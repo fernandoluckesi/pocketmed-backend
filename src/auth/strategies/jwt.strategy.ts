@@ -4,14 +4,17 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../../entities/user.entity';
+import { Patient } from '../../entities/patient.entity';
+import { Doctor } from '../../entities/doctor.entity';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
+    @InjectRepository(Patient)
+    private patientRepository: Repository<Patient>,
+    @InjectRepository(Doctor)
+    private doctorRepository: Repository<Doctor>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -21,14 +24,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const user = await this.userRepository.findOne({
-      where: { id: payload.sub },
-    });
+    let user: Patient | Doctor | null = null;
+
+    if (payload.type === 'patient') {
+      user = await this.patientRepository.findOne({ where: { id: payload.sub } });
+    } else if (payload.type === 'doctor') {
+      user = await this.doctorRepository.findOne({ where: { id: payload.sub } });
+    } else {
+      user = await this.patientRepository.findOne({ where: { id: payload.sub } });
+      if (!user) {
+        user = await this.doctorRepository.findOne({ where: { id: payload.sub } });
+      }
+    }
 
     if (!user) {
       throw new UnauthorizedException('Invalid token');
     }
 
-    return { userId: payload.sub, email: payload.email, type: payload.type };
+    return { userId: user.id, email: user.email, type: user.type };
   }
 }

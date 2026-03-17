@@ -15,7 +15,6 @@ import { UploadModule } from './upload/upload.module';
 import { EmailModule } from './email/email.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
-import { User } from './entities/user.entity';
 import { Patient } from './entities/patient.entity';
 import { Doctor } from './entities/doctor.entity';
 import { Dependent } from './entities/dependent.entity';
@@ -41,7 +40,6 @@ import { DoctorPermission } from './entities/doctor-permission.entity';
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         entities: [
-          User,
           Patient,
           Doctor,
           Dependent,
@@ -51,7 +49,8 @@ import { DoctorPermission } from './entities/doctor-permission.entity';
           DoctorAccessRequest,
           DoctorPermission,
         ],
-        synchronize: true,
+        migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
+        synchronize: false,
         logging: false,
       }),
       inject: [ConfigService],

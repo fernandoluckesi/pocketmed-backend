@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Doctor } from '../entities/doctor.entity';
@@ -120,10 +125,15 @@ export class DoctorsService {
     return await this.accessRequestRepository.save(accessRequest);
   }
 
-  async respondToAccessRequest(requestId: string, status: AccessRequestStatus, userId: string, userType: string) {
+  async respondToAccessRequest(
+    requestId: string,
+    status: AccessRequestStatus,
+    userId: string,
+    userType: string,
+  ) {
     const request = await this.accessRequestRepository.findOne({
       where: { id: requestId },
-      relations: ['dependent', 'dependent.responsibles'],
+      relations: ['doctor', 'patient', 'dependent', 'dependent.responsibles'],
     });
 
     if (!request) {
@@ -171,16 +181,14 @@ export class DoctorsService {
   async getMyAccessRequests(doctorId: string) {
     return await this.accessRequestRepository.find({
       where: { doctorId },
-      relations: ['patient', 'dependent'],
+      relations: ['doctor', 'patient', 'dependent'],
     });
   }
 
   async getAccessRequestsForPatient(patientId: string) {
     return await this.accessRequestRepository.find({
-      where: [
-        { patientId },
-      ],
-      relations: ['doctor'],
+      where: [{ patientId }],
+      relations: ['doctor', 'patient', 'dependent'],
     });
   }
 
@@ -200,12 +208,17 @@ export class DoctorsService {
     return await this.accessRequestRepository
       .createQueryBuilder('request')
       .leftJoinAndSelect('request.doctor', 'doctor')
+      .leftJoinAndSelect('request.patient', 'patient')
       .leftJoinAndSelect('request.dependent', 'dependent')
       .where('request.dependentId IN (:...dependentIds)', { dependentIds })
       .getMany();
   }
 
-  async hasPermission(doctorId: string, patientId?: string, dependentId?: string): Promise<boolean> {
+  async hasPermission(
+    doctorId: string,
+    patientId?: string,
+    dependentId?: string,
+  ): Promise<boolean> {
     const permission = await this.permissionRepository.findOne({
       where: {
         doctorId,

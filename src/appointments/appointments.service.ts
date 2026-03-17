@@ -196,14 +196,14 @@ export class AppointmentsService {
     if (userType === 'doctor') {
       return await this.appointmentRepository.find({
         where: { doctorId: userId },
-        relations: ['patient', 'dependent'],
+        relations: ['doctor', 'patient', 'dependent'],
       });
     }
 
     if (userType === 'patient') {
       const patientAppointments = await this.appointmentRepository.find({
         where: { patientId: userId },
-        relations: ['doctor'],
+        relations: ['doctor', 'patient', 'dependent'],
       });
 
       const dependents = await this.dependentRepository
@@ -219,6 +219,7 @@ export class AppointmentsService {
         dependentAppointments = await this.appointmentRepository
           .createQueryBuilder('appointment')
           .leftJoinAndSelect('appointment.doctor', 'doctor')
+          .leftJoinAndSelect('appointment.patient', 'patient')
           .leftJoinAndSelect('appointment.dependent', 'dependent')
           .where('appointment.dependentId IN (:...dependentIds)', { dependentIds })
           .getMany();
@@ -252,7 +253,7 @@ export class AppointmentsService {
   async update(id: string, userId: string, userType: string, dto: UpdateAppointmentDto) {
     const appointment = await this.appointmentRepository.findOne({
       where: { id },
-      relations: ['dependent', 'dependent.responsibles'],
+      relations: ['doctor', 'patient', 'dependent', 'dependent.responsibles'],
     });
 
     if (!appointment) {

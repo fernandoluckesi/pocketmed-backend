@@ -11,7 +11,6 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
-import { User } from '../entities/user.entity';
 import { RegisterPatientDto } from './dto/register-patient.dto';
 import { RegisterDoctorDto } from './dto/register-doctor.dto';
 import { RegisterPatientShadowDto } from './dto/register-patient-shadow.dto';
@@ -19,11 +18,11 @@ import { LoginDto } from './dto/login.dto';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 
+type AuthUser = Patient | Doctor;
+
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
     @InjectRepository(Patient)
     private patientRepository: Repository<Patient>,
     @InjectRepository(Doctor)
@@ -48,9 +47,7 @@ export class AuthService {
         : 'No file',
     );
 
-    const existingUser = await this.userRepository.findOne({
-      where: { email: dto.email },
-    });
+    const existingUser = await this.findUserByEmail(dto.email);
 
     if (existingUser) {
       throw new ConflictException('Email already registered');
@@ -97,9 +94,7 @@ export class AuthService {
       throw new NotFoundException('Doctor not found');
     }
 
-    const existingUser = await this.userRepository.findOne({
-      where: { email: dto.email },
-    });
+    const existingUser = await this.findUserByEmail(dto.email);
 
     if (existingUser) {
       throw new ConflictException('Email already registered');
@@ -138,9 +133,7 @@ export class AuthService {
   }
 
   async registerDoctor(dto: RegisterDoctorDto, file?: Express.Multer.File) {
-    const existingUser = await this.userRepository.findOne({
-      where: { email: dto.email },
-    });
+    const existingUser = await this.findUserByEmail(dto.email);
 
     if (existingUser) {
       throw new ConflictException('Email already registered');
@@ -179,9 +172,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.userRepository.findOne({
-      where: { email: dto.email },
-    });
+    const user = await this.findUserByEmail(dto.email);
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -210,7 +201,7 @@ export class AuthService {
   }
 
   async sendVerificationCode(email: string) {
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.findUserByEmail(email);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -226,7 +217,7 @@ export class AuthService {
     user.verificationCode = verificationCode;
     user.verificationCodeExpiry = verificationCodeExpiry;
 
-    await this.userRepository.save(user);
+    await this.saveUser(user);
     await this.emailService.sendVerificationCode(email, verificationCode, user.name);
 
     return {
@@ -235,7 +226,7 @@ export class AuthService {
   }
 
   async activateShadowAccount(email: string, verificationCode: string, password: string) {
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.findUserByEmail(email);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -260,7 +251,7 @@ export class AuthService {
     user.verificationCode = null;
     user.verificationCodeExpiry = null;
 
-    await this.userRepository.save(user);
+    await this.saveUser(user);
 
     const token = this.generateToken(user);
 
@@ -272,7 +263,7 @@ export class AuthService {
   }
 
   async forgotPassword(email: string) {
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.findUserByEmail(email);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -284,7 +275,7 @@ export class AuthService {
     user.passwordResetCode = resetCode;
     user.passwordResetCodeExpiry = resetCodeExpiry;
 
-    await this.userRepository.save(user);
+    await this.saveUser(user);
     await this.emailService.sendPasswordResetCode(email, resetCode, user.name);
 
     return {
@@ -293,7 +284,7 @@ export class AuthService {
   }
 
   async resetPassword(email: string, resetCode: string, newPassword: string) {
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.findUserByEmail(email);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -313,15 +304,15 @@ export class AuthService {
     user.passwordResetCode = null;
     user.passwordResetCodeExpiry = null;
 
-    await this.userRepository.save(user);
+    await this.saveUser(user);
 
     return {
       message: 'Password reset successfully',
     };
   }
 
-  async changePassword(userId: string, oldPassword: string, newPassword: string) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+  async changePassword(userId: string, userType: string, oldPassword: string, newPassword: string) {
+    const user = await this.findUserById(userId, userType);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -337,16 +328,50 @@ export class AuthService {
 
     user.password = hashedPassword;
 
-    await this.userRepository.save(user);
+    await this.saveUser(user);
 
     return {
       message: 'Password changed successfully',
     };
   }
 
-  private generateToken(user: User) {
+  private generateToken(user: AuthUser) {
     const payload = { email: user.email, sub: user.id, type: user.type };
     return this.jwtService.sign(payload);
+  }
+
+  private async findUserByEmail(email: string): Promise<AuthUser | null> {
+    const patient = await this.patientRepository.findOne({ where: { email } });
+    if (patient) {
+      return patient;
+    }
+
+    return this.doctorRepository.findOne({ where: { email } });
+  }
+
+  private async findUserById(userId: string, userType?: string): Promise<AuthUser | null> {
+    if (userType === 'patient') {
+      return this.patientRepository.findOne({ where: { id: userId } });
+    }
+
+    if (userType === 'doctor') {
+      return this.doctorRepository.findOne({ where: { id: userId } });
+    }
+
+    const patient = await this.patientRepository.findOne({ where: { id: userId } });
+    if (patient) {
+      return patient;
+    }
+
+    return this.doctorRepository.findOne({ where: { id: userId } });
+  }
+
+  private async saveUser(user: AuthUser): Promise<AuthUser> {
+    if (user.type === 'doctor') {
+      return this.doctorRepository.save(user as Doctor);
+    }
+
+    return this.patientRepository.save(user as Patient);
   }
 
   private generateVerificationCode(): string {

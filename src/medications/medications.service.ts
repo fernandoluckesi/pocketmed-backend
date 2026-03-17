@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Medication } from '../entities/medication.entity';
@@ -86,14 +91,14 @@ export class MedicationsService {
     if (userType === 'doctor') {
       return await this.medicationRepository.find({
         where: { doctorId: userId },
-        relations: ['patient', 'dependent', 'appointment'],
+        relations: ['doctor', 'patient', 'dependent', 'appointment'],
       });
     }
 
     if (userType === 'patient') {
       const patientMedications = await this.medicationRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'appointment'],
+        relations: ['doctor', 'patient', 'dependent', 'appointment'],
       });
 
       const dependents = await this.dependentRepository
@@ -109,6 +114,7 @@ export class MedicationsService {
         dependentMedications = await this.medicationRepository
           .createQueryBuilder('medication')
           .leftJoinAndSelect('medication.doctor', 'doctor')
+          .leftJoinAndSelect('medication.patient', 'patient')
           .leftJoinAndSelect('medication.dependent', 'dependent')
           .leftJoinAndSelect('medication.appointment', 'appointment')
           .where('medication.dependentId IN (:...dependentIds)', { dependentIds })

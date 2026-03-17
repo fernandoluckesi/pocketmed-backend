@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Exam } from '../entities/exam.entity';
@@ -93,14 +98,14 @@ export class ExamsService {
     if (userType === 'doctor') {
       return await this.examRepository.find({
         where: { doctorId: userId },
-        relations: ['patient', 'dependent', 'appointment'],
+        relations: ['doctor', 'patient', 'dependent', 'appointment'],
       });
     }
 
     if (userType === 'patient') {
       const patientExams = await this.examRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'appointment'],
+        relations: ['doctor', 'patient', 'dependent', 'appointment'],
       });
 
       const dependents = await this.dependentRepository
@@ -116,6 +121,7 @@ export class ExamsService {
         dependentExams = await this.examRepository
           .createQueryBuilder('exam')
           .leftJoinAndSelect('exam.doctor', 'doctor')
+          .leftJoinAndSelect('exam.patient', 'patient')
           .leftJoinAndSelect('exam.dependent', 'dependent')
           .leftJoinAndSelect('exam.appointment', 'appointment')
           .where('exam.dependentId IN (:...dependentIds)', { dependentIds })
@@ -147,7 +153,13 @@ export class ExamsService {
     return exam;
   }
 
-  async update(id: string, userId: string, userType: string, dto: UpdateExamDto, file?: Express.Multer.File) {
+  async update(
+    id: string,
+    userId: string,
+    userType: string,
+    dto: UpdateExamDto,
+    file?: Express.Multer.File,
+  ) {
     const exam = await this.examRepository.findOne({
       where: { id },
       relations: ['dependent', 'dependent.responsibles'],
@@ -201,11 +213,7 @@ export class ExamsService {
     };
   }
 
-  private async canAccessExam(
-    exam: Exam,
-    userId: string,
-    userType: string,
-  ): Promise<boolean> {
+  private async canAccessExam(exam: Exam, userId: string, userType: string): Promise<boolean> {
     if (userType === 'doctor') {
       if (exam.doctorId === userId) {
         return true;

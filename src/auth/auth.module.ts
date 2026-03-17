@@ -6,7 +6,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { User } from '../entities/user.entity';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { UploadModule } from '../upload/upload.module';
@@ -14,7 +13,7 @@ import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Patient, Doctor]),
+    TypeOrmModule.forFeature([Patient, Doctor]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
