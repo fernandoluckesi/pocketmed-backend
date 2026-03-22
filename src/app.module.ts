@@ -11,6 +11,7 @@ import { DoctorsModule } from './doctors/doctors.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { MedicationsModule } from './medications/medications.module';
 import { ExamsModule } from './exams/exams.module';
+import { AvailabilityModule } from './availability/availability.module';
 import { UploadModule } from './upload/upload.module';
 import { EmailModule } from './email/email.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
@@ -23,6 +24,8 @@ import { Medication } from './entities/medication.entity';
 import { Exam } from './entities/exam.entity';
 import { DoctorAccessRequest } from './entities/doctor-access-request.entity';
 import { DoctorPermission } from './entities/doctor-permission.entity';
+import { AvailabilityRule } from './entities/availability-rule.entity';
+import { AvailabilityException } from './entities/availability-exception.entity';
 
 @Module({
   imports: [
@@ -48,6 +51,8 @@ import { DoctorPermission } from './entities/doctor-permission.entity';
           Exam,
           DoctorAccessRequest,
           DoctorPermission,
+          AvailabilityRule,
+          AvailabilityException,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -62,6 +67,7 @@ import { DoctorPermission } from './entities/doctor-permission.entity';
     AppointmentsModule,
     MedicationsModule,
     ExamsModule,
+    AvailabilityModule,
     UploadModule,
     EmailModule,
   ],
