@@ -14,11 +14,11 @@ import { Notification } from '../entities/notification.entity';
 
 const AppDataSource = new DataSource({
   type: 'mysql',
-  host: process.env.DB_HOST,
+  host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT || 3306),
-  username: process.env.DB_USERNAME,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_DATABASE,
+  username: process.env.DB_USERNAME || process.env.MYSQL_USER || 'pocketmed_user',
+  password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || 'pocketmed_pass',
+  database: process.env.DB_DATABASE || process.env.MYSQL_DATABASE || 'pocketmed',
   entities: [
     Patient,
     Doctor,

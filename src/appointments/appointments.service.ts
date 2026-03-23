@@ -59,16 +59,23 @@ export class AppointmentsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    const hasPermission = await this.doctorsService.hasPermission(
-      doctorId,
-      dto.patientId,
-      dto.dependentId,
-    );
+    const isCreatingClinicalData =
+      Boolean(dto.isCompleted) ||
+      Boolean(dto.doctorFeedback?.trim()) ||
+      Boolean(dto.doctorInstructions?.trim());
 
-    if (!hasPermission) {
-      throw new ForbiddenException(
-        'You do not have permission to create appointments for this patient/dependent',
+    if (isCreatingClinicalData) {
+      const hasPermission = await this.doctorsService.hasPermission(
+        doctorId,
+        dto.patientId,
+        dto.dependentId,
       );
+
+      if (!hasPermission) {
+        throw new ForbiddenException(
+          'You do not have permission to create clinical data for this patient/dependent',
+        );
+      }
     }
 
     if (dto.patientId) {
