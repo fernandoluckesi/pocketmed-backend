@@ -14,6 +14,7 @@ import { DoctorsService } from '../doctors/doctors.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { PatientsService } from 'src/patients/patients.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AppointmentsService {
@@ -27,6 +28,7 @@ export class AppointmentsService {
     @InjectRepository(Dependent)
     private dependentRepository: Repository<Dependent>,
     private doctorsService: DoctorsService,
+    private notificationsService: NotificationsService,
     private patientsService: PatientsService,
   ) {}
 
@@ -271,13 +273,26 @@ export class AppointmentsService {
       throw new ForbiddenException('Only the doctor who created the appointment can update it');
     }
 
+    const isDoctorRequestingCompletion = dto.isCompleted === true;
+
     Object.assign(appointment, dto);
 
     if (dto.dateTime) {
       appointment.dateTime = new Date(dto.dateTime);
     }
 
-    return await this.appointmentRepository.save(appointment);
+    if (isDoctorRequestingCompletion) {
+      appointment.isCompleted = false;
+      appointment.status = AppointmentStatus.PENDING;
+    }
+
+    const savedAppointment = await this.appointmentRepository.save(appointment);
+
+    if (isDoctorRequestingCompletion) {
+      await this.notifyPatientCompletionRequest(savedAppointment);
+    }
+
+    return savedAppointment;
   }
 
   async respondToAppointment(
@@ -311,8 +326,26 @@ export class AppointmentsService {
       }
     }
 
-    appointment.status = status;
+    const hasCompletionData = Boolean(
+      appointment.doctorFeedback?.trim() || appointment.doctorInstructions?.trim(),
+    );
+
+    if (appointment.status !== AppointmentStatus.PENDING || !hasCompletionData) {
+      throw new BadRequestException('This appointment has no pending completion approval');
+    }
+
+    if (status === AppointmentStatus.COMPLETED) {
+      appointment.status = AppointmentStatus.COMPLETED;
+      appointment.isCompleted = true;
+    } else if (status === AppointmentStatus.REJECTED) {
+      appointment.status = AppointmentStatus.PENDING;
+      appointment.isCompleted = false;
+    } else {
+      throw new BadRequestException('Only completed or rejected are allowed for this action');
+    }
+
     await this.appointmentRepository.save(appointment);
+    await this.notificationsService.syncAppointmentCompletionNotificationStatus(id, status);
 
     return {
       message: `Appointment ${status}`,
@@ -370,5 +403,49 @@ export class AppointmentsService {
     }
 
     return false;
+  }
+
+  private async notifyPatientCompletionRequest(appointment: Appointment) {
+    const title = 'Finalização de consulta pendente';
+    const body =
+      'Seu médico finalizou a consulta. Abra para revisar o conteúdo e aceitar ou recusar a finalização.';
+
+    if (appointment.patientId) {
+      await this.notificationsService.createNotification(
+        appointment.patientId,
+        'patient',
+        title,
+        body,
+        'APPOINTMENT_COMPLETION_REQUESTED',
+        {
+          appointmentId: appointment.id,
+          status: appointment.status,
+        },
+        appointment.id,
+      );
+      return;
+    }
+
+    if (!appointment.dependentId || !appointment.dependent?.responsibles?.length) {
+      return;
+    }
+
+    await Promise.all(
+      appointment.dependent.responsibles.map((responsible) =>
+        this.notificationsService.createNotification(
+          responsible.id,
+          'patient',
+          title,
+          body,
+          'APPOINTMENT_COMPLETION_REQUESTED',
+          {
+            appointmentId: appointment.id,
+            dependentId: appointment.dependentId,
+            status: appointment.status,
+          },
+          appointment.id,
+        ),
+      ),
+    );
   }
 }

@@ -2,6 +2,8 @@ import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nest
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DeviceToken } from '../entities/device-token.entity';
+import { AccessRequestStatus } from '../entities/doctor-access-request.entity';
+import { AppointmentStatus } from '../entities/appointment.entity';
 import { Notification } from '../entities/notification.entity';
 import { RegisterDeviceTokenDto } from './dto/register-device-token.dto';
 import Expo, { ExpoPushMessage } from 'expo-server-sdk';
@@ -138,6 +140,58 @@ export class NotificationsService {
     );
 
     return saved;
+  }
+
+  async syncAccessRequestNotificationStatus(
+    relatedEntityId: string,
+    status: AccessRequestStatus,
+  ): Promise<void> {
+    const notifications = await this.notificationRepository.find({
+      where: {
+        relatedEntityId,
+        type: 'ACCESS_REQUEST_CREATED',
+      },
+    });
+
+    if (!notifications.length) {
+      return;
+    }
+
+    await this.notificationRepository.save(
+      notifications.map((notification) => ({
+        ...notification,
+        data: {
+          ...(notification.data ?? {}),
+          status,
+        },
+      })),
+    );
+  }
+
+  async syncAppointmentCompletionNotificationStatus(
+    relatedEntityId: string,
+    status: AppointmentStatus,
+  ): Promise<void> {
+    const notifications = await this.notificationRepository.find({
+      where: {
+        relatedEntityId,
+        type: 'APPOINTMENT_COMPLETION_REQUESTED',
+      },
+    });
+
+    if (!notifications.length) {
+      return;
+    }
+
+    await this.notificationRepository.save(
+      notifications.map((notification) => ({
+        ...notification,
+        data: {
+          ...(notification.data ?? {}),
+          status,
+        },
+      })),
+    );
   }
 
   async getNotificationsForUser(userId: string): Promise<Notification[]> {

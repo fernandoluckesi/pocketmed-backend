@@ -190,6 +190,8 @@ export class DoctorsService {
     request.status = status;
     await this.accessRequestRepository.save(request);
 
+    await this.notificationsService.syncAccessRequestNotificationStatus(request.id, status);
+
     if (status === AccessRequestStatus.APPROVED) {
       const permission = this.permissionRepository.create({
         doctorId: request.doctorId,
