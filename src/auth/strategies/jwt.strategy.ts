@@ -6,6 +6,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Patient } from '../../entities/patient.entity';
 import { Doctor } from '../../entities/doctor.entity';
+import { ClinicMembership } from '../../entities/clinic-membership.entity';
+import { ProfessionalRole } from '../professional-role.enum';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -15,6 +17,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private patientRepository: Repository<Patient>,
     @InjectRepository(Doctor)
     private doctorRepository: Repository<Doctor>,
+    @InjectRepository(ClinicMembership)
+    private clinicMembershipRepository: Repository<ClinicMembership>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -41,6 +45,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid token');
     }
 
-    return { userId: user.id, email: user.email, type: user.type };
+    let role: string | null = null;
+    let activeClinicId: string | null = null;
+
+    if (user.type === 'doctor') {
+      const membership = await this.clinicMembershipRepository.findOne({
+        where: { professionalId: user.id, isActive: true },
+        order: { createdAt: 'ASC' },
+      });
+
+      role = membership?.role || payload?.role || ProfessionalRole.DOCTOR;
+      activeClinicId = membership?.clinicId || payload?.activeClinicId || null;
+    }
+
+    return {
+      userId: user.id,
+      email: user.email,
+      type: user.type,
+      role,
+      activeClinicId,
+    };
   }
 }

@@ -28,7 +28,10 @@ import { AvailabilityRule } from './entities/availability-rule.entity';
 import { AvailabilityException } from './entities/availability-exception.entity';
 import { DeviceToken } from './entities/device-token.entity';
 import { Notification } from './entities/notification.entity';
+import { Clinic } from './entities/clinic.entity';
+import { ClinicMembership } from './entities/clinic-membership.entity';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
 
 @Module({
   imports: [
@@ -58,6 +61,8 @@ import { NotificationsModule } from './notifications/notifications.module';
           AvailabilityException,
           DeviceToken,
           Notification,
+          Clinic,
+          ClinicMembership,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -76,6 +81,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     UploadModule,
     EmailModule,
     NotificationsModule,
+    ClinicAdminModule,
   ],
   controllers: [AppController],
   providers: [

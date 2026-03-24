@@ -8,12 +8,13 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
+import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { UploadModule } from '../upload/upload.module';
 import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Patient, Doctor]),
+    TypeOrmModule.forFeature([Patient, Doctor, ClinicMembership]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

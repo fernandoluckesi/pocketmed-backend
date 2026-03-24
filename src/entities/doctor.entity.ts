@@ -12,6 +12,7 @@ import { Exam } from './exam.entity';
 import { Patient } from './patient.entity';
 import { DoctorAccessRequest } from './doctor-access-request.entity';
 import { DoctorPermission } from './doctor-permission.entity';
+import { ClinicMembership } from './clinic-membership.entity';
 
 @Entity('doctors')
 export class Doctor {
@@ -83,6 +84,9 @@ export class Doctor {
 
   @OneToMany(() => DoctorPermission, (permission) => permission.doctor)
   permissions: DoctorPermission[];
+
+  @OneToMany(() => ClinicMembership, (membership) => membership.professional)
+  clinicMemberships: ClinicMembership[];
 
   @CreateDateColumn()
   createdAt: Date;

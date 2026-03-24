@@ -22,14 +22,14 @@ export class AppointmentsController {
   @ApiResponse({ status: 403, description: 'Forbidden - No permission' })
   @ApiResponse({ status: 404, description: 'Patient or Dependent not found' })
   async create(@CurrentUser() user: any, @Body() dto: CreateAppointmentDto) {
-    return this.appointmentsService.create(user.userId, user.type, dto);
+    return this.appointmentsService.create(user.userId, user.type, user.role, dto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all appointments for current user' })
   @ApiResponse({ status: 200, description: 'Return appointments' })
   async findAll(@CurrentUser() user: any) {
-    return this.appointmentsService.findAll(user.userId, user.type);
+    return this.appointmentsService.findAll(user.userId, user.type, user.role, user.activeClinicId);
   }
 
   @Get(':id')
@@ -38,7 +38,13 @@ export class AppointmentsController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Appointment not found' })
   async findOne(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.appointmentsService.findOne(id, user.userId, user.type);
+    return this.appointmentsService.findOne(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   @Put(':id')
@@ -52,7 +58,7 @@ export class AppointmentsController {
     @CurrentUser() user: any,
     @Body() dto: UpdateAppointmentDto,
   ) {
-    return this.appointmentsService.update(id, user.userId, user.type, dto);
+    return this.appointmentsService.update(id, user.userId, user.type, user.role, dto);
   }
 
   @Post(':id/respond')
@@ -76,6 +82,6 @@ export class AppointmentsController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Appointment not found' })
   async delete(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.appointmentsService.delete(id, user.userId, user.type);
+    return this.appointmentsService.delete(id, user.userId, user.type, user.role);
   }
 }

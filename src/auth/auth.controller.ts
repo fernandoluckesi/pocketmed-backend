@@ -23,6 +23,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Roles } from './decorators/roles.decorator';
+import { RolesGuard } from './guards/roles.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -53,19 +55,22 @@ export class AuthController {
     return this.authService.registerPatient(dto, file);
   }
 
-  @Public()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('doctor', 'admin', 'secretary')
   @Post('register/patient-shadow')
   @UseInterceptors(FileInterceptor('profileImage'))
-  @ApiOperation({ summary: 'Register a shadow patient by a doctor' })
+  @ApiOperation({ summary: 'Register a shadow patient by a professional account' })
   @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth('JWT-auth')
   @ApiResponse({ status: 201, description: 'Shadow patient created successfully' })
   @ApiResponse({ status: 404, description: 'Doctor not found' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   async registerPatientShadow(
+    @CurrentUser() user: any,
     @Body() dto: RegisterPatientShadowDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.authService.registerPatientShadow(dto, file);
+    return this.authService.registerPatientShadow(dto, file, user);
   }
 
   @Public()

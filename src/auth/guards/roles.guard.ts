@@ -16,6 +16,12 @@ export class RolesGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
+
+    // Professional accounts should be authorized by role, not by account type.
+    if (user?.type === 'doctor' && user?.role) {
+      return requiredRoles.some((role) => user.role === role);
+    }
+
     return requiredRoles.some((role) => user.type === role);
   }
 }
