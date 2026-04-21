@@ -267,10 +267,9 @@ export class AppointmentsService {
         doctorName = doctor.name;
         doctorSpecialty = doctor.specialty;
       } else {
-        doctorId = null;
-        doctorCrm = dto.doctorCrm;
-        doctorName = dto.doctorName;
-        doctorSpecialty = dto.doctorSpecialty;
+        throw new BadRequestException(
+          `Doctor not found for CRM ${dto.doctorCrm}. Please select a registered doctor.`,
+        );
       }
     }
 
@@ -418,12 +417,18 @@ export class AppointmentsService {
       throw new NotFoundException('Appointment not found');
     }
 
-    if (
-      userType !== 'doctor' ||
-      userRole !== ProfessionalRole.DOCTOR ||
-      appointment.doctorId !== userId
-    ) {
-      throw new ForbiddenException('Only the doctor who created the appointment can update it');
+    const isOwnerDoctor =
+      userType === 'doctor' &&
+      userRole === ProfessionalRole.DOCTOR &&
+      appointment.doctorId === userId;
+
+    const isOwnerPatient =
+      userType === 'patient' && appointment.patientId === userId && !appointment.isCompleted;
+
+    if (!isOwnerDoctor && !isOwnerPatient) {
+      throw new ForbiddenException(
+        'Only the doctor who created the appointment or the patient who owns it can update it',
+      );
     }
 
     Object.assign(appointment, dto);

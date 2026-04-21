@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Delete, Patch, Param, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Patch,
+  Param,
+  Body,
+  UseGuards,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { DoctorsService } from './doctors.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -105,5 +115,13 @@ export class DoctorsController {
   @ApiResponse({ status: 404, description: 'Permission not found' })
   async revokePermission(@Param('id') id: string, @CurrentUser() user: any) {
     return this.doctorsService.revokePermission(id, user.userId, user.type);
+  }
+
+  @Get('search/crm')
+  @ApiOperation({ summary: 'Search doctor by CRM and state' })
+  @ApiResponse({ status: 200, description: 'Doctor found' })
+  @ApiResponse({ status: 404, description: 'Doctor not found' })
+  async searchByCRM(@Query('crm') crm: string, @Query('state') state: string) {
+    return this.doctorsService.findByCrm(crm, state);
   }
 }

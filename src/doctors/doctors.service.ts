@@ -73,6 +73,44 @@ export class DoctorsService {
     return doctor;
   }
 
+  async findByCrm(crm: string, state: string) {
+    const normalizedCrm = String(crm || '').trim();
+    const normalizedState = String(state || '')
+      .trim()
+      .toUpperCase();
+
+    if (!normalizedCrm || !normalizedState) {
+      throw new BadRequestException('Both crm and state are required');
+    }
+
+    const formattedCrm = `${normalizedState}-${normalizedCrm}`;
+
+    console.log(`Searching for doctor with CRM: ${formattedCrm}`);
+
+    const doctor = await this.doctorRepository.findOne({
+      where: { crm: formattedCrm },
+      select: [
+        'id',
+        'name',
+        'email',
+        'gender',
+        'specialty',
+        'crm',
+        'phone',
+        'birthDate',
+        'profileImage',
+        'createdAt',
+        'updatedAt',
+      ],
+    });
+
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    return doctor;
+  }
+
   async requestAccess(doctorId: string, dto: RequestAccessDto) {
     if (!dto.patientId && !dto.dependentId) {
       throw new BadRequestException('Either patientId or dependentId must be provided');
@@ -305,9 +343,9 @@ export class DoctorsService {
 
   async getPermissionsForPatient(patientId: string) {
     return await this.permissionRepository.find({
-      where: { patientId, isActive: true },
+      where: { patientId },
       relations: ['doctor'],
-      order: { grantedAt: 'DESC' },
+      order: { isActive: 'DESC', grantedAt: 'DESC' },
     });
   }
 
@@ -338,6 +376,7 @@ export class DoctorsService {
     }
 
     permission.isActive = false;
+    permission.revokedAt = new Date();
     await this.permissionRepository.save(permission);
 
     return { message: 'Permission revoked successfully' };

@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+
 import { Doctor } from './doctor.entity';
 import { Patient } from './patient.entity';
 import { Dependent } from './dependent.entity';
@@ -41,4 +42,7 @@ export class DoctorPermission {
 
   @CreateDateColumn()
   grantedAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true, default: null })
+  revokedAt: Date | null;
 }

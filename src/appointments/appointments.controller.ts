@@ -54,8 +54,7 @@ export class AppointmentsController {
   }
 
   @Put(':id')
-  @Roles('doctor')
-  @ApiOperation({ summary: 'Update appointment (doctor who created only)' })
+  @ApiOperation({ summary: 'Update appointment (doctor who created it or patient who owns it)' })
   @ApiResponse({ status: 200, description: 'Appointment updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Appointment not found' })
