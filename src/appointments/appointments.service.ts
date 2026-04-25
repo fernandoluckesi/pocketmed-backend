@@ -232,7 +232,7 @@ export class AppointmentsService {
       }
     }
 
-    let doctorId: string;
+    let doctorId: string | null;
     let doctorCrm: string;
     let doctorName: string;
     let doctorSpecialty: string;
@@ -267,9 +267,11 @@ export class AppointmentsService {
         doctorName = doctor.name;
         doctorSpecialty = doctor.specialty;
       } else {
-        throw new BadRequestException(
-          `Doctor not found for CRM ${dto.doctorCrm}. Please select a registered doctor.`,
-        );
+        // Doctor not in the database — save external doctor data without doctorId
+        doctorId = null;
+        doctorCrm = dto.doctorCrm;
+        doctorName = dto.doctorName;
+        doctorSpecialty = dto.doctorSpecialty;
       }
     }
 

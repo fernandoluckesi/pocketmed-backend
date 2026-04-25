@@ -57,10 +57,10 @@ export class Appointment {
   })
   status: AppointmentStatus;
 
-  @Column({ type: 'uuid' })
-  doctorId: string;
+  @Column({ type: 'uuid', nullable: true })
+  doctorId: string | null;
 
-  @ManyToOne(() => Doctor, (doctor) => doctor.appointments)
+  @ManyToOne(() => Doctor, (doctor) => doctor.appointments, { nullable: true })
   @JoinColumn({ name: 'doctorId' })
   doctor: Doctor;
 
