@@ -6,8 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class UploadService implements OnModuleInit {
   private readonly logger = new Logger(UploadService.name);
-  private minioClient: Minio.Client;
+  private minioClient: Minio.Client | null = null;
   private bucketName: string;
+  private isConfigured: boolean = false;
 
   constructor(private configService: ConfigService) {
     const endpoint = this.configService.get<string>('MINIO_ENDPOINT');
@@ -17,26 +18,32 @@ export class UploadService implements OnModuleInit {
     const secretKey = this.configService.get<string>('MINIO_SECRET_KEY');
     this.bucketName = this.configService.get<string>('MINIO_BUCKET_NAME');
 
-    console.log('MINIO CONFIG >>>', {
-      endpoint,
-      port,
-      useSSL,
-      accessKey,
-      secretKey,
-      bucket: this.bucketName,
-    });
+    if (!endpoint) {
+      this.logger.warn('MINIO_ENDPOINT not configured — file upload will be unavailable.');
+      return;
+    }
 
-    this.minioClient = new Minio.Client({
-      endPoint: endpoint,
-      port: port,
-      useSSL: useSSL,
-      accessKey: accessKey,
-      secretKey: secretKey,
-      pathStyle: true, // Required for R2 and other S3-compatible services
-    });
+    try {
+      this.minioClient = new Minio.Client({
+        endPoint: endpoint,
+        port: port,
+        useSSL: useSSL,
+        accessKey: accessKey,
+        secretKey: secretKey,
+        pathStyle: true,
+      });
+      this.isConfigured = true;
+    } catch (error) {
+      this.logger.error(`Failed to initialize MinIO client: ${error.message}`);
+    }
   }
 
   async onModuleInit() {
+    if (!this.isConfigured || !this.minioClient) {
+      this.logger.warn('MinIO not configured — skipping bucket initialization.');
+      return;
+    }
+
     try {
       const bucketExists = await this.minioClient.bucketExists(this.bucketName);
       if (!bucketExists) {
@@ -66,6 +73,11 @@ export class UploadService implements OnModuleInit {
   }
 
   async uploadFile(file: Express.Multer.File, folder: string = 'images'): Promise<string> {
+    if (!this.isConfigured || !this.minioClient) {
+      this.logger.warn('MinIO not configured — upload skipped, returning empty URL.');
+      return '';
+    }
+
     try {
       const fileExtension = file.originalname.split('.').pop();
       const fileName = `${folder}/${uuidv4()}.${fileExtension}`;
@@ -80,7 +92,6 @@ export class UploadService implements OnModuleInit {
       const useSSL = this.configService.get<string>('MINIO_USE_SSL') === 'true';
       const protocol = useSSL ? 'https' : 'http';
 
-      // For R2/S3-compatible services on standard ports (443/80), omit the port from the URL
       const isStandardPort = (useSSL && port === 443) || (!useSSL && port === 80);
       const hostWithPort = isStandardPort ? endpoint : `${endpoint}:${port}`;
       const fileUrl = `${protocol}://${hostWithPort}/${this.bucketName}/${fileName}`;
@@ -92,6 +103,11 @@ export class UploadService implements OnModuleInit {
   }
 
   async deleteFile(fileUrl: string): Promise<void> {
+    if (!this.isConfigured || !this.minioClient) {
+      this.logger.warn('MinIO not configured — delete skipped.');
+      return;
+    }
+
     try {
       const fileName = fileUrl.split(`/${this.bucketName}/`)[1];
       if (fileName) {
