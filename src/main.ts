@@ -40,7 +40,7 @@ async function bootstrap() {
     res.json(document);
   });
 
-  await app.listen(3000, '0.0.0.0');
+  await app.listen(process.env.PORT || 3000, '0.0.0.0');
   console.log(`Application is running on: ${await app.getUrl()}`);
   console.log(`Swagger documentation available at: ${await app.getUrl()}/api/docs`);
   console.log(`Swagger JSON available at: ${await app.getUrl()}/api/docs-json`);
