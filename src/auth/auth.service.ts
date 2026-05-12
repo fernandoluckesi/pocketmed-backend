@@ -73,9 +73,14 @@ export class AuthService {
     let profileImageUrl = null;
     if (file) {
       console.log('Uploading file to MinIO...');
-      const uploadedUrl = await this.uploadService.uploadFile(file, 'profiles');
-      profileImageUrl = uploadedUrl || null;
-      console.log('File uploaded. URL:', profileImageUrl);
+      try {
+        const uploadedUrl = await this.uploadService.uploadFile(file, 'profiles');
+        profileImageUrl = uploadedUrl || null;
+        console.log('File uploaded. URL:', profileImageUrl);
+      } catch (uploadError) {
+        console.warn('Profile image upload failed, continuing without image:', uploadError.message);
+        profileImageUrl = null;
+      }
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -159,7 +164,13 @@ export class AuthService {
 
     let profileImageUrl = null;
     if (file) {
-      profileImageUrl = await this.uploadService.uploadFile(file, 'profiles');
+      try {
+        const uploadedUrl = await this.uploadService.uploadFile(file, 'profiles');
+        profileImageUrl = uploadedUrl || null;
+      } catch (uploadError) {
+        console.warn('Profile image upload failed, continuing without image:', uploadError.message);
+        profileImageUrl = null;
+      }
     }
 
     const verificationCode = this.generateVerificationCode();
@@ -198,7 +209,13 @@ export class AuthService {
 
     let profileImageUrl = null;
     if (file) {
-      profileImageUrl = await this.uploadService.uploadFile(file, 'profiles');
+      try {
+        const uploadedUrl = await this.uploadService.uploadFile(file, 'profiles');
+        profileImageUrl = uploadedUrl || null;
+      } catch (uploadError) {
+        console.warn('Profile image upload failed, continuing without image:', uploadError.message);
+        profileImageUrl = null;
+      }
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);

@@ -9,6 +9,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterPatientDto } from './dto/register-patient.dto';
@@ -33,7 +34,7 @@ export class AuthController {
 
   @Public()
   @Post('register/patient')
-  @UseInterceptors(FileInterceptor('profileImage'))
+  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Register a new patient' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Patient registered successfully' })
@@ -58,7 +59,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('doctor', 'admin', 'secretary')
   @Post('register/patient-shadow')
-  @UseInterceptors(FileInterceptor('profileImage'))
+  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Register a shadow patient by a professional account' })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('JWT-auth')
@@ -75,7 +76,7 @@ export class AuthController {
 
   @Public()
   @Post('register/doctor')
-  @UseInterceptors(FileInterceptor('profileImage'))
+  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Register a new doctor' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Doctor registered successfully' })
