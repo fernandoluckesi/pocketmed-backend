@@ -443,7 +443,8 @@ export class AppointmentsService {
       );
     }
 
-    const isDoctorRequestingCompletion = dto.isCompleted === true;
+    const isDoctorRequestingCompletion = dto.isCompleted === true && isOwnerDoctor;
+    const isPatientRequestingCompletion = dto.isCompleted === true && isOwnerPatient;
 
     Object.assign(appointment, dto);
 
@@ -452,8 +453,13 @@ export class AppointmentsService {
     }
 
     if (isDoctorRequestingCompletion) {
+      // Doctor finalizing → requires patient approval
       appointment.isCompleted = false;
       appointment.status = AppointmentStatus.PENDING;
+    } else if (isPatientRequestingCompletion) {
+      // Patient finalizing → auto-approved, no approval needed
+      appointment.isCompleted = true;
+      appointment.status = AppointmentStatus.COMPLETED;
     }
 
     const savedAppointment = await this.appointmentRepository.save(appointment);
