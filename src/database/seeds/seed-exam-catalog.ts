@@ -292,8 +292,8 @@ export async function seedExamCatalog() {
   const examCatalogRepository = AppDataSource.getRepository(ExamCatalog);
 
   // Clear existing data to replace with new catalog
-  await examCatalogRepository.delete({});
-  await categoryRepository.delete({});
+  await examCatalogRepository.createQueryBuilder().delete().execute();
+  await categoryRepository.createQueryBuilder().delete().execute();
 
   // ── Categorias ────────────────────────────────────────────────────────────────
   const categoryMap: Record<string, ExamCategory> = {};

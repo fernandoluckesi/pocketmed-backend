@@ -361,11 +361,135 @@ export async function seedDatabase() {
     await accessRequestRepository.save(accessRequest);
   }
 
+  // ── Dr. Fernando Luckesi ──────────────────────────────────────────────────────
+  const fernandoPasswordHash = await bcrypt.hash('958969', 10);
+
+  let drFernando = await doctorRepository.findOne({
+    where: { email: 'fernando.luckesi.dr@gmail.com' },
+  });
+
+  if (!drFernando) {
+    drFernando = doctorRepository.create({
+      name: 'DR. Fernando Luckesi',
+      email: 'fernando.luckesi.dr@gmail.com',
+      password: fernandoPasswordHash,
+      gender: 'male',
+      phone: '11977777777',
+      birthDate: new Date('1990-08-15'),
+      specialty: 'Clínica Geral',
+      crm: 'CRM-SP-99999',
+      cpf: '99988877766',
+      profileImage: null,
+      type: 'doctor',
+      isShadow: false,
+    });
+
+    drFernando = await doctorRepository.save(drFernando);
+  }
+
+  // ── 50 pacientes extras para Dr. Fernando ───────────────────────────────────
+  const FERNANDO_PATIENT_NAMES = [
+    'Thiago Mendes', 'Larissa Campos', 'Diego Ferreira', 'Isabela Rocha', 'Vinicius Alves',
+    'Natalia Borges', 'Gustavo Pinto', 'Mariana Duarte', 'Leandro Cunha', 'Priscila Monteiro',
+    'Henrique Lopes', 'Tatiana Vieira', 'Rodrigo Barros', 'Vanessa Cardoso', 'Fabio Teixeira',
+    'Daniela Ramos', 'Marcelo Farias', 'Simone Correia', 'Andre Nogueira', 'Leticia Melo',
+    'Caio Rezende', 'Raquel Azevedo', 'Felipe Braga', 'Juliana Pires', 'Eduardo Sampaio',
+    'Adriana Fonseca', 'Renato Machado', 'Cristiane Neves', 'Sergio Alencar', 'Monica Tavares',
+    'Alexandre Brito', 'Flavia Guimaraes', 'Luciano Andrade', 'Elaine Siqueira', 'Matheus Coelho',
+    'Debora Lacerda', 'Wagner Bastos', 'Cintia Marques', 'Otavio Rangel', 'Sabrina Pacheco',
+    'Leonardo Vasconcelos', 'Bianca Medeiros', 'Renan Cavalcanti', 'Camila Fontes', 'Hugo Batista',
+    'Fernanda Queiroz', 'Tiago Moraes', 'Aline Santana', 'Murilo Dantas', 'Carolina Esteves',
+  ];
+
+  const fernandoPatients: Patient[] = [];
+
+  for (let i = 0; i < FERNANDO_PATIENT_NAMES.length; i++) {
+    const fullName = FERNANDO_PATIENT_NAMES[i];
+    const emailName = fullName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '.');
+    const email = `${emailName}@email.com`;
+
+    let p = await patientRepository.findOne({ where: { email } });
+
+    if (!p) {
+      const gender = i % 2 === 0 ? 'male' : 'female';
+      const day = (i % 28) + 1;
+      const month = (i % 12) + 1;
+      const year = 1975 + (i % 30);
+
+      p = patientRepository.create({
+        name: fullName,
+        email,
+        password: patientPasswordHash,
+        gender,
+        phone: `1196${String(i + 2000000).slice(-7)}`,
+        birthDate: new Date(
+          `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        ),
+        profileImage: null,
+        type: 'patient',
+        isShadow: false,
+        doctorCreatorId: null,
+      });
+
+      p = await patientRepository.save(p);
+    }
+
+    fernandoPatients.push(p);
+  }
+
+  // ── Permissões: Dr. Fernando tem acesso aos 10 primeiros pacientes ──────────
+  const patientsWithAccess = fernandoPatients.slice(0, 10);
+
+  for (const fp of patientsWithAccess) {
+    const existingPermission = await permissionRepository.findOne({
+      where: { doctorId: drFernando.id, patientId: fp.id, dependentId: null },
+    });
+
+    if (!existingPermission) {
+      const perm = permissionRepository.create({
+        doctorId: drFernando.id,
+        patientId: fp.id,
+        dependentId: null,
+        isActive: true,
+      });
+      await permissionRepository.save(perm);
+    }
+
+    // Criar access request aprovado correspondente
+    const existingRequest = await accessRequestRepository.findOne({
+      where: {
+        doctorId: drFernando.id,
+        patientId: fp.id,
+        dependentId: null,
+        status: AccessRequestStatus.APPROVED,
+      },
+    });
+
+    if (!existingRequest) {
+      const req = accessRequestRepository.create({
+        doctorId: drFernando.id,
+        patientId: fp.id,
+        dependentId: null,
+        status: AccessRequestStatus.APPROVED,
+        message: 'Acesso concedido via seed',
+      });
+      await accessRequestRepository.save(req);
+    }
+  }
+
   console.log('Seed finalizada com sucesso.');
   console.log('Doctor login: doctor.seed@pocketmed.com / 123456');
+  console.log('Doctor login: fernando.luckesi.dr@gmail.com / 958969');
   console.log('Patient login: patient.seed@pocketmed.com / 958969');
   console.log(
     `Pacientes comuns existentes/criados para login: ${generatedPatients.length} com senha 958969`,
+  );
+  console.log(
+    `Pacientes Dr. Fernando: ${fernandoPatients.length} criados, ${patientsWithAccess.length} com acesso concedido`,
   );
 
   await seedClinic();
