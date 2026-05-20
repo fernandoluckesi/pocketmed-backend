@@ -36,10 +36,12 @@ import { ExamCategory } from './entities/exam-category.entity';
 import { ExamCatalog } from './entities/exam-catalog.entity';
 import { ExamSchedule } from './entities/exam-schedule.entity';
 import { ExamScheduleItem } from './entities/exam-schedule-item.entity';
+import { DoctorDocument } from './entities/doctor-document.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
 import { ExamCatalogModule } from './exam-catalog/exam-catalog.module';
 import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
+import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.module';
 
 @Module({
   imports: [
@@ -82,6 +84,7 @@ import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
           ExamCatalog,
           ExamSchedule,
           ExamScheduleItem,
+          DoctorDocument,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -103,6 +106,7 @@ import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
     ClinicAdminModule,
     ExamCatalogModule,
     ExamSchedulingModule,
+    DoctorDocumentsModule,
   ],
   controllers: [AppController],
   providers: [

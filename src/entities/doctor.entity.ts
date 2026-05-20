@@ -13,6 +13,7 @@ import { Patient } from './patient.entity';
 import { DoctorAccessRequest } from './doctor-access-request.entity';
 import { DoctorPermission } from './doctor-permission.entity';
 import { ClinicMembership } from './clinic-membership.entity';
+import { DoctorDocument } from './doctor-document.entity';
 
 @Entity('doctors')
 export class Doctor {
@@ -67,6 +68,9 @@ export class Doctor {
   @Column({ type: 'varchar', length: 14 })
   cpf: string;
 
+  @Column({ type: 'varchar', length: 20, default: 'PENDING' })
+  verificationStatus: string; // PENDING, SUBMITTED, APPROVED, REJECTED
+
   @OneToMany(() => Patient, (patient) => patient.doctorCreator)
   shadowPatientsCreated: Patient[];
 
@@ -87,6 +91,9 @@ export class Doctor {
 
   @OneToMany(() => ClinicMembership, (membership) => membership.professional)
   clinicMemberships: ClinicMembership[];
+
+  @OneToMany(() => DoctorDocument, (doc) => doc.doctor)
+  documents: DoctorDocument[];
 
   @CreateDateColumn()
   createdAt: Date;

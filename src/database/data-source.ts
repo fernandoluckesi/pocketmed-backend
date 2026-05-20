@@ -19,6 +19,7 @@ import { ExamCategory } from '../entities/exam-category.entity';
 import { ExamCatalog } from '../entities/exam-catalog.entity';
 import { ExamSchedule } from '../entities/exam-schedule.entity';
 import { ExamScheduleItem } from '../entities/exam-schedule-item.entity';
+import { DoctorDocument } from '../entities/doctor-document.entity';
 
 const AppDataSource = new DataSource({
   type: 'mysql',
@@ -46,6 +47,7 @@ const AppDataSource = new DataSource({
     ExamCatalog,
     ExamSchedule,
     ExamScheduleItem,
+    DoctorDocument,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
