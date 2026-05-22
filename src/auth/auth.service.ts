@@ -201,10 +201,33 @@ export class AuthService {
   }
 
   async registerDoctor(dto: RegisterDoctorDto, file?: Express.Multer.File) {
-    const existingUser = await this.findUserByEmail(dto.email);
+    // Check all conflicts at once
+    const conflicts: string[] = [];
 
-    if (existingUser) {
-      throw new ConflictException('Email already registered');
+    const existingEmail = await this.findUserByEmail(dto.email);
+    if (existingEmail) {
+      conflicts.push('email');
+    }
+
+    const existingPhone = await this.doctorRepository.findOne({
+      where: { phone: dto.phone },
+    });
+    if (existingPhone) {
+      conflicts.push('phone');
+    }
+
+    const existingCrm = await this.doctorRepository.findOne({
+      where: { crm: dto.crm },
+    });
+    if (existingCrm) {
+      conflicts.push('crm');
+    }
+
+    if (conflicts.length > 0) {
+      throw new ConflictException({
+        message: 'Dados já cadastrados',
+        conflicts,
+      });
     }
 
     let profileImageUrl = null;

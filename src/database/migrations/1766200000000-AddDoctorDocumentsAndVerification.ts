@@ -25,7 +25,7 @@ export class AddDoctorDocumentsAndVerification1766200000000 implements Migration
         PRIMARY KEY (\`id\`),
         KEY \`FK_doctor_documents_doctor\` (\`doctorId\`),
         CONSTRAINT \`FK_doctor_documents_doctor\` FOREIGN KEY (\`doctorId\`) REFERENCES \`doctors\`(\`id\`) ON DELETE CASCADE ON UPDATE NO ACTION
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
     `);
   }
 
