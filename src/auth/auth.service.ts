@@ -253,6 +253,7 @@ export class AuthService {
       phone: dto.phone,
       birthDate: new Date(dto.birthDate),
       crm: dto.crm,
+      rqe: dto.rqe || null,
       profileImage: profileImageUrl,
       type: 'doctor',
       isShadow: false,

@@ -46,6 +46,11 @@ export class RegisterDoctorDto {
   @IsNotEmpty()
   crm: string;
 
+  @ApiProperty({ example: '12345', required: false })
+  @IsString()
+  @IsOptional()
+  rqe?: string;
+
   @ApiProperty({ type: 'string', format: 'binary', required: false })
   @IsOptional()
   profileImage?: any;

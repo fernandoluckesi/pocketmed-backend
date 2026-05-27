@@ -65,6 +65,9 @@ export class Doctor {
   @Column({ type: 'varchar', length: 20 })
   crm: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  rqe: string;
+
   @Column({ type: 'varchar', length: 14 })
   cpf: string;
 
