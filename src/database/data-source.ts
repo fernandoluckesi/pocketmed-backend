@@ -20,6 +20,13 @@ import { ExamCatalog } from '../entities/exam-catalog.entity';
 import { ExamSchedule } from '../entities/exam-schedule.entity';
 import { ExamScheduleItem } from '../entities/exam-schedule-item.entity';
 import { DoctorDocument } from '../entities/doctor-document.entity';
+import { FinancialSettings } from '../entities/financial-settings.entity';
+import { FinancialCostCenter } from '../entities/financial-cost-center.entity';
+import { FinancialConvenio } from '../entities/financial-convenio.entity';
+import { FinancialRevenue } from '../entities/financial-revenue.entity';
+import { FinancialExpense } from '../entities/financial-expense.entity';
+import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
+import { FinancialCashflowEntry } from '../entities/financial-cashflow-entry.entity';
 
 const AppDataSource = new DataSource({
   type: 'mysql',
@@ -48,6 +55,13 @@ const AppDataSource = new DataSource({
     ExamSchedule,
     ExamScheduleItem,
     DoctorDocument,
+    FinancialSettings,
+    FinancialCostCenter,
+    FinancialConvenio,
+    FinancialRevenue,
+    FinancialExpense,
+    FinancialDoctorTransfer,
+    FinancialCashflowEntry,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

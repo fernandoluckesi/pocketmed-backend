@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -37,11 +38,19 @@ import { ExamCatalog } from './entities/exam-catalog.entity';
 import { ExamSchedule } from './entities/exam-schedule.entity';
 import { ExamScheduleItem } from './entities/exam-schedule-item.entity';
 import { DoctorDocument } from './entities/doctor-document.entity';
+import { FinancialSettings } from './entities/financial-settings.entity';
+import { FinancialCostCenter } from './entities/financial-cost-center.entity';
+import { FinancialConvenio } from './entities/financial-convenio.entity';
+import { FinancialRevenue } from './entities/financial-revenue.entity';
+import { FinancialExpense } from './entities/financial-expense.entity';
+import { FinancialDoctorTransfer } from './entities/financial-doctor-transfer.entity';
+import { FinancialCashflowEntry } from './entities/financial-cashflow-entry.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
 import { ExamCatalogModule } from './exam-catalog/exam-catalog.module';
 import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
 import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.module';
+import { FinancialModule } from './financial/financial.module';
 
 @Module({
   imports: [
@@ -49,6 +58,7 @@ import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.modul
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -85,6 +95,13 @@ import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.modul
           ExamSchedule,
           ExamScheduleItem,
           DoctorDocument,
+          FinancialSettings,
+          FinancialCostCenter,
+          FinancialConvenio,
+          FinancialRevenue,
+          FinancialExpense,
+          FinancialDoctorTransfer,
+          FinancialCashflowEntry,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -107,6 +124,7 @@ import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.modul
     ExamCatalogModule,
     ExamSchedulingModule,
     DoctorDocumentsModule,
+    FinancialModule,
   ],
   controllers: [AppController],
   providers: [
