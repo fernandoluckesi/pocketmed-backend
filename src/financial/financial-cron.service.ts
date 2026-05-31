@@ -8,7 +8,7 @@ export class FinancialCronService {
 
   constructor(private readonly financialService: FinancialService) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_1AM)
+  @Cron(CronExpression.EVERY_DAY_AT_1AM, { name: 'financial-overdue-check' })
   async handleOverdueCheck() {
     this.logger.log('Running daily overdue check...');
     try {
