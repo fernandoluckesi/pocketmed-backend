@@ -13,13 +13,13 @@ RUN npm run build
 # ── Production image ──────────────────────────────────────────────────────────
 FROM node:18-alpine
 
-# Install netcat for DB readiness check in start.sh
-RUN apk add --no-cache netcat-openbsd
+# Install netcat for DB readiness check and build tools for native modules
+RUN apk add --no-cache netcat-openbsd python3 make g++
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm ci --omit=dev && apk del python3 make g++
 
 # Copy compiled output and startup script
 COPY --from=builder /app/dist ./dist
