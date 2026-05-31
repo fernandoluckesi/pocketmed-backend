@@ -19,7 +19,7 @@ RUN apk add --no-cache netcat-openbsd
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # Copy compiled output and startup script
 COPY --from=builder /app/dist ./dist
