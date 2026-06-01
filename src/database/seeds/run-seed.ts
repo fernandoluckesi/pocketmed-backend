@@ -389,16 +389,56 @@ export async function seedDatabase() {
 
   // ── 50 pacientes extras para Dr. Fernando ───────────────────────────────────
   const FERNANDO_PATIENT_NAMES = [
-    'Thiago Mendes', 'Larissa Campos', 'Diego Ferreira', 'Isabela Rocha', 'Vinicius Alves',
-    'Natalia Borges', 'Gustavo Pinto', 'Mariana Duarte', 'Leandro Cunha', 'Priscila Monteiro',
-    'Henrique Lopes', 'Tatiana Vieira', 'Rodrigo Barros', 'Vanessa Cardoso', 'Fabio Teixeira',
-    'Daniela Ramos', 'Marcelo Farias', 'Simone Correia', 'Andre Nogueira', 'Leticia Melo',
-    'Caio Rezende', 'Raquel Azevedo', 'Felipe Braga', 'Juliana Pires', 'Eduardo Sampaio',
-    'Adriana Fonseca', 'Renato Machado', 'Cristiane Neves', 'Sergio Alencar', 'Monica Tavares',
-    'Alexandre Brito', 'Flavia Guimaraes', 'Luciano Andrade', 'Elaine Siqueira', 'Matheus Coelho',
-    'Debora Lacerda', 'Wagner Bastos', 'Cintia Marques', 'Otavio Rangel', 'Sabrina Pacheco',
-    'Leonardo Vasconcelos', 'Bianca Medeiros', 'Renan Cavalcanti', 'Camila Fontes', 'Hugo Batista',
-    'Fernanda Queiroz', 'Tiago Moraes', 'Aline Santana', 'Murilo Dantas', 'Carolina Esteves',
+    'Thiago Mendes',
+    'Larissa Campos',
+    'Diego Ferreira',
+    'Isabela Rocha',
+    'Vinicius Alves',
+    'Natalia Borges',
+    'Gustavo Pinto',
+    'Mariana Duarte',
+    'Leandro Cunha',
+    'Priscila Monteiro',
+    'Henrique Lopes',
+    'Tatiana Vieira',
+    'Rodrigo Barros',
+    'Vanessa Cardoso',
+    'Fabio Teixeira',
+    'Daniela Ramos',
+    'Marcelo Farias',
+    'Simone Correia',
+    'Andre Nogueira',
+    'Leticia Melo',
+    'Caio Rezende',
+    'Raquel Azevedo',
+    'Felipe Braga',
+    'Juliana Pires',
+    'Eduardo Sampaio',
+    'Adriana Fonseca',
+    'Renato Machado',
+    'Cristiane Neves',
+    'Sergio Alencar',
+    'Monica Tavares',
+    'Alexandre Brito',
+    'Flavia Guimaraes',
+    'Luciano Andrade',
+    'Elaine Siqueira',
+    'Matheus Coelho',
+    'Debora Lacerda',
+    'Wagner Bastos',
+    'Cintia Marques',
+    'Otavio Rangel',
+    'Sabrina Pacheco',
+    'Leonardo Vasconcelos',
+    'Bianca Medeiros',
+    'Renan Cavalcanti',
+    'Camila Fontes',
+    'Hugo Batista',
+    'Fernanda Queiroz',
+    'Tiago Moraes',
+    'Aline Santana',
+    'Murilo Dantas',
+    'Carolina Esteves',
   ];
 
   const fernandoPatients: Patient[] = [];
@@ -490,6 +530,149 @@ export async function seedDatabase() {
   );
   console.log(
     `Pacientes Dr. Fernando: ${fernandoPatients.length} criados, ${patientsWithAccess.length} com acesso concedido`,
+  );
+
+  // ── Dra. Camila Rocha ──────────────────────────────────────────────────────
+  const camilaPasswordHash = await bcrypt.hash('123456', 10);
+
+  let draCamila = await doctorRepository.findOne({
+    where: { email: 'camila.rocha@pocketmed.com' },
+  });
+
+  if (!draCamila) {
+    draCamila = doctorRepository.create({
+      name: 'Dra. Camila Rocha',
+      email: 'camila.rocha@pocketmed.com',
+      password: camilaPasswordHash,
+      gender: 'female',
+      phone: '11966554433',
+      birthDate: new Date('1988-03-22'),
+      specialty: 'Dermatologia',
+      crm: 'CRM-SP-54321',
+      cpf: '98765432100',
+      profileImage: null,
+      type: 'doctor',
+      isShadow: false,
+    });
+
+    draCamila = await doctorRepository.save(draCamila);
+  }
+
+  // ── 30 pacientes para Dra. Camila ──────────────────────────────────────────
+  const CAMILA_PATIENT_NAMES = [
+    'Amanda Ferreira',
+    'Bruno Cardoso',
+    'Cecília Martins',
+    'Daniel Oliveira',
+    'Elisa Nascimento',
+    'Fábio Correia',
+    'Gabriela Souza',
+    'Heitor Barbosa',
+    'Ingrid Almeida',
+    'João Pedro Lima',
+    'Karen Teixeira',
+    'Leonardo Dias',
+    'Manuela Costa',
+    'Nicolas Ribeiro',
+    'Olívia Gomes',
+    'Paulo Henrique Moura',
+    'Rafaela Pinto',
+    'Samuel Araújo',
+    'Tatiana Freitas',
+    'Ulisses Neves',
+    'Valentina Rocha',
+    'Wesley Campos',
+    'Ximena Borges',
+    'Yuri Fonseca',
+    'Zilda Machado',
+    'Arthur Lacerda',
+    'Bianca Siqueira',
+    'Caio Rangel',
+    'Diana Pacheco',
+    'Eduardo Vasconcelos',
+  ];
+
+  const camilaPatients: Patient[] = [];
+
+  for (let i = 0; i < CAMILA_PATIENT_NAMES.length; i++) {
+    const fullName = CAMILA_PATIENT_NAMES[i];
+    const emailName = fullName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, '.');
+    const email = `${emailName}.camila@email.com`;
+
+    let p = await patientRepository.findOne({ where: { email } });
+
+    if (!p) {
+      const gender = i % 2 === 0 ? 'female' : 'male';
+      const day = (i % 28) + 1;
+      const month = (i % 12) + 1;
+      const year = 1978 + (i % 30);
+
+      p = patientRepository.create({
+        name: fullName,
+        email,
+        password: patientPasswordHash,
+        gender,
+        phone: `1195${String(i + 3000000).slice(-7)}`,
+        birthDate: new Date(
+          `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        ),
+        profileImage: null,
+        type: 'patient',
+        isShadow: false,
+        doctorCreatorId: null,
+      });
+
+      p = await patientRepository.save(p);
+    }
+
+    camilaPatients.push(p);
+  }
+
+  // ── Permissões: Dra. Camila tem acesso aos 10 primeiros pacientes ──────────
+  const camilaPatientsWithAccess = camilaPatients.slice(0, 10);
+
+  for (const cp of camilaPatientsWithAccess) {
+    const existingPermission = await permissionRepository.findOne({
+      where: { doctorId: draCamila.id, patientId: cp.id, dependentId: null },
+    });
+
+    if (!existingPermission) {
+      const perm = permissionRepository.create({
+        doctorId: draCamila.id,
+        patientId: cp.id,
+        dependentId: null,
+        isActive: true,
+      });
+      await permissionRepository.save(perm);
+    }
+
+    const existingRequest = await accessRequestRepository.findOne({
+      where: {
+        doctorId: draCamila.id,
+        patientId: cp.id,
+        dependentId: null,
+        status: AccessRequestStatus.APPROVED,
+      },
+    });
+
+    if (!existingRequest) {
+      const req = accessRequestRepository.create({
+        doctorId: draCamila.id,
+        patientId: cp.id,
+        dependentId: null,
+        status: AccessRequestStatus.APPROVED,
+        message: 'Acesso concedido via seed',
+      });
+      await accessRequestRepository.save(req);
+    }
+  }
+
+  console.log(
+    `Pacientes Dra. Camila: ${camilaPatients.length} criados, ${camilaPatientsWithAccess.length} com acesso concedido`,
   );
 
   await seedClinic();
