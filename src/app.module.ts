@@ -45,6 +45,7 @@ import { FinancialRevenue } from './entities/financial-revenue.entity';
 import { FinancialExpense } from './entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from './entities/financial-doctor-transfer.entity';
 import { FinancialCashflowEntry } from './entities/financial-cashflow-entry.entity';
+import { PatientAccessLog } from './entities/patient-access-log.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
 import { ExamCatalogModule } from './exam-catalog/exam-catalog.module';
@@ -102,6 +103,7 @@ import { FinancialModule } from './financial/financial.module';
           FinancialExpense,
           FinancialDoctorTransfer,
           FinancialCashflowEntry,
+          PatientAccessLog,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PatientsService } from './patients.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -62,5 +62,171 @@ export class PatientsController {
   @ApiResponse({ status: 404, description: 'Patient not found' })
   async findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.patientsService.findOne(id, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  // ─── Sprint 1: Patient Sub-resource Endpoints ─────────────────────────────
+
+  @Get(':id/medical-record')
+  @ApiOperation({ summary: 'Get full medical record for a patient' })
+  @ApiResponse({ status: 200, description: 'Return consolidated medical record' })
+  async getMedicalRecord(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getMedicalRecord(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+  }
+
+  @Get(':id/consultations')
+  @ApiOperation({ summary: 'Get consultations (appointments) for a patient' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter start date (ISO)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter end date (ISO)' })
+  @ApiResponse({ status: 200, description: 'Return patient consultations' })
+  async getConsultations(
+    @Param('id') id: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.getConsultations(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      startDate,
+      endDate,
+    );
+  }
+
+  @Get(':id/medications')
+  @ApiOperation({ summary: 'Get medications for a patient' })
+  @ApiResponse({ status: 200, description: 'Return patient medications' })
+  async getMedications(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getMedications(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+  }
+
+  @Get(':id/exams')
+  @ApiOperation({ summary: 'Get exams/documents for a patient' })
+  @ApiResponse({ status: 200, description: 'Return patient exams' })
+  async getExams(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getExams(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+  }
+
+  @Post(':id/consultations')
+  @ApiOperation({ summary: 'Create a consultation note for a patient' })
+  @ApiResponse({ status: 201, description: 'Consultation created' })
+  async createConsultation(
+    @Param('id') id: string,
+    @Body() body: { date: string; symptoms?: string; diagnosis?: string; prescription?: string; notes?: string; priority?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.createConsultation(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
+  }
+
+  @Post(':id/medications')
+  @ApiOperation({ summary: 'Prescribe medication for a patient' })
+  @ApiResponse({ status: 201, description: 'Medication prescribed' })
+  async prescribeMedication(
+    @Param('id') id: string,
+    @Body() body: { name: string; dosage: string; frequency: string; type?: string; startDate: string; endDate?: string; notes?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.prescribeMedication(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update patient personal data' })
+  @ApiResponse({ status: 200, description: 'Patient updated' })
+  async updatePatient(
+    @Param('id') id: string,
+    @Body() body: { name?: string; phone?: string; gender?: string; birthDate?: string; profileImage?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.updatePatient(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
+  }
+
+  // ─── Sprint 3: Timeline & Alerts ─────────────────────────────────────────
+
+  @Get(':id/timeline')
+  @ApiOperation({ summary: 'Get patient timeline (all events chronologically)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Max items to return (default 50)' })
+  @ApiResponse({ status: 200, description: 'Return patient timeline' })
+  async getTimeline(
+    @Param('id') id: string,
+    @Query('limit') limit: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.getTimeline(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      limit ? parseInt(limit, 10) : 50,
+    );
+  }
+
+  @Get(':id/alerts')
+  @ApiOperation({ summary: 'Get clinical alerts for a patient' })
+  @ApiResponse({ status: 200, description: 'Return patient alerts' })
+  async getAlerts(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getAlerts(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+  }
+
+  // ─── Sprint 4: Audit Logging ──────────────────────────────────────────────
+
+  @Get(':id/access-log')
+  @ApiOperation({ summary: 'Get access log for a patient (audit trail)' })
+  @ApiResponse({ status: 200, description: 'Return access log entries' })
+  async getAccessLog(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getAccessLog(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 }
