@@ -9,6 +9,7 @@ import { Medication } from '../entities/medication.entity';
 import { Exam } from '../entities/exam.entity';
 import { PatientAccessLog } from '../entities/patient-access-log.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PatientsService {
@@ -42,6 +43,7 @@ export class PatientsService {
     private examRepository: Repository<Exam>,
     @InjectRepository(PatientAccessLog)
     private accessLogRepository: Repository<PatientAccessLog>,
+    private notificationsService: NotificationsService,
   ) {}
 
   private async getAccessiblePatientIdsForDoctor(doctorId: string): Promise<string[]> {
@@ -397,11 +399,18 @@ export class PatientsService {
     await this.logAccess(patientId, doctorId, 'VIEW_RECORD');
 
     // Get appointments
-    const appointments = await this.appointmentRepository.find({
+    let appointments = await this.appointmentRepository.find({
       where: { patientId },
       order: { dateTime: 'DESC' },
       take: 50,
     });
+
+    // Filter out pending_approval consultations from other doctors (they can only see approved ones)
+    if (userType === 'doctor') {
+      appointments = appointments.filter(
+        (apt) => apt.status !== ('pending_approval' as any) || apt.doctorId === doctorId,
+      );
+    }
 
     // Get medications
     const medications = await this.medicationRepository.find({
@@ -503,6 +512,7 @@ export class PatientsService {
       prescription?: string;
       notes?: string;
       priority?: string;
+      completed?: boolean;
     },
   ) {
     // Verify access
@@ -510,23 +520,184 @@ export class PatientsService {
 
     await this.logAccess(patientId, doctorId, 'CREATE_CONSULTATION');
 
+    const isCompleted = data.completed === true;
+
+    // Shadow patients don't need approval (they don't have an app account)
+    const patientEntity = await this.patientRepository.findOne({ where: { id: patientId } });
+    const isShadow = patientEntity?.isShadow ?? false;
+
+    // Shadow: goes directly to final status. Non-shadow: needs patient approval first
+    let status: string;
+    if (isShadow) {
+      status = isCompleted ? 'completed' : 'approved';
+    } else {
+      status = 'pending_approval';
+    }
+
     const appointment = this.appointmentRepository.create({
       patientId,
       doctorId,
       dateTime: new Date(data.date),
       reason: data.symptoms || '',
       doctorFeedback: data.diagnosis || null,
-      doctorInstructions: data.prescription
-        ? `${data.prescription}${data.notes ? '\n\nNotes: ' + data.notes : ''}`
-        : data.notes || null,
-      status: 'completed' as any,
-      isCompleted: true,
+      doctorInstructions: data.prescription || null,
+      status: status as any,
+      isCompleted,
+      lockedByDoctor: true,
+      lastModifiedById: doctorId,
+      lastModifiedByType: 'doctor',
       doctorCrm: '',
       doctorName: '',
       doctorSpecialty: '',
     });
 
     const saved = await this.appointmentRepository.save(appointment);
+
+    // Send push notification to patient if not shadow
+    if (!isShadow) {
+      const doctorEntity = await this.patientRepository.manager
+        .getRepository('Doctor')
+        .findOne({ where: { id: doctorId }, select: ['id', 'name'] }) as { id: string; name: string } | null;
+
+      const doctorName = doctorEntity?.name || 'Seu médico';
+      const dateFormatted = new Date(data.date).toLocaleDateString('pt-BR');
+
+      await this.notificationsService.createNotification(
+        patientId,
+        'patient',
+        'Nova consulta agendada',
+        `${doctorName} agendou uma consulta para ${dateFormatted}. Toque para confirmar.`,
+        'CONSULTATION_APPROVAL_REQUESTED',
+        { appointmentId: saved.id, doctorId, doctorName },
+        saved.id,
+      );
+    }
+
+    return saved;
+  }
+
+  async updateConsultation(
+    patientId: string,
+    consultationId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: {
+      date?: string;
+      symptoms?: string;
+      diagnosis?: string;
+      prescription?: string;
+      notes?: string;
+      completed?: boolean;
+    },
+  ) {
+    // Verify access
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+
+    await this.logAccess(patientId, userId, 'UPDATE_CONSULTATION');
+
+    const appointment = await this.appointmentRepository.findOne({
+      where: { id: consultationId, patientId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Consultation not found');
+    }
+
+    // If patient tries to edit a doctor-locked consultation, deny
+    if (userType === 'patient' && appointment.lockedByDoctor) {
+      throw new ForbiddenException('Esta consulta foi registrada pelo médico e não pode ser alterada.');
+    }
+
+    if (data.date) appointment.dateTime = new Date(data.date);
+    if (data.symptoms !== undefined) appointment.reason = data.symptoms;
+    if (data.diagnosis !== undefined) appointment.doctorFeedback = data.diagnosis || null;
+    if (data.prescription !== undefined) {
+      appointment.doctorInstructions = data.prescription || null;
+    }
+    if (data.completed !== undefined) {
+      appointment.isCompleted = data.completed;
+      appointment.status = (data.completed ? 'completed' : 'approved') as any;
+    }
+
+    // Track who modified
+    appointment.lastModifiedById = userId;
+    appointment.lastModifiedByType = userType === 'doctor' ? 'doctor' : 'patient';
+
+    // If doctor edits, lock for patient and send notification
+    if (userType === 'doctor') {
+      appointment.lockedByDoctor = true;
+
+      // Set status back to pending_approval if patient is not shadow
+      const patientEntity = await this.patientRepository.findOne({ where: { id: patientId } });
+      if (patientEntity && !patientEntity.isShadow) {
+        appointment.status = 'pending_approval' as any;
+
+        const doctorEntity = await this.patientRepository.manager
+          .getRepository('Doctor')
+          .findOne({ where: { id: userId }, select: ['id', 'name'] }) as { id: string; name: string } | null;
+
+        const doctorName = doctorEntity?.name || 'Seu médico';
+
+        await this.notificationsService.createNotification(
+          patientId,
+          'patient',
+          'Consulta atualizada',
+          `${doctorName} atualizou os dados da sua consulta. Toque para revisar e confirmar.`,
+          'CONSULTATION_APPROVAL_REQUESTED',
+          { appointmentId: consultationId, doctorId: userId, doctorName },
+          consultationId,
+        );
+      }
+    }
+
+    return this.appointmentRepository.save(appointment);
+  }
+
+  async approveConsultation(
+    patientId: string,
+    consultationId: string,
+    userId: string,
+    approved: boolean,
+  ) {
+    // Only the patient themselves can approve
+    if (userId !== patientId) {
+      throw new ForbiddenException('Only the patient can approve/reject consultations');
+    }
+
+    const appointment = await this.appointmentRepository.findOne({
+      where: { id: consultationId, patientId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Consultation not found');
+    }
+
+    if (appointment.status !== ('pending_approval' as any)) {
+      throw new ForbiddenException('This consultation is not pending approval');
+    }
+
+    appointment.status = (approved ? (appointment.isCompleted ? 'completed' : 'approved') : 'rejected') as any;
+
+    const saved = await this.appointmentRepository.save(appointment);
+
+    // Notify the doctor about the decision
+    const patientEntity = await this.patientRepository.findOne({ where: { id: patientId }, select: ['id', 'name'] });
+    const patientName = patientEntity?.name || 'Paciente';
+
+    await this.notificationsService.createNotification(
+      appointment.doctorId,
+      'doctor',
+      approved ? 'Consulta confirmada' : 'Consulta recusada',
+      approved
+        ? `${patientName} confirmou a consulta agendada.`
+        : `${patientName} recusou a consulta agendada.`,
+      approved ? 'CONSULTATION_APPROVED' : 'CONSULTATION_REJECTED',
+      { appointmentId: saved.id, patientId },
+      saved.id,
+    );
+
     return saved;
   }
 

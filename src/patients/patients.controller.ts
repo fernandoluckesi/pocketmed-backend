@@ -132,7 +132,7 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Consultation created' })
   async createConsultation(
     @Param('id') id: string,
-    @Body() body: { date: string; symptoms?: string; diagnosis?: string; prescription?: string; notes?: string; priority?: string },
+    @Body() body: { date: string; symptoms?: string; diagnosis?: string; prescription?: string; notes?: string; priority?: string; completed?: boolean },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.createConsultation(
@@ -142,6 +142,43 @@ export class PatientsController {
       user.role,
       user.activeClinicId,
       body,
+    );
+  }
+
+  @Put(':id/consultations/:consultationId')
+  @ApiOperation({ summary: 'Update a consultation for a patient' })
+  @ApiResponse({ status: 200, description: 'Consultation updated' })
+  async updateConsultation(
+    @Param('id') id: string,
+    @Param('consultationId') consultationId: string,
+    @Body() body: { date?: string; symptoms?: string; diagnosis?: string; prescription?: string; notes?: string; completed?: boolean },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.updateConsultation(
+      id,
+      consultationId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
+  }
+
+  @Post(':id/consultations/:consultationId/approve')
+  @ApiOperation({ summary: 'Patient approves or rejects a consultation' })
+  @ApiResponse({ status: 200, description: 'Consultation approved/rejected' })
+  async approveConsultation(
+    @Param('id') id: string,
+    @Param('consultationId') consultationId: string,
+    @Body() body: { approved: boolean },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.approveConsultation(
+      id,
+      consultationId,
+      user.userId,
+      body.approved,
     );
   }
 

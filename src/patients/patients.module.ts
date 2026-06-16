@@ -9,6 +9,7 @@ import { Appointment } from '../entities/appointment.entity';
 import { Medication } from '../entities/medication.entity';
 import { Exam } from '../entities/exam.entity';
 import { PatientAccessLog } from '../entities/patient-access-log.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { PatientAccessLog } from '../entities/patient-access-log.entity';
       Exam,
       PatientAccessLog,
     ]),
+    NotificationsModule,
   ],
   controllers: [PatientsController],
   providers: [PatientsService],

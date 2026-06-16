@@ -16,6 +16,7 @@ import { Exam } from './exam.entity';
 
 export enum AppointmentStatus {
   PENDING = 'pending',
+  PENDING_APPROVAL = 'pending_approval',
   APPROVED = 'approved',
   REJECTED = 'rejected',
   COMPLETED = 'completed',
@@ -90,6 +91,18 @@ export class Appointment {
 
   @OneToMany(() => Exam, (exam) => exam.appointment)
   exams: Exam[];
+
+  /** Tracks who last modified this appointment: 'doctor' or 'patient' */
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  lastModifiedById: string | null;
+
+  /** 'doctor' | 'patient' */
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  lastModifiedByType: string | null;
+
+  /** Once a doctor modifies, patient cannot edit/delete */
+  @Column({ type: 'boolean', default: false })
+  lockedByDoctor: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
