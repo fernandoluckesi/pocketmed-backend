@@ -405,10 +405,12 @@ export class PatientsService {
       take: 50,
     });
 
-    // Filter out pending_approval consultations from other doctors (they can only see approved ones)
+    // Filter out pending_approval and rejected consultations from other doctors
     if (userType === 'doctor') {
       appointments = appointments.filter(
-        (apt) => apt.status !== ('pending_approval' as any) || apt.doctorId === doctorId,
+        (apt) =>
+          (apt.status !== ('pending_approval' as any) && apt.status !== ('rejected' as any)) ||
+          apt.doctorId === doctorId,
       );
     }
 
@@ -534,6 +536,11 @@ export class PatientsService {
       status = 'pending_approval';
     }
 
+    // Get doctor info for the appointment record
+    const doctorEntity = await this.patientRepository.manager
+      .getRepository('Doctor')
+      .findOne({ where: { id: doctorId }, select: ['id', 'name', 'crm', 'specialty'] }) as { id: string; name: string; crm: string; specialty: string } | null;
+
     const appointment = this.appointmentRepository.create({
       patientId,
       doctorId,
@@ -546,9 +553,9 @@ export class PatientsService {
       lockedByDoctor: true,
       lastModifiedById: doctorId,
       lastModifiedByType: 'doctor',
-      doctorCrm: '',
-      doctorName: '',
-      doctorSpecialty: '',
+      doctorCrm: doctorEntity?.crm || '',
+      doctorName: doctorEntity?.name || '',
+      doctorSpecialty: doctorEntity?.specialty || '',
     });
 
     const saved = await this.appointmentRepository.save(appointment);
@@ -695,6 +702,60 @@ export class PatientsService {
         : `${patientName} recusou a consulta agendada.`,
       approved ? 'CONSULTATION_APPROVED' : 'CONSULTATION_REJECTED',
       { appointmentId: saved.id, patientId },
+      saved.id,
+    );
+
+    return saved;
+  }
+
+  async resendConsultation(
+    patientId: string,
+    consultationId: string,
+    doctorId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
+    // Only the doctor who created can resend
+    if (userType !== 'doctor') {
+      throw new ForbiddenException('Only doctors can resend consultations');
+    }
+
+    await this.findOne(patientId, doctorId, userType, role, activeClinicId);
+
+    const appointment = await this.appointmentRepository.findOne({
+      where: { id: consultationId, patientId },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException('Consultation not found');
+    }
+
+    if (appointment.doctorId !== doctorId) {
+      throw new ForbiddenException('Only the doctor who created this consultation can resend it');
+    }
+
+    if (appointment.status !== ('rejected' as any)) {
+      throw new ForbiddenException('Only rejected consultations can be resent');
+    }
+
+    appointment.status = 'pending_approval' as any;
+    const saved = await this.appointmentRepository.save(appointment);
+
+    // Notify patient
+    const doctorEntity = await this.patientRepository.manager
+      .getRepository('Doctor')
+      .findOne({ where: { id: doctorId }, select: ['id', 'name'] }) as { id: string; name: string } | null;
+
+    const doctorName = doctorEntity?.name || 'Seu médico';
+
+    await this.notificationsService.createNotification(
+      patientId,
+      'patient',
+      'Consulta reenviada',
+      `${doctorName} reenviou a solicitação de consulta. Toque para revisar e confirmar.`,
+      'CONSULTATION_APPROVAL_REQUESTED',
+      { appointmentId: saved.id, doctorId, doctorName },
       saved.id,
     );
 

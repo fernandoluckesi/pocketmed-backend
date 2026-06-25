@@ -3,6 +3,7 @@ import {
   ConflictException,
   UnauthorizedException,
   NotFoundException,
+  ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -601,5 +602,54 @@ export class AuthService {
     }
 
     return result;
+  }
+
+  async updateProfile(
+    userId: string,
+    userType: string,
+    data: { name?: string; phone?: string; gender?: string; birthDate?: string; specialty?: string; crm?: string; rqe?: string },
+    file?: Express.Multer.File,
+  ) {
+    let profileImageUrl: string | null = null;
+    if (file) {
+      try {
+        profileImageUrl = await this.uploadService.uploadFile(file, 'profiles');
+      } catch (uploadError) {
+        console.warn('Profile image upload failed:', uploadError.message);
+      }
+    }
+
+    if (userType === 'doctor') {
+      const doctor = await this.doctorRepository.findOne({ where: { id: userId } });
+      if (!doctor) throw new NotFoundException('Doctor not found');
+
+      if (data.name) doctor.name = data.name;
+      if (data.phone) doctor.phone = data.phone;
+      if (data.gender) doctor.gender = data.gender;
+      if (data.birthDate) doctor.birthDate = new Date(data.birthDate);
+      if (data.specialty) doctor.specialty = data.specialty;
+      if (data.crm) doctor.crm = data.crm;
+      if (data.rqe !== undefined) doctor.rqe = data.rqe || null;
+      if (profileImageUrl) doctor.profileImage = profileImageUrl;
+
+      await this.doctorRepository.save(doctor);
+      return { message: 'Profile updated', profileImage: doctor.profileImage };
+    }
+
+    if (userType === 'patient') {
+      const patient = await this.patientRepository.findOne({ where: { id: userId } });
+      if (!patient) throw new NotFoundException('Patient not found');
+
+      if (data.name) patient.name = data.name;
+      if (data.phone) patient.phone = data.phone;
+      if (data.gender) patient.gender = data.gender;
+      if (data.birthDate) patient.birthDate = new Date(data.birthDate);
+      if (profileImageUrl) patient.profileImage = profileImageUrl;
+
+      await this.patientRepository.save(patient);
+      return { message: 'Profile updated', profileImage: patient.profileImage };
+    }
+
+    throw new ForbiddenException('Invalid user type');
   }
 }

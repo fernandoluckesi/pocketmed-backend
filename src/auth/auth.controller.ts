@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Patch,
   Body,
   UseInterceptors,
   UploadedFile,
@@ -152,5 +153,20 @@ export class AuthController {
       dto.oldPassword,
       dto.newPassword,
     );
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
+  @ApiOperation({ summary: 'Update current user profile' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Profile updated' })
+  async updateProfile(
+    @CurrentUser() user: any,
+    @Body() body: { name?: string; phone?: string; gender?: string; birthDate?: string; specialty?: string; crm?: string; rqe?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.authService.updateProfile(user.userId, user.type, body, file);
   }
 }

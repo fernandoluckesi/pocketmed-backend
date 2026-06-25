@@ -182,6 +182,24 @@ export class PatientsController {
     );
   }
 
+  @Post(':id/consultations/:consultationId/resend')
+  @ApiOperation({ summary: 'Doctor resends a rejected consultation for re-approval' })
+  @ApiResponse({ status: 200, description: 'Consultation resent' })
+  async resendConsultation(
+    @Param('id') id: string,
+    @Param('consultationId') consultationId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.resendConsultation(
+      id,
+      consultationId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+  }
+
   @Post(':id/medications')
   @ApiOperation({ summary: 'Prescribe medication for a patient' })
   @ApiResponse({ status: 201, description: 'Medication prescribed' })
