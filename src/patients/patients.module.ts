@@ -9,6 +9,9 @@ import { Appointment } from '../entities/appointment.entity';
 import { Medication } from '../entities/medication.entity';
 import { Exam } from '../entities/exam.entity';
 import { PatientAccessLog } from '../entities/patient-access-log.entity';
+import { PatientDisease } from '../entities/patient-disease.entity';
+import { PatientAllergy } from '../entities/patient-allergy.entity';
+import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -21,6 +24,9 @@ import { NotificationsModule } from '../notifications/notifications.module';
       Medication,
       Exam,
       PatientAccessLog,
+      PatientDisease,
+      PatientAllergy,
+      PatientVaccine,
     ]),
     NotificationsModule,
   ],

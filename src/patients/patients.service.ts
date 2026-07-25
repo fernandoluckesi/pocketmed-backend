@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
@@ -8,6 +8,9 @@ import { Appointment } from '../entities/appointment.entity';
 import { Medication } from '../entities/medication.entity';
 import { Exam } from '../entities/exam.entity';
 import { PatientAccessLog } from '../entities/patient-access-log.entity';
+import { PatientDisease } from '../entities/patient-disease.entity';
+import { PatientAllergy } from '../entities/patient-allergy.entity';
+import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -43,6 +46,12 @@ export class PatientsService {
     private examRepository: Repository<Exam>,
     @InjectRepository(PatientAccessLog)
     private accessLogRepository: Repository<PatientAccessLog>,
+    @InjectRepository(PatientDisease)
+    private diseaseRepository: Repository<PatientDisease>,
+    @InjectRepository(PatientAllergy)
+    private allergyRepository: Repository<PatientAllergy>,
+    @InjectRepository(PatientVaccine)
+    private vaccineRepository: Repository<PatientVaccine>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -348,7 +357,7 @@ export class PatientsService {
     }
 
     const patients = await this.patientRepository.find({
-      where: [{ name: Like(`%${query}%`) }, { email: Like(`%${query}%`) }],
+      where: [{ name: Like(`%${query}%`), isShadow: false }, { email: Like(`%${query}%`), isShadow: false }],
       select: this.patientSelectFields,
     });
 
@@ -572,8 +581,8 @@ export class PatientsService {
       await this.notificationsService.createNotification(
         patientId,
         'patient',
-        'Nova consulta agendada',
-        `${doctorName} agendou uma consulta para ${dateFormatted}. Toque para confirmar.`,
+        'Nova consulta cadastrada',
+        `${doctorName} cadastrou uma consulta para ${dateFormatted}. Toque para confirmar.`,
         'CONSULTATION_APPROVAL_REQUESTED',
         { appointmentId: saved.id, doctorId, doctorName },
         saved.id,
@@ -776,10 +785,21 @@ export class PatientsService {
       startDate: string;
       endDate?: string;
       notes?: string;
+      appointmentId?: string;
     },
   ) {
     // Verify access
     await this.findOne(patientId, doctorId, userType, role, activeClinicId);
+
+    // Validate appointmentId if provided
+    if (data.appointmentId) {
+      const appointment = await this.appointmentRepository.findOne({
+        where: { id: data.appointmentId },
+      });
+      if (!appointment || appointment.patientId !== patientId) {
+        throw new BadRequestException('appointmentId inválido ou não pertence a este paciente');
+      }
+    }
 
     await this.logAccess(patientId, doctorId, 'PRESCRIBE_MEDICATION');
 
@@ -793,6 +813,8 @@ export class PatientsService {
       endDate: data.endDate ? new Date(data.endDate) : undefined,
       instructions: data.notes || null,
       isActive: true,
+      appointmentId: data.appointmentId || null,
+      lockedByDoctor: true,
     });
 
     const saved = await this.medicationRepository.save(medication);
@@ -832,6 +854,152 @@ export class PatientsService {
     await this.patientRepository.update(patientId, updateData);
 
     return this.findOne(patientId, userId, userType, role, activeClinicId);
+  }
+
+  async updateDiseases(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    diseases: string[],
+  ) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    await this.logAccess(patientId, userId, 'UPDATE_DISEASES');
+    await this.patientRepository.update(patientId, { diseases });
+    return { diseases };
+  }
+
+  // ─── Disease Management ─────────────────────────────────────────────────────
+
+  async getDiseases(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    return this.diseaseRepository.find({ where: { patientId }, order: { createdAt: 'DESC' } });
+  }
+
+  async createDisease(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: { name: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+  ) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    await this.logAccess(patientId, userId, 'CREATE_DISEASE');
+
+    const disease = this.diseaseRepository.create({
+      patientId,
+      doctorId: userType === 'doctor' ? userId : null,
+      name: data.name,
+      description: data.description || null,
+      observations: data.observations || null,
+      status: data.status || 'in_treatment',
+      diagnosisDate: data.diagnosisDate ? new Date(data.diagnosisDate) : null,
+      treatmentStartDate: data.treatmentStartDate ? new Date(data.treatmentStartDate) : null,
+      treatmentEndDate: data.treatmentEndDate ? new Date(data.treatmentEndDate) : null,
+    });
+
+    return this.diseaseRepository.save(disease);
+  }
+
+  async updateDisease(
+    patientId: string,
+    diseaseId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: { name?: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+  ) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+
+    const disease = await this.diseaseRepository.findOne({ where: { id: diseaseId, patientId } });
+    if (!disease) throw new NotFoundException('Disease not found');
+
+    if (data.name !== undefined) disease.name = data.name;
+    if (data.description !== undefined) disease.description = data.description || null;
+    if (data.observations !== undefined) disease.observations = data.observations || null;
+    if (data.status !== undefined) disease.status = data.status;
+    if (data.diagnosisDate !== undefined) disease.diagnosisDate = data.diagnosisDate ? new Date(data.diagnosisDate) : null;
+    if (data.treatmentStartDate !== undefined) disease.treatmentStartDate = data.treatmentStartDate ? new Date(data.treatmentStartDate) : null;
+    if (data.treatmentEndDate !== undefined) disease.treatmentEndDate = data.treatmentEndDate ? new Date(data.treatmentEndDate) : null;
+
+    return this.diseaseRepository.save(disease);
+  }
+
+  async deleteDisease(patientId: string, diseaseId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const disease = await this.diseaseRepository.findOne({ where: { id: diseaseId, patientId } });
+    if (!disease) throw new NotFoundException('Disease not found');
+    await this.diseaseRepository.remove(disease);
+    return { message: 'Disease deleted' };
+  }
+
+  // ─── Allergy Management ─────────────────────────────────────────────────────
+
+  async getAllergies(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    return this.allergyRepository.find({ where: { patientId }, order: { createdAt: 'DESC' } });
+  }
+
+  async createAllergy(patientId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name: string; severity?: string; reaction?: string; notes?: string }) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const allergy = this.allergyRepository.create({ patientId, doctorId: userType === 'doctor' ? userId : null, name: data.name, severity: data.severity || 'moderate', reaction: data.reaction || null, notes: data.notes || null });
+    return this.allergyRepository.save(allergy);
+  }
+
+  async updateAllergy(patientId: string, allergyId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name?: string; severity?: string; reaction?: string; notes?: string }) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const allergy = await this.allergyRepository.findOne({ where: { id: allergyId, patientId } });
+    if (!allergy) throw new NotFoundException('Allergy not found');
+    if (data.name !== undefined) allergy.name = data.name;
+    if (data.severity !== undefined) allergy.severity = data.severity;
+    if (data.reaction !== undefined) allergy.reaction = data.reaction || null;
+    if (data.notes !== undefined) allergy.notes = data.notes || null;
+    return this.allergyRepository.save(allergy);
+  }
+
+  async deleteAllergy(patientId: string, allergyId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const allergy = await this.allergyRepository.findOne({ where: { id: allergyId, patientId } });
+    if (!allergy) throw new NotFoundException('Allergy not found');
+    await this.allergyRepository.remove(allergy);
+    return { message: 'Allergy deleted' };
+  }
+
+  // ─── Vaccine Management ─────────────────────────────────────────────────────
+
+  async getVaccines(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    return this.vaccineRepository.find({ where: { patientId }, order: { createdAt: 'DESC' } });
+  }
+
+  async createVaccine(patientId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const vaccine = this.vaccineRepository.create({ patientId, doctorId: userType === 'doctor' ? userId : null, name: data.name, dose: data.dose || null, applicationDate: data.applicationDate ? new Date(data.applicationDate) : null, nextDoseDate: data.nextDoseDate ? new Date(data.nextDoseDate) : null, laboratory: data.laboratory || null, notes: data.notes || null });
+    return this.vaccineRepository.save(vaccine);
+  }
+
+  async updateVaccine(patientId: string, vaccineId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name?: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const vaccine = await this.vaccineRepository.findOne({ where: { id: vaccineId, patientId } });
+    if (!vaccine) throw new NotFoundException('Vaccine not found');
+    if (data.name !== undefined) vaccine.name = data.name;
+    if (data.dose !== undefined) vaccine.dose = data.dose || null;
+    if (data.applicationDate !== undefined) vaccine.applicationDate = data.applicationDate ? new Date(data.applicationDate) : null;
+    if (data.nextDoseDate !== undefined) vaccine.nextDoseDate = data.nextDoseDate ? new Date(data.nextDoseDate) : null;
+    if (data.laboratory !== undefined) vaccine.laboratory = data.laboratory || null;
+    if (data.notes !== undefined) vaccine.notes = data.notes || null;
+    return this.vaccineRepository.save(vaccine);
+  }
+
+  async deleteVaccine(patientId: string, vaccineId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const vaccine = await this.vaccineRepository.findOne({ where: { id: vaccineId, patientId } });
+    if (!vaccine) throw new NotFoundException('Vaccine not found');
+    await this.vaccineRepository.remove(vaccine);
+    return { message: 'Vaccine deleted' };
   }
 
   // ─── Sprint 3: Timeline & Alerts ───────────────────────────────────────────

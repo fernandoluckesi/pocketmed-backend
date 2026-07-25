@@ -99,6 +99,22 @@ export class Exam {
   @JoinColumn({ name: 'appointmentId' })
   appointment: Appointment;
 
+  /** When true, patient cannot edit/delete this exam */
+  @Column({ type: 'boolean', default: false })
+  lockedByDoctor: boolean;
+
+  /** Groups exams created together in the same request */
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  batchId: string | null;
+
+  /** Date when the exam was completed/realized */
+  @Column({ type: 'date', nullable: true })
+  completedAt: Date | null;
+
+  /** Array of result file URLs (uploaded to MinIO) */
+  @Column({ type: 'json', nullable: true })
+  resultFiles: string[] | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

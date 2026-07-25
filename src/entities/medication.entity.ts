@@ -89,6 +89,10 @@ export class Medication {
   @JoinColumn({ name: 'appointmentId' })
   appointment: Appointment;
 
+  /** When true, patient cannot edit/delete (only modify times) */
+  @Column({ type: 'boolean', default: false })
+  lockedByDoctor: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

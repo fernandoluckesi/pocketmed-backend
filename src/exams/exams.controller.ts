@@ -9,8 +9,10 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { ExamsService } from './exams.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -74,6 +76,21 @@ export class ExamsController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.examsService.update(id, user.userId, user.type, dto, file);
+  }
+
+  @Put(':id/result')
+  @Roles('doctor', 'patient')
+  @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
+  @ApiOperation({ summary: 'Submit exam result with files' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Exam result saved' })
+  async submitResult(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: { completedAt?: string },
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    return this.examsService.submitResult(id, user.userId, user.type, body.completedAt, files);
   }
 
   @Delete(':id')

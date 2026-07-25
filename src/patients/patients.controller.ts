@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PatientsService } from './patients.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -205,7 +205,7 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Medication prescribed' })
   async prescribeMedication(
     @Param('id') id: string,
-    @Body() body: { name: string; dosage: string; frequency: string; type?: string; startDate: string; endDate?: string; notes?: string },
+    @Body() body: { name: string; dosage: string; frequency: string; type?: string; startDate: string; endDate?: string; notes?: string; appointmentId?: string },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.prescribeMedication(
@@ -234,6 +234,99 @@ export class PatientsController {
       user.activeClinicId,
       body,
     );
+  }
+
+  @Get(':id/diseases')
+  @ApiOperation({ summary: 'Get patient diseases list' })
+  @ApiResponse({ status: 200, description: 'Diseases list' })
+  async getDiseases(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getDiseases(id, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  @Post(':id/diseases')
+  @ApiOperation({ summary: 'Add a disease to patient' })
+  @ApiResponse({ status: 201, description: 'Disease created' })
+  async createDisease(
+    @Param('id') id: string,
+    @Body() body: { name: string; description?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.createDisease(id, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Put(':id/diseases/:diseaseId')
+  @ApiOperation({ summary: 'Update a patient disease' })
+  @ApiResponse({ status: 200, description: 'Disease updated' })
+  async updateDisease(
+    @Param('id') id: string,
+    @Param('diseaseId') diseaseId: string,
+    @Body() body: { name?: string; description?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.updateDisease(id, diseaseId, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Delete(':id/diseases/:diseaseId')
+  @ApiOperation({ summary: 'Delete a patient disease' })
+  @ApiResponse({ status: 200, description: 'Disease deleted' })
+  async deleteDisease(
+    @Param('id') id: string,
+    @Param('diseaseId') diseaseId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.deleteDisease(id, diseaseId, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  // ─── Allergies ────────────────────────────────────────────────────────────
+
+  @Get(':id/allergies')
+  @ApiOperation({ summary: 'Get patient allergies' })
+  async getAllergies(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getAllergies(id, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  @Post(':id/allergies')
+  @ApiOperation({ summary: 'Add allergy to patient' })
+  async createAllergy(@Param('id') id: string, @Body() body: { name: string; severity?: string; reaction?: string; notes?: string }, @CurrentUser() user: any) {
+    return this.patientsService.createAllergy(id, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Put(':id/allergies/:allergyId')
+  @ApiOperation({ summary: 'Update patient allergy' })
+  async updateAllergy(@Param('id') id: string, @Param('allergyId') allergyId: string, @Body() body: { name?: string; severity?: string; reaction?: string; notes?: string }, @CurrentUser() user: any) {
+    return this.patientsService.updateAllergy(id, allergyId, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Delete(':id/allergies/:allergyId')
+  @ApiOperation({ summary: 'Delete patient allergy' })
+  async deleteAllergy(@Param('id') id: string, @Param('allergyId') allergyId: string, @CurrentUser() user: any) {
+    return this.patientsService.deleteAllergy(id, allergyId, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  // ─── Vaccines ─────────────────────────────────────────────────────────────
+
+  @Get(':id/vaccines')
+  @ApiOperation({ summary: 'Get patient vaccines' })
+  async getVaccines(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getVaccines(id, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  @Post(':id/vaccines')
+  @ApiOperation({ summary: 'Add vaccine to patient' })
+  async createVaccine(@Param('id') id: string, @Body() body: { name: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }, @CurrentUser() user: any) {
+    return this.patientsService.createVaccine(id, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Put(':id/vaccines/:vaccineId')
+  @ApiOperation({ summary: 'Update patient vaccine' })
+  async updateVaccine(@Param('id') id: string, @Param('vaccineId') vaccineId: string, @Body() body: { name?: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }, @CurrentUser() user: any) {
+    return this.patientsService.updateVaccine(id, vaccineId, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Delete(':id/vaccines/:vaccineId')
+  @ApiOperation({ summary: 'Delete patient vaccine' })
+  async deleteVaccine(@Param('id') id: string, @Param('vaccineId') vaccineId: string, @CurrentUser() user: any) {
+    return this.patientsService.deleteVaccine(id, vaccineId, user.userId, user.type, user.role, user.activeClinicId);
   }
 
   // ─── Sprint 3: Timeline & Alerts ─────────────────────────────────────────

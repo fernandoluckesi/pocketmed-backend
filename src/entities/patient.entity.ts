@@ -86,6 +86,10 @@ export class Patient {
   @OneToMany(() => DoctorPermission, (permission) => permission.patient)
   permissions: DoctorPermission[];
 
+  /** List of chronic conditions/diseases */
+  @Column({ type: 'json', nullable: true })
+  diseases: string[] | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

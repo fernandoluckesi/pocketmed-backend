@@ -28,6 +28,9 @@ import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
 import { FinancialCashflowEntry } from '../entities/financial-cashflow-entry.entity';
 import { PatientAccessLog } from '../entities/patient-access-log.entity';
+import { PatientDisease } from '../entities/patient-disease.entity';
+import { PatientAllergy } from '../entities/patient-allergy.entity';
+import { PatientVaccine } from '../entities/patient-vaccine.entity';
 
 const AppDataSource = new DataSource({
   type: 'mysql',
@@ -64,6 +67,9 @@ const AppDataSource = new DataSource({
     FinancialDoctorTransfer,
     FinancialCashflowEntry,
     PatientAccessLog,
+    PatientDisease,
+    PatientAllergy,
+    PatientVaccine,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

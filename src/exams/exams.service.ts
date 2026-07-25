@@ -92,6 +92,17 @@ export class ExamsService {
       }
     }
 
+    if (dto.appointmentId) {
+      const appointment = await this.appointmentRepository.findOne({
+        where: { id: dto.appointmentId },
+      });
+      if (!appointment || appointment.patientId !== dto.patientId) {
+        throw new BadRequestException(
+          'appointmentId inválido ou não pertence a este paciente',
+        );
+      }
+    }
+
     let resultFileUrl = null;
     if (file) {
       resultFileUrl = await this.uploadService.uploadFile(file, 'exam-results');
@@ -261,6 +272,43 @@ export class ExamsService {
       }
       exam.resultFile = await this.uploadService.uploadFile(file, 'exam-results');
     }
+
+    return await this.examRepository.save(exam);
+  }
+
+  async submitResult(
+    id: string,
+    userId: string,
+    userType: string,
+    completedAt?: string,
+    files?: Express.Multer.File[],
+  ) {
+    const exam = await this.examRepository.findOne({ where: { id } });
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    // Verify ownership
+    if (userType === 'patient' && exam.patientId !== userId) {
+      throw new ForbiddenException('You can only submit results for your own exams');
+    }
+
+    // Upload files
+    const resultUrls: string[] = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        try {
+          const url = await this.uploadService.uploadFile(file, 'exam-results');
+          if (url) resultUrls.push(url);
+        } catch (err) {
+          console.warn('File upload failed:', err.message);
+        }
+      }
+    }
+
+    exam.status = 'completed' as any;
+    exam.completedAt = completedAt ? new Date(completedAt) : new Date();
+    exam.resultFiles = resultUrls.length > 0 ? resultUrls : exam.resultFiles;
 
     return await this.examRepository.save(exam);
   }
