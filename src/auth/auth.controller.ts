@@ -22,6 +22,7 @@ import { ActivateShadowAccountDto } from './dto/activate-shadow-account.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -153,6 +154,28 @@ export class AuthController {
       dto.oldPassword,
       dto.newPassword,
     );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('send-email-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Send email verification code to current user' })
+  @ApiResponse({ status: 200, description: 'Verification code sent' })
+  @ApiResponse({ status: 400, description: 'Email already verified' })
+  async sendEmailVerification(@CurrentUser() user: any) {
+    return this.authService.sendEmailVerification(user.userId, user.type);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Verify email with code' })
+  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired code' })
+  async verifyEmail(@CurrentUser() user: any, @Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(user.userId, user.type, dto.code);
   }
 
   @Patch('profile')

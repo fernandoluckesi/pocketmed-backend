@@ -121,6 +121,40 @@ export class EmailService {
     }
   }
 
+  async sendEmailVerificationCode(email: string, code: string, userName: string) {
+    try {
+      if (!this.ensureEmailEnabledOrLogFallback(email, code, 'Email verification')) {
+        return;
+      }
+
+      const mailOptions = {
+        from: this.configService.get<string>('EMAIL_FROM'),
+        to: email,
+        subject: 'Verificação de Email - PocketMed',
+        html: `
+          <h1>Olá, ${userName}!</h1>
+          <p>Bem-vindo(a) ao PocketMed!</p>
+          <p>Seu código de verificação é: <strong>${code}</strong></p>
+          <p>Este código expira em 15 minutos.</p>
+          <p>Se você não criou uma conta no PocketMed, ignore este email.</p>
+          <br>
+          <p>Atenciosamente,</p>
+          <p>Equipe PocketMed</p>
+        `,
+      };
+
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Email verification code sent to ${email}`);
+    } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        this.logger.warn(`Falling back to mock email verification delivery for ${email}.`);
+        this.logMockCode(email, code, 'Email verification');
+        return;
+      }
+      this.rethrowEmailError(error, 'Error sending email verification');
+    }
+  }
+
   async sendPasswordResetCode(email: string, code: string, userName: string) {
     try {
       if (!this.ensureEmailEnabledOrLogFallback(email, code, 'Password reset')) {

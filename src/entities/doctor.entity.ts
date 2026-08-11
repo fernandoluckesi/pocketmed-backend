@@ -59,6 +59,9 @@ export class Doctor {
   @Column({ type: 'timestamp', nullable: true })
   passwordResetCodeExpiry: Date;
 
+  @Column({ type: 'boolean', default: false })
+  emailVerified: boolean;
+
   @Column({ type: 'varchar', length: 100 })
   specialty: string;
 

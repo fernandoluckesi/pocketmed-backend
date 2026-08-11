@@ -61,6 +61,9 @@ export class Patient {
   @Column({ type: 'timestamp', nullable: true })
   passwordResetCodeExpiry: Date;
 
+  @Column({ type: 'boolean', default: false })
+  emailVerified: boolean;
+
   @Column({ type: 'uuid', nullable: true })
   doctorCreatorId: string;
 

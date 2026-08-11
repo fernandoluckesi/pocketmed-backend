@@ -96,10 +96,18 @@ export class AuthService {
       profileImage: profileImageUrl,
       type: 'patient',
       isShadow: false,
+      emailVerified: false,
     });
 
     const savedPatient = await this.patientRepository.save(patient);
     console.log('Patient saved with profileImage:', savedPatient.profileImage);
+
+    // Send email verification code
+    const verificationCode = this.generateVerificationCode();
+    savedPatient.verificationCode = verificationCode;
+    savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await this.patientRepository.save(savedPatient);
+    await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
     const token = await this.generateToken(savedPatient);
 
@@ -258,9 +266,17 @@ export class AuthService {
       profileImage: profileImageUrl,
       type: 'doctor',
       isShadow: false,
+      emailVerified: false,
     });
 
     const savedDoctor = await this.doctorRepository.save(doctor);
+
+    // Send email verification code
+    const verificationCode = this.generateVerificationCode();
+    savedDoctor.verificationCode = verificationCode;
+    savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await this.doctorRepository.save(savedDoctor);
+    await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
     const token = await this.generateToken(savedDoctor);
 
@@ -404,6 +420,61 @@ export class AuthService {
       message: 'Account activated successfully',
       user: this.sanitizeUser(user, doctorContext),
       token,
+    };
+  }
+
+  async sendEmailVerification(userId: string, userType: string) {
+    const user = await this.findUserById(userId, userType);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.emailVerified) {
+      throw new BadRequestException('Email already verified');
+    }
+
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpiry = verificationCodeExpiry;
+
+    await this.saveUser(user);
+    await this.emailService.sendEmailVerificationCode(user.email, verificationCode, user.name);
+
+    return {
+      message: 'Verification code sent to email',
+    };
+  }
+
+  async verifyEmail(userId: string, userType: string, code: string) {
+    const user = await this.findUserById(userId, userType);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.emailVerified) {
+      throw new BadRequestException('Email already verified');
+    }
+
+    if (user.verificationCode !== code) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
+      throw new BadRequestException('Verification code expired');
+    }
+
+    user.emailVerified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpiry = null;
+
+    await this.saveUser(user);
+
+    return {
+      message: 'Email verified successfully',
     };
   }
 
@@ -599,6 +670,11 @@ export class AuthService {
     if (user?.type === 'doctor') {
       result.role = doctorContext?.role || ProfessionalRole.DOCTOR;
       result.activeClinicId = doctorContext?.activeClinicId || null;
+    }
+
+    // Ensure emailVerified is always present
+    if (result.emailVerified === undefined) {
+      result.emailVerified = true;
     }
 
     return result;
