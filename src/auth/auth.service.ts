@@ -65,9 +65,17 @@ export class AuthService {
         : 'No file',
     );
 
-    const existingUser = await this.findUserByEmail(dto.email);
-
-    if (existingUser) {
+    // Only check for active (non-shadow) accounts with same email
+    const existingActive = await this.patientRepository.findOne({
+      where: { email: dto.email, isShadow: false },
+    });
+    if (existingActive) {
+      throw new ConflictException('Email already registered');
+    }
+    const existingDoctor = await this.doctorRepository.findOne({
+      where: { email: dto.email, isShadow: false },
+    });
+    if (existingDoctor) {
       throw new ConflictException('Email already registered');
     }
 
@@ -165,11 +173,20 @@ export class AuthService {
       }
     }
 
-    const existingUser = await this.findUserByEmail(dto.email);
-
-    if (existingUser) {
-      throw new ConflictException('Email already registered');
+    // Only block if there's an active (non-shadow) account with this email
+    const existingActive = await this.patientRepository.findOne({
+      where: { email: dto.email, isShadow: false },
+    });
+    if (existingActive) {
+      throw new ConflictException('Email already registered to an active account');
     }
+    const existingDoctor = await this.doctorRepository.findOne({
+      where: { email: dto.email, isShadow: false },
+    });
+    if (existingDoctor) {
+      throw new ConflictException('Email already registered to a doctor account');
+    }
+    // Shadows with same email are allowed (will be merged on activation)
 
     let profileImageUrl = null;
     if (file) {
@@ -182,9 +199,6 @@ export class AuthService {
       }
     }
 
-    const verificationCode = this.generateVerificationCode();
-    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-
     const patient = this.patientRepository.create({
       name: dto.name,
       email: dto.email,
@@ -195,16 +209,14 @@ export class AuthService {
       type: 'patient',
       isShadow: true,
       doctorCreatorId: dto.doctorCreatorId,
-      verificationCode,
-      verificationCodeExpiry,
     });
 
     const savedPatient = await this.patientRepository.save(patient);
 
-    await this.emailService.sendVerificationCode(dto.email, verificationCode, dto.name);
+    await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name);
 
     return {
-      message: 'Shadow patient created successfully. Verification code sent to email.',
+      message: 'Shadow patient created successfully. Invitation email sent.',
       user: this.sanitizeUser(savedPatient),
     };
   }
@@ -358,25 +370,46 @@ export class AuthService {
     };
   }
 
-  async sendVerificationCode(email: string) {
-    const user = await this.findUserByEmail(email);
+  async checkShadowAccount(email: string) {
+    const shadow = await this.findAnyShadowByEmail(email);
 
-    if (!user) {
-      throw new NotFoundException('User not found');
+    if (!shadow) {
+      return { isShadow: false };
     }
 
-    if (!user.isShadow) {
-      throw new BadRequestException('This account is already activated');
+    // Send verification code automatically
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    shadow.verificationCode = verificationCode;
+    shadow.verificationCodeExpiry = verificationCodeExpiry;
+
+    await this.patientRepository.save(shadow);
+    await this.emailService.sendShadowActivationCode(shadow.email, verificationCode, shadow.name);
+
+    return {
+      isShadow: true,
+      email: shadow.email,
+      name: shadow.name,
+      message: 'Verification code sent to email',
+    };
+  }
+
+  async sendVerificationCode(email: string) {
+    const shadow = await this.findAnyShadowByEmail(email);
+
+    if (!shadow) {
+      throw new NotFoundException('Shadow account not found');
     }
 
     const verificationCode = this.generateVerificationCode();
     const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
-    user.verificationCode = verificationCode;
-    user.verificationCodeExpiry = verificationCodeExpiry;
+    shadow.verificationCode = verificationCode;
+    shadow.verificationCodeExpiry = verificationCodeExpiry;
 
-    await this.saveUser(user);
-    await this.emailService.sendVerificationCode(email, verificationCode, user.name);
+    await this.patientRepository.save(shadow);
+    await this.emailService.sendShadowActivationCode(email, verificationCode, shadow.name);
 
     return {
       message: 'Verification code sent to email',
@@ -384,21 +417,17 @@ export class AuthService {
   }
 
   async activateShadowAccount(email: string, verificationCode: string, password: string) {
-    const user = await this.findUserByEmail(email);
+    const user = await this.findAnyShadowByEmail(email);
 
     if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (!user.isShadow) {
-      throw new BadRequestException('This account is already activated');
+      throw new NotFoundException('Shadow account not found');
     }
 
     if (user.verificationCode !== verificationCode) {
       throw new BadRequestException('Invalid verification code');
     }
 
-    if (new Date() > user.verificationCodeExpiry) {
+    if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
       throw new BadRequestException('Verification code expired');
     }
 
@@ -408,8 +437,12 @@ export class AuthService {
     user.isShadow = false;
     user.verificationCode = null;
     user.verificationCodeExpiry = null;
+    user.emailVerified = true;
 
     await this.saveUser(user);
+
+    // Merge any other shadow accounts with the same email
+    await this.mergeShadowAccounts(user.id, user.email);
 
     const token = await this.generateToken(user);
 
@@ -472,6 +505,11 @@ export class AuthService {
     user.verificationCodeExpiry = null;
 
     await this.saveUser(user);
+
+    // Merge any shadow accounts with the same email into this account
+    if (user.type === 'patient') {
+      await this.mergeShadowAccounts(user.id, user.email);
+    }
 
     return {
       message: 'Email verified successfully',
@@ -609,12 +647,24 @@ export class AuthService {
   }
 
   private async findUserByEmail(email: string): Promise<AuthUser | null> {
-    const patient = await this.patientRepository.findOne({ where: { email } });
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Only find active (non-shadow) accounts
+    const patient = await this.patientRepository.findOne({
+      where: { email: normalizedEmail, isShadow: false },
+    });
     if (patient) {
       return patient;
     }
 
-    return this.doctorRepository.findOne({ where: { email } });
+    return this.doctorRepository.findOne({ where: { email: normalizedEmail } });
+  }
+
+  private async findAnyShadowByEmail(email: string): Promise<Patient | null> {
+    const normalizedEmail = email.trim().toLowerCase();
+    return this.patientRepository.findOne({
+      where: { email: normalizedEmail, isShadow: true },
+    });
   }
 
   private async findUserById(userId: string, userType?: string): Promise<AuthUser | null> {
@@ -648,6 +698,64 @@ export class AuthService {
 
     await this.clinicAdminProfileRepository.update({ professionalId: doctor.id }, updatedFields);
     await this.secretaryProfileRepository.update({ professionalId: doctor.id }, updatedFields);
+  }
+
+  async mergeShadowAccounts(primaryPatientId: string, email: string): Promise<void> {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Find all shadow patients with the same email, excluding the primary
+    const shadows = await this.patientRepository.find({
+      where: { email: normalizedEmail, isShadow: true },
+    });
+
+    const shadowsToMerge = shadows.filter((s) => s.id !== primaryPatientId);
+
+    if (shadowsToMerge.length === 0) return;
+
+    const queryRunner = this.patientRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const shadow of shadowsToMerge) {
+        const shadowId = shadow.id;
+
+        // Migrate all related data to the primary patient
+        await queryRunner.query('UPDATE `appointments` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `medications` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `exams` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `patient_diseases` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `patient_allergies` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `patient_vaccines` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `doctor_access_requests` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `patient_access_logs` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+
+        // Create doctor permission for the doctor who created this shadow
+        if (shadow.doctorCreatorId) {
+          const existingPermission = await queryRunner.query(
+            'SELECT id FROM `doctor_permissions` WHERE `doctorId` = ? AND `patientId` = ? AND `revokedAt` IS NULL LIMIT 1',
+            [shadow.doctorCreatorId, primaryPatientId],
+          );
+          if (existingPermission.length === 0) {
+            await queryRunner.query(
+              'INSERT INTO `doctor_permissions` (`id`, `doctorId`, `patientId`, `createdAt`, `updatedAt`) VALUES (UUID(), ?, ?, NOW(), NOW())',
+              [shadow.doctorCreatorId, primaryPatientId],
+            );
+          }
+        }
+
+        // Delete the merged shadow
+        await queryRunner.query('DELETE FROM `patients` WHERE `id` = ?', [shadowId]);
+      }
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error('Shadow merge failed:', error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   private async saveUser(user: AuthUser): Promise<AuthUser> {

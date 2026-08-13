@@ -223,7 +223,7 @@ export class PatientsController {
   @ApiResponse({ status: 200, description: 'Patient updated' })
   async updatePatient(
     @Param('id') id: string,
-    @Body() body: { name?: string; phone?: string; gender?: string; birthDate?: string; profileImage?: string },
+    @Body() body: { name?: string; email?: string; phone?: string; gender?: string; birthDate?: string; profileImage?: string },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updatePatient(

@@ -98,6 +98,15 @@ export class AuthController {
   }
 
   @Public()
+  @Post('check-shadow')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check if email belongs to a shadow account and send activation code' })
+  @ApiResponse({ status: 200, description: 'Shadow check result' })
+  async checkShadowAccount(@Body() dto: SendVerificationCodeDto) {
+    return this.authService.checkShadowAccount(dto.email);
+  }
+
+  @Public()
   @Post('send-verification-code')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send verification code to shadow account' })

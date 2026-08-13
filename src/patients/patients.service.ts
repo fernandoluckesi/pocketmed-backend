@@ -829,6 +829,7 @@ export class PatientsService {
     activeClinicId: string,
     data: {
       name?: string;
+      email?: string;
       phone?: string;
       gender?: string;
       birthDate?: string;
@@ -842,6 +843,7 @@ export class PatientsService {
 
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
+    if (data.email !== undefined) updateData.email = data.email;
     if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.gender !== undefined) updateData.gender = data.gender;
     if (data.birthDate !== undefined) updateData.birthDate = data.birthDate;
