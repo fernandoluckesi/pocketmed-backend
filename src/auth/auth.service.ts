@@ -302,6 +302,7 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const loginUser = await this.findLoginUserByEmail(dto.email);
+    console.log('[AUTH] findLoginUserByEmail result:', loginUser ? `Found (type: ${(loginUser as any).type || 'role_profile'}, id: ${(loginUser as any).id})` : 'NOT FOUND');
 
     if (!loginUser) {
       throw new UnauthorizedException('Invalid credentials');

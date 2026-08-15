@@ -95,7 +95,10 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+    console.log('[LOGIN] Attempting login for:', dto.email);
+    const result = await this.authService.login(dto);
+    console.log('[LOGIN] Success for:', dto.email);
+    return result;
   }
 
   @Public()
