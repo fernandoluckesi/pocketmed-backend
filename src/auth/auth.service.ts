@@ -624,15 +624,18 @@ export class AuthService {
 
   private async findLoginUserByEmail(email: string): Promise<LoginUser | null> {
     const normalizedEmail = email.trim().toLowerCase();
+    console.log('[AUTH] Searching for email:', normalizedEmail);
 
     const patient = await this.patientRepository.findOne({ where: { email: normalizedEmail } });
     if (patient) {
+      console.log('[AUTH] Found as patient');
       return patient;
     }
 
     const clinicAdmin = await this.clinicAdminProfileRepository.findOne({
       where: { email: normalizedEmail },
     });
+    console.log('[AUTH] clinicAdmin query result:', clinicAdmin ? 'FOUND' : 'null');
     if (clinicAdmin) {
       return clinicAdmin;
     }
