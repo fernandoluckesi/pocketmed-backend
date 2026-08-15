@@ -329,6 +329,15 @@ export class PatientsController {
     return this.patientsService.deleteVaccine(id, vaccineId, user.userId, user.type, user.role, user.activeClinicId);
   }
 
+  // ─── Dependents ─────────────────────────────────────────────────────────────
+
+  @Get(':id/dependents')
+  @ApiOperation({ summary: 'Get dependents for a patient' })
+  @ApiResponse({ status: 200, description: 'Return dependents list' })
+  async getDependents(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getDependents(id, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
   // ─── Sprint 3: Timeline & Alerts ─────────────────────────────────────────
 
   @Get(':id/timeline')

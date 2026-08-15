@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Patch,
+  Delete,
   Body,
   UseInterceptors,
   UploadedFile,
@@ -200,5 +201,15 @@ export class AuthController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.authService.updateProfile(user.userId, user.type, body, file);
+  }
+
+  @Delete('account')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Delete current user account (LGPD)' })
+  @ApiResponse({ status: 200, description: 'Account deleted' })
+  async deleteAccount(@CurrentUser() user: any) {
+    return this.authService.deleteAccount(user.userId, user.type);
   }
 }

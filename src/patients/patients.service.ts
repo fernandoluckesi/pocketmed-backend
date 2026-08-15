@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
+import { Dependent } from '../entities/dependent.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { Appointment } from '../entities/appointment.entity';
@@ -52,6 +53,8 @@ export class PatientsService {
     private allergyRepository: Repository<PatientAllergy>,
     @InjectRepository(PatientVaccine)
     private vaccineRepository: Repository<PatientVaccine>,
+    @InjectRepository(Dependent)
+    private dependentRepository: Repository<Dependent>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -275,6 +278,29 @@ export class PatientsService {
     });
 
     if (!patient) {
+      // Try to find as a dependent
+      const dependent = await this.dependentRepository.findOne({
+        where: { id },
+        relations: ['responsibles'],
+      });
+      if (dependent) {
+        return {
+          id: dependent.id,
+          name: dependent.name,
+          email: null,
+          gender: dependent.gender,
+          phone: null,
+          birthDate: dependent.birthDate,
+          profileImage: dependent.profileImage,
+          type: 'dependent',
+          isShadow: false,
+          doctorCreatorId: null,
+          createdAt: dependent.createdAt,
+          updatedAt: dependent.updatedAt,
+          isDependent: true,
+          responsibles: (dependent.responsibles || []).map((r) => ({ id: r.id, name: r.name })),
+        };
+      }
       throw new NotFoundException('Patient not found');
     }
 
@@ -405,14 +431,26 @@ export class PatientsService {
     // Verify access using existing findOne permission logic
     const patient = await this.findOne(patientId, doctorId, userType, role, activeClinicId);
 
-    await this.logAccess(patientId, doctorId, 'VIEW_RECORD');
+    await this.logAccess(patientId, doctorId, 'VIEW_RECORD').catch(() => {});
+
+    // Check if this is a dependent (findOne returns isDependent: true)
+    const isDependent = (patient as any).isDependent === true;
 
     // Get appointments
-    let appointments = await this.appointmentRepository.find({
-      where: { patientId },
-      order: { dateTime: 'DESC' },
-      take: 50,
-    });
+    let appointments;
+    if (isDependent) {
+      appointments = await this.appointmentRepository.find({
+        where: { dependentId: patientId },
+        order: { dateTime: 'DESC' },
+        take: 50,
+      });
+    } else {
+      appointments = await this.appointmentRepository.find({
+        where: { patientId },
+        order: { dateTime: 'DESC' },
+        take: 50,
+      });
+    }
 
     // Filter out pending_approval and rejected consultations from other doctors
     if (userType === 'doctor') {
@@ -425,13 +463,13 @@ export class PatientsService {
 
     // Get medications
     const medications = await this.medicationRepository.find({
-      where: { patientId },
+      where: isDependent ? { dependentId: patientId } : { patientId },
       order: { createdAt: 'DESC' },
     });
 
     // Get exams
     const exams = await this.examRepository.find({
-      where: { patientId },
+      where: isDependent ? { dependentId: patientId } : { patientId },
       order: { createdAt: 'DESC' },
     });
 
@@ -1002,6 +1040,32 @@ export class PatientsService {
     if (!vaccine) throw new NotFoundException('Vaccine not found');
     await this.vaccineRepository.remove(vaccine);
     return { message: 'Vaccine deleted' };
+  }
+
+  // ─── Dependents ─────────────────────────────────────────────────────────────
+
+  async getDependents(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+
+    const patient = await this.patientRepository.findOne({
+      where: { id: patientId },
+      relations: ['dependents', 'dependents.responsibles'],
+    });
+
+    if (!patient || !patient.dependents) return [];
+
+    return patient.dependents.map((dep) => ({
+      id: dep.id,
+      name: dep.name,
+      gender: dep.gender,
+      birthDate: dep.birthDate,
+      profileImage: dep.profileImage,
+      createdAt: dep.createdAt,
+      responsibles: (dep.responsibles || []).map((r) => ({
+        id: r.id,
+        name: r.name,
+      })),
+    }));
   }
 
   // ─── Sprint 3: Timeline & Alerts ───────────────────────────────────────────

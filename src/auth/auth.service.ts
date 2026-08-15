@@ -788,6 +788,44 @@ export class AuthService {
     return result;
   }
 
+  async deleteAccount(userId: string, userType: string) {
+    const queryRunner = this.patientRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      if (userType === 'patient') {
+        // Delete all related data
+        await queryRunner.query('DELETE FROM `appointments` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `medications` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `exams` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `patient_diseases` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `patient_allergies` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `patient_vaccines` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `doctor_permissions` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `patient_access_logs` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `patients` WHERE `id` = ?', [userId]);
+      } else if (userType === 'doctor') {
+        await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `doctorId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `doctor_permissions` WHERE `doctorId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `clinic_memberships` WHERE `professionalId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `doctor_documents` WHERE `doctorId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `clinic_admin_profiles` WHERE `professionalId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `secretary_profiles` WHERE `professionalId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `doctors` WHERE `id` = ?', [userId]);
+      }
+
+      await queryRunner.commitTransaction();
+      return { message: 'Account deleted successfully' };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async updateProfile(
     userId: string,
     userType: string,

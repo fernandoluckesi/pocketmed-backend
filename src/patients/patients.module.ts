@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
 import { Patient } from '../entities/patient.entity';
+import { Dependent } from '../entities/dependent.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { Appointment } from '../entities/appointment.entity';
@@ -18,6 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     TypeOrmModule.forFeature([
       Patient,
+      Dependent,
       DoctorPermission,
       ClinicMembership,
       Appointment,
