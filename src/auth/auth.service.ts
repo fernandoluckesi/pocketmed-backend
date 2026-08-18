@@ -65,19 +65,14 @@ export class AuthService {
         : 'No file',
     );
 
-    // Only check for active (non-shadow) accounts with same email
+    // Only check for active (non-shadow) accounts with same email in PATIENTS table
     const existingActive = await this.patientRepository.findOne({
       where: { email: dto.email, isShadow: false },
     });
     if (existingActive) {
       throw new ConflictException('Email already registered');
     }
-    const existingDoctor = await this.doctorRepository.findOne({
-      where: { email: dto.email, isShadow: false },
-    });
-    if (existingDoctor) {
-      throw new ConflictException('Email already registered');
-    }
+    // Allow same email to exist as doctor (different profile)
 
     let profileImageUrl = null;
     if (file) {
@@ -225,8 +220,11 @@ export class AuthService {
     // Check all conflicts at once
     const conflicts: string[] = [];
 
-    const existingEmail = await this.findUserByEmail(dto.email);
-    if (existingEmail) {
+    // Only check email conflict with other doctors (not patients)
+    const existingDoctorEmail = await this.doctorRepository.findOne({
+      where: { email: dto.email.trim().toLowerCase() },
+    });
+    if (existingDoctorEmail) {
       conflicts.push('email');
     }
 
@@ -301,7 +299,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const loginUser = await this.findLoginUserByEmail(dto.email);
+    const loginUser = await this.findLoginUserByEmail(dto.email, dto.loginAs);
     console.log('[AUTH] findLoginUserByEmail result:', loginUser ? `Found (type: ${(loginUser as any).type || 'role_profile'}, id: ${(loginUser as any).id})` : 'NOT FOUND');
 
     if (!loginUser) {
@@ -394,18 +392,11 @@ export class AuthService {
       };
     }
 
-    // Check if an active account exists
+    // Check if an active PATIENT account exists (doctors don't block — dual profile allowed)
     const activePatient = await this.patientRepository.findOne({
       where: { email: email.trim().toLowerCase(), isShadow: false },
     });
     if (activePatient) {
-      return { isShadow: false, exists: true };
-    }
-
-    const activeDoctor = await this.doctorRepository.findOne({
-      where: { email: email.trim().toLowerCase() },
-    });
-    if (activeDoctor) {
       return { isShadow: false, exists: true };
     }
 
@@ -638,32 +629,39 @@ export class AuthService {
     return !('type' in user);
   }
 
-  private async findLoginUserByEmail(email: string): Promise<LoginUser | null> {
+  private async findLoginUserByEmail(email: string, loginAs?: string): Promise<LoginUser | null> {
     const normalizedEmail = email.trim().toLowerCase();
-    console.log('[AUTH] Searching for email:', normalizedEmail);
 
-    const patient = await this.patientRepository.findOne({ where: { email: normalizedEmail } });
-    if (patient) {
-      console.log('[AUTH] Found as patient');
-      return patient;
+    // If explicitly requesting patient login (mobile)
+    if (loginAs === 'patient') {
+      const patient = await this.patientRepository.findOne({
+        where: { email: normalizedEmail, isShadow: false },
+      });
+      if (patient) return patient;
+      // Fallback: try shadow accounts for activation flow
+      return null;
     }
 
+    // Default order: clinicAdmin → secretary → doctor → patient
     const clinicAdmin = await this.clinicAdminProfileRepository.findOne({
       where: { email: normalizedEmail },
     });
-    console.log('[AUTH] clinicAdmin query result:', clinicAdmin ? 'FOUND' : 'null');
-    if (clinicAdmin) {
-      return clinicAdmin;
-    }
+    if (clinicAdmin) return clinicAdmin;
 
     const secretary = await this.secretaryProfileRepository.findOne({
       where: { email: normalizedEmail },
     });
-    if (secretary) {
-      return secretary;
-    }
+    if (secretary) return secretary;
 
-    return this.doctorRepository.findOne({ where: { email: normalizedEmail } });
+    const doctor = await this.doctorRepository.findOne({ where: { email: normalizedEmail } });
+    if (doctor) return doctor;
+
+    const patient = await this.patientRepository.findOne({
+      where: { email: normalizedEmail, isShadow: false },
+    });
+    if (patient) return patient;
+
+    return null;
   }
 
   private async findUserByEmail(email: string): Promise<AuthUser | null> {
