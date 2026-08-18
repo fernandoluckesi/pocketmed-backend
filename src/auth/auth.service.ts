@@ -374,26 +374,42 @@ export class AuthService {
   async checkShadowAccount(email: string) {
     const shadow = await this.findAnyShadowByEmail(email);
 
-    if (!shadow) {
-      return { isShadow: false };
+    if (shadow) {
+      // Send verification code automatically
+      const verificationCode = this.generateVerificationCode();
+      const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+      shadow.verificationCode = verificationCode;
+      shadow.verificationCodeExpiry = verificationCodeExpiry;
+
+      await this.patientRepository.save(shadow);
+      await this.emailService.sendShadowActivationCode(shadow.email, verificationCode, shadow.name);
+
+      return {
+        isShadow: true,
+        exists: true,
+        email: shadow.email,
+        name: shadow.name,
+        message: 'Verification code sent to email',
+      };
     }
 
-    // Send verification code automatically
-    const verificationCode = this.generateVerificationCode();
-    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    // Check if an active account exists
+    const activePatient = await this.patientRepository.findOne({
+      where: { email: email.trim().toLowerCase(), isShadow: false },
+    });
+    if (activePatient) {
+      return { isShadow: false, exists: true };
+    }
 
-    shadow.verificationCode = verificationCode;
-    shadow.verificationCodeExpiry = verificationCodeExpiry;
+    const activeDoctor = await this.doctorRepository.findOne({
+      where: { email: email.trim().toLowerCase() },
+    });
+    if (activeDoctor) {
+      return { isShadow: false, exists: true };
+    }
 
-    await this.patientRepository.save(shadow);
-    await this.emailService.sendShadowActivationCode(shadow.email, verificationCode, shadow.name);
-
-    return {
-      isShadow: true,
-      email: shadow.email,
-      name: shadow.name,
-      message: 'Verification code sent to email',
-    };
+    return { isShadow: false, exists: false };
   }
 
   async sendVerificationCode(email: string) {
