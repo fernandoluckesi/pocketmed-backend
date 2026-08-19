@@ -1,13 +1,14 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly emailEnabled: boolean;
   private readonly emailMockFallback: boolean;
-  private transporter: nodemailer.Transporter;
+  private readonly resend: Resend;
+  private readonly emailFrom: string;
 
   constructor(private configService: ConfigService) {
     const nodeEnv = String(this.configService.get<string>('NODE_ENV') ?? 'development').trim();
@@ -21,15 +22,8 @@ export class EmailService {
     ).trim();
     this.emailMockFallback = mockFallbackFlag.toLowerCase() !== 'false';
 
-    this.transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('EMAIL_HOST'),
-      port: this.configService.get<number>('EMAIL_PORT'),
-      secure: false,
-      auth: {
-        user: this.configService.get<string>('EMAIL_USER'),
-        pass: this.configService.get<string>('EMAIL_PASSWORD'),
-      },
-    });
+    this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
+    this.emailFrom = this.configService.get<string>('EMAIL_FROM') || 'PocketMed <noreply@pocketmed.com>';
 
     if (!this.emailEnabled) {
       this.logger.warn(
@@ -39,7 +33,7 @@ export class EmailService {
 
     if (this.emailMockFallback) {
       this.logger.warn(
-        'Email mock fallback is enabled (EMAIL_MOCK_FALLBACK=true). SMTP errors will fallback to log-only mode.',
+        'Email mock fallback is enabled (EMAIL_MOCK_FALLBACK=true). Send errors will fallback to log-only mode.',
       );
     }
   }
@@ -60,31 +54,29 @@ export class EmailService {
       return false;
     }
 
-    const code = String(error?.code || '').toUpperCase();
     const message = String(error?.message || '').toLowerCase();
 
     return (
-      code === 'EAUTH' ||
-      code === 'ECONNECTION' ||
-      code === 'ETIMEDOUT' ||
-      message.includes('invalid login') ||
-      message.includes('badcredentials') ||
-      message.includes('username and password not accepted')
+      message.includes('api key') ||
+      message.includes('unauthorized') ||
+      message.includes('forbidden') ||
+      message.includes('rate limit') ||
+      message.includes('timeout')
     );
   }
 
   private logMockCode(email: string, code: string, purpose: string) {
     this.logger.warn(
-      `[EMAIL_MOCK] ${purpose} code for ${email}: ${code}. Delivery mocked due to SMTP fallback.`,
+      `[EMAIL_MOCK] ${purpose} code for ${email}: ${code}. Delivery mocked due to send fallback.`,
     );
   }
 
   private rethrowEmailError(error: any, context: string) {
-    const errorMessage = error?.message || 'Unknown email transport error';
+    const errorMessage = error?.message || 'Unknown email error';
     this.logger.error(`${context}: ${errorMessage}`);
 
     throw new ServiceUnavailableException(
-      'Falha ao enviar e-mail. Verifique EMAIL_USER/EMAIL_PASSWORD (no Gmail use App Password) ou desative envio com EMAIL_ENABLED=false no ambiente local.',
+      'Falha ao enviar e-mail. Verifique RESEND_API_KEY e EMAIL_FROM ou desative envio com EMAIL_ENABLED=false no ambiente local.',
     );
   }
 
@@ -165,14 +157,17 @@ export class EmailService {
         return;
       }
 
-      const mailOptions = {
-        from: this.configService.get<string>('EMAIL_FROM'),
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
         to: email,
         subject: `${doctorName} adicionou você ao PocketMed`,
         html: this.buildInviteEmailHtml(patientName, doctorName),
-      };
+      });
 
-      await this.transporter.sendMail(mailOptions);
+      if (error) {
+        throw new Error(error.message);
+      }
+
       this.logger.log(`Invite email sent to ${email}`);
     } catch (error) {
       if (this.shouldUseMockFallback(error)) {
@@ -273,8 +268,8 @@ export class EmailService {
         return;
       }
 
-      const mailOptions = {
-        from: this.configService.get<string>('EMAIL_FROM'),
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
         to: email,
         subject: 'Ative sua conta - PocketMed',
         html: this.buildEmailHtml({
@@ -284,9 +279,12 @@ export class EmailService {
           code,
           footer: 'Se você não reconhece esta solicitação, ignore este email.',
         }),
-      };
+      });
 
-      await this.transporter.sendMail(mailOptions);
+      if (error) {
+        throw new Error(error.message);
+      }
+
       this.logger.log(`Shadow activation code sent to ${email}`);
     } catch (error) {
       if (this.shouldUseMockFallback(error)) {
@@ -304,8 +302,8 @@ export class EmailService {
         return;
       }
 
-      const mailOptions = {
-        from: this.configService.get<string>('EMAIL_FROM'),
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
         to: email,
         subject: 'Código de Verificação - PocketMed',
         html: this.buildEmailHtml({
@@ -315,9 +313,12 @@ export class EmailService {
           code,
           footer: 'Se você não solicitou este código, ignore este email.',
         }),
-      };
+      });
 
-      await this.transporter.sendMail(mailOptions);
+      if (error) {
+        throw new Error(error.message);
+      }
+
       this.logger.log(`Verification code sent to ${email}`);
     } catch (error) {
       if (this.shouldUseMockFallback(error)) {
@@ -335,8 +336,8 @@ export class EmailService {
         return;
       }
 
-      const mailOptions = {
-        from: this.configService.get<string>('EMAIL_FROM'),
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
         to: email,
         subject: 'Confirme seu email - PocketMed',
         html: this.buildEmailHtml({
@@ -346,9 +347,12 @@ export class EmailService {
           code,
           footer: 'Se você não criou uma conta no PocketMed, ignore este email.',
         }),
-      };
+      });
 
-      await this.transporter.sendMail(mailOptions);
+      if (error) {
+        throw new Error(error.message);
+      }
+
       this.logger.log(`Email verification code sent to ${email}`);
     } catch (error) {
       if (this.shouldUseMockFallback(error)) {
@@ -366,8 +370,8 @@ export class EmailService {
         return;
       }
 
-      const mailOptions = {
-        from: this.configService.get<string>('EMAIL_FROM'),
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
         to: email,
         subject: 'Recuperação de Senha - PocketMed',
         html: this.buildEmailHtml({
@@ -377,9 +381,12 @@ export class EmailService {
           code,
           footer: 'Se você não solicitou a recuperação de senha, ignore este email. Sua senha permanecerá inalterada.',
         }),
-      };
+      });
 
-      await this.transporter.sendMail(mailOptions);
+      if (error) {
+        throw new Error(error.message);
+      }
+
       this.logger.log(`Password reset code sent to ${email}`);
     } catch (error) {
       if (this.shouldUseMockFallback(error)) {
