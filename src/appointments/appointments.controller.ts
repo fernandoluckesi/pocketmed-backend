@@ -71,7 +71,7 @@ export class AppointmentsController {
   @ApiOperation({ summary: 'Respond to appointment (patients only)' })
   @ApiResponse({ status: 200, description: 'Appointment status updated' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  @ApiResponse({ status: 404, description: 'Appointment not found' })
+  @ApiResponse({ status: 404, description: 'Appointment not found 404' })
   async respondToAppointment(
     @Param('id') id: string,
     @Body() dto: RespondAppointmentDto,
