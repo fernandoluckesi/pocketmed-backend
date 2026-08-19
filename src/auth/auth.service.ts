@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Patient } from '../entities/patient.entity';
@@ -48,23 +48,10 @@ export class AuthService {
     private jwtService: JwtService,
     private uploadService: UploadService,
     private emailService: EmailService,
+    private dataSource: DataSource,
   ) {}
 
   async registerPatient(dto: RegisterPatientDto, file?: Express.Multer.File) {
-    console.log('=== REGISTER PATIENT ===');
-    console.log('DTO:', dto);
-    console.log(
-      'File received:',
-      file
-        ? {
-            fieldname: file.fieldname,
-            originalname: file.originalname,
-            mimetype: file.mimetype,
-            size: file.size,
-          }
-        : 'No file',
-    );
-
     // Only check for active (non-shadow) accounts with same email in PATIENTS table
     const existingActive = await this.patientRepository.findOne({
       where: { email: dto.email, isShadow: false },
@@ -72,15 +59,12 @@ export class AuthService {
     if (existingActive) {
       throw new ConflictException('Email already registered');
     }
-    // Allow same email to exist as doctor (different profile)
 
     let profileImageUrl = null;
     if (file) {
-      console.log('Uploading file to MinIO...');
       try {
         const uploadedUrl = await this.uploadService.uploadFile(file, 'profiles');
         profileImageUrl = uploadedUrl || null;
-        console.log('File uploaded. URL:', profileImageUrl);
       } catch (uploadError) {
         console.warn('Profile image upload failed, continuing without image:', uploadError.message);
         profileImageUrl = null;
@@ -89,35 +73,47 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    const patient = this.patientRepository.create({
-      name: dto.name,
-      email: dto.email,
-      password: hashedPassword,
-      gender: dto.gender,
-      phone: dto.phone,
-      birthDate: new Date(dto.birthDate),
-      profileImage: profileImageUrl,
-      type: 'patient',
-      isShadow: false,
-      emailVerified: false,
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const savedPatient = await this.patientRepository.save(patient);
-    console.log('Patient saved with profileImage:', savedPatient.profileImage);
+    try {
+      const patient = queryRunner.manager.create(Patient, {
+        name: dto.name,
+        email: dto.email,
+        password: hashedPassword,
+        gender: dto.gender,
+        phone: dto.phone,
+        birthDate: new Date(dto.birthDate),
+        profileImage: profileImageUrl,
+        type: 'patient',
+        isShadow: false,
+        emailVerified: false,
+      });
 
-    // Send email verification code
-    const verificationCode = this.generateVerificationCode();
-    savedPatient.verificationCode = verificationCode;
-    savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-    await this.patientRepository.save(savedPatient);
-    await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
+      const savedPatient = await queryRunner.manager.save(patient);
 
-    const token = await this.generateToken(savedPatient);
+      // Send email verification code
+      const verificationCode = this.generateVerificationCode();
+      savedPatient.verificationCode = verificationCode;
+      savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      await queryRunner.manager.save(savedPatient);
+      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
-    return {
-      user: this.sanitizeUser(savedPatient),
-      token,
-    };
+      await queryRunner.commitTransaction();
+
+      const token = await this.generateToken(savedPatient);
+
+      return {
+        user: this.sanitizeUser(savedPatient),
+        token,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async registerPatientShadow(
@@ -194,26 +190,39 @@ export class AuthService {
       }
     }
 
-    const patient = this.patientRepository.create({
-      name: dto.name,
-      email: dto.email,
-      gender: dto.gender,
-      phone: dto.phone,
-      birthDate: new Date(dto.birthDate),
-      profileImage: profileImageUrl,
-      type: 'patient',
-      isShadow: true,
-      doctorCreatorId: dto.doctorCreatorId,
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const savedPatient = await this.patientRepository.save(patient);
+    try {
+      const patient = queryRunner.manager.create(Patient, {
+        name: dto.name,
+        email: dto.email,
+        gender: dto.gender,
+        phone: dto.phone,
+        birthDate: new Date(dto.birthDate),
+        profileImage: profileImageUrl,
+        type: 'patient',
+        isShadow: true,
+        doctorCreatorId: dto.doctorCreatorId,
+      });
 
-    await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name);
+      const savedPatient = await queryRunner.manager.save(patient);
 
-    return {
-      message: 'Shadow patient created successfully. Invitation email sent.',
-      user: this.sanitizeUser(savedPatient),
-    };
+      await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name);
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: 'Shadow patient created successfully. Invitation email sent.',
+        user: this.sanitizeUser(savedPatient),
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async registerDoctor(dto: RegisterDoctorDto, file?: Express.Multer.File) {
@@ -262,40 +271,52 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    const doctor = this.doctorRepository.create({
-      name: dto.name,
-      email: dto.email,
-      password: hashedPassword,
-      gender: dto.gender,
-      specialty: dto.specialty,
-      cpf: dto.cpf,
-      phone: dto.phone,
-      birthDate: new Date(dto.birthDate),
-      crm: dto.crm,
-      rqe: dto.rqe || null,
-      profileImage: profileImageUrl,
-      type: 'doctor',
-      isShadow: false,
-      emailVerified: false,
-    });
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const savedDoctor = await this.doctorRepository.save(doctor);
+    try {
+      const doctor = queryRunner.manager.create(Doctor, {
+        name: dto.name,
+        email: dto.email,
+        password: hashedPassword,
+        gender: dto.gender,
+        specialty: dto.specialty,
+        cpf: dto.cpf,
+        phone: dto.phone,
+        birthDate: new Date(dto.birthDate),
+        crm: dto.crm,
+        rqe: dto.rqe || null,
+        profileImage: profileImageUrl,
+        type: 'doctor',
+        isShadow: false,
+        emailVerified: false,
+      });
 
-    // Send email verification code
-    const verificationCode = this.generateVerificationCode();
-    savedDoctor.verificationCode = verificationCode;
-    savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-    await this.doctorRepository.save(savedDoctor);
-    await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
+      const savedDoctor = await queryRunner.manager.save(doctor);
 
-    const token = await this.generateToken(savedDoctor);
+      // Send email verification code
+      const verificationCode = this.generateVerificationCode();
+      savedDoctor.verificationCode = verificationCode;
+      savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      await queryRunner.manager.save(savedDoctor);
+      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
-    const doctorContext = await this.getDoctorAuthContext(savedDoctor.id);
+      await queryRunner.commitTransaction();
 
-    return {
-      user: this.sanitizeUser(savedDoctor, doctorContext),
-      token,
-    };
+      const token = await this.generateToken(savedDoctor);
+      const doctorContext = await this.getDoctorAuthContext(savedDoctor.id);
+
+      return {
+        user: this.sanitizeUser(savedDoctor, doctorContext),
+        token,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async login(dto: LoginDto) {
