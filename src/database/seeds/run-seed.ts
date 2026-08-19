@@ -4,6 +4,7 @@ import { In } from 'typeorm';
 import AppDataSource from '../data-source';
 import { seedClinic } from './seed-clinic';
 import { seedExamCatalog } from './seed-exam-catalog';
+import { seedFinancial } from './seed-financial';
 import { Doctor } from '../../entities/doctor.entity';
 import { Patient } from '../../entities/patient.entity';
 import { Dependent } from '../../entities/dependent.entity';
@@ -677,6 +678,7 @@ export async function seedDatabase() {
 
   await seedClinic();
   await seedExamCatalog();
+  await seedFinancial();
 
   if (shouldDestroyConnection && AppDataSource.isInitialized) {
     await AppDataSource.destroy();
