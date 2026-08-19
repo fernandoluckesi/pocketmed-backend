@@ -210,9 +210,20 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Delete current user account (LGPD)' })
+  @ApiOperation({ summary: 'Delete current user account (LGPD) - requires verification code' })
   @ApiResponse({ status: 200, description: 'Account deleted' })
-  async deleteAccount(@CurrentUser() user: any) {
-    return this.authService.deleteAccount(user.userId, user.type);
+  @ApiResponse({ status: 400, description: 'Invalid or expired verification code' })
+  async deleteAccount(@CurrentUser() user: any, @Body() body: { verificationCode: string }) {
+    return this.authService.deleteAccount(user.userId, user.type, body.verificationCode);
+  }
+
+  @Post('request-account-deletion')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Request account deletion verification code' })
+  @ApiResponse({ status: 200, description: 'Verification code sent to email' })
+  async requestAccountDeletion(@CurrentUser() user: any) {
+    return this.authService.requestAccountDeletion(user.userId, user.type);
   }
 }

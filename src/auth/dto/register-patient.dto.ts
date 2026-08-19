@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, MinLength, IsDateString, IsBoolean, IsOptional } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, MinLength, IsDateString, IsBoolean, IsOptional, Matches } from 'class-validator';
 
 export class RegisterPatientDto {
   @ApiProperty({ example: 'Fernando Luckesi' })
@@ -17,9 +17,13 @@ export class RegisterPatientDto {
   @IsNotEmpty()
   gender: string;
 
-  @ApiProperty({ example: '958969' })
+  @ApiProperty({ example: 'Senha@123' })
   @IsString()
-  @MinLength(6)
+  @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres' })
+  @Matches(/[A-Z]/, { message: 'A senha deve conter pelo menos uma letra maiúscula' })
+  @Matches(/[a-z]/, { message: 'A senha deve conter pelo menos uma letra minúscula' })
+  @Matches(/\d/, { message: 'A senha deve conter pelo menos um número' })
+  @Matches(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, { message: 'A senha deve conter pelo menos um caractere especial' })
   password: string;
 
   @ApiProperty({ example: '(11) 99999-1234' })

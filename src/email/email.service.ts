@@ -397,4 +397,38 @@ export class EmailService {
       this.rethrowEmailError(error, 'Error sending password reset email');
     }
   }
+
+  async sendAccountDeletionCode(email: string, code: string, userName: string) {
+    try {
+      if (!this.ensureEmailEnabledOrLogFallback(email, code, 'Account deletion')) {
+        return;
+      }
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: 'Confirmação de Exclusão de Conta - PocketMed',
+        html: this.buildEmailHtml({
+          userName,
+          title: 'Código de confirmação',
+          message: 'Você solicitou a exclusão permanente da sua conta PocketMed. Use o código abaixo para confirmar. Esta ação é irreversível.',
+          code,
+          footer: 'Se você não solicitou a exclusão da conta, ignore este email e altere sua senha imediatamente.',
+        }),
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Account deletion code sent to ${email}`);
+    } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        this.logger.warn(`Falling back to mock account deletion email delivery for ${email}.`);
+        this.logMockCode(email, code, 'Account deletion');
+        return;
+      }
+      this.rethrowEmailError(error, 'Error sending account deletion email');
+    }
+  }
 }

@@ -827,14 +827,52 @@ export class AuthService {
     return result;
   }
 
-  async deleteAccount(userId: string, userType: string) {
-    const queryRunner = this.patientRepository.manager.connection.createQueryRunner();
+  async requestAccountDeletion(userId: string, userType: string) {
+    const user = await this.findUserById(userId, userType);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpiry = verificationCodeExpiry;
+
+    await this.saveUser(user);
+    await this.emailService.sendAccountDeletionCode(user.email, verificationCode, user.name);
+
+    return {
+      message: 'Verification code sent to email',
+    };
+  }
+
+  async deleteAccount(userId: string, userType: string, verificationCode?: string) {
+    const user = await this.findUserById(userId, userType);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!verificationCode) {
+      throw new BadRequestException('Verification code is required');
+    }
+
+    if (user.verificationCode !== verificationCode) {
+      throw new BadRequestException('Invalid verification code');
+    }
+
+    if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
+      throw new BadRequestException('Verification code expired');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       if (userType === 'patient') {
-        // Delete all related data
         await queryRunner.query('DELETE FROM `appointments` WHERE `patientId` = ?', [userId]);
         await queryRunner.query('DELETE FROM `medications` WHERE `patientId` = ?', [userId]);
         await queryRunner.query('DELETE FROM `exams` WHERE `patientId` = ?', [userId]);
