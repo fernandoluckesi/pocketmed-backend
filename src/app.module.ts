@@ -55,6 +55,7 @@ import { ExamCatalogModule } from './exam-catalog/exam-catalog.module';
 import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
 import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.module';
 import { FinancialModule } from './financial/financial.module';
+import { ClinicsModule } from './clinics/clinics.module';
 
 @Module({
   imports: [
@@ -68,11 +69,27 @@ import { FinancialModule } from './financial/financial.module';
       useFactory: (configService: ConfigService) => ({
         type: 'mysql',
         // Support both DB_* (manual) and MYSQL_* (Railway auto-injected) variable names
-        host: configService.get<string>('DB_HOST') || configService.get<string>('MYSQL_HOST') || configService.get<string>('MYSQLHOST'),
-        port: configService.get<number>('DB_PORT') || configService.get<number>('MYSQL_PORT') || configService.get<number>('MYSQLPORT') || 3306,
-        username: configService.get<string>('DB_USERNAME') || configService.get<string>('MYSQL_USER') || configService.get<string>('MYSQLUSER'),
-        password: configService.get<string>('DB_PASSWORD') || configService.get<string>('MYSQL_PASSWORD') || configService.get<string>('MYSQLPASSWORD'),
-        database: configService.get<string>('DB_DATABASE') || configService.get<string>('MYSQL_DATABASE') || configService.get<string>('MYSQLDATABASE'),
+        host:
+          configService.get<string>('DB_HOST') ||
+          configService.get<string>('MYSQL_HOST') ||
+          configService.get<string>('MYSQLHOST'),
+        port:
+          configService.get<number>('DB_PORT') ||
+          configService.get<number>('MYSQL_PORT') ||
+          configService.get<number>('MYSQLPORT') ||
+          3306,
+        username:
+          configService.get<string>('DB_USERNAME') ||
+          configService.get<string>('MYSQL_USER') ||
+          configService.get<string>('MYSQLUSER'),
+        password:
+          configService.get<string>('DB_PASSWORD') ||
+          configService.get<string>('MYSQL_PASSWORD') ||
+          configService.get<string>('MYSQLPASSWORD'),
+        database:
+          configService.get<string>('DB_DATABASE') ||
+          configService.get<string>('MYSQL_DATABASE') ||
+          configService.get<string>('MYSQLDATABASE'),
         // Retry connection on startup (Railway DB may not be immediately available)
         retryAttempts: 10,
         retryDelay: 3000,
@@ -133,6 +150,7 @@ import { FinancialModule } from './financial/financial.module';
     ExamSchedulingModule,
     DoctorDocumentsModule,
     FinancialModule,
+    ClinicsModule,
   ],
   controllers: [AppController],
   providers: [
