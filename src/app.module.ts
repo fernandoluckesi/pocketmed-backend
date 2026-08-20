@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -56,6 +56,10 @@ import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
 import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.module';
 import { FinancialModule } from './financial/financial.module';
 import { ClinicsModule } from './clinics/clinics.module';
+import { AuditModule } from './audit/audit.module';
+import { AuditEvent } from './audit/entities/audit-event.entity';
+import { RequestContextMiddleware } from './audit/request-context.middleware';
+import { AuditContextInterceptor } from './audit/audit-context.interceptor';
 
 @Module({
   imports: [
@@ -127,6 +131,7 @@ import { ClinicsModule } from './clinics/clinics.module';
           PatientDisease,
           PatientAllergy,
           PatientVaccine,
+          AuditEvent,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -151,6 +156,7 @@ import { ClinicsModule } from './clinics/clinics.module';
     DoctorDocumentsModule,
     FinancialModule,
     ClinicsModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [
@@ -163,6 +169,14 @@ import { ClinicsModule } from './clinics/clinics.module';
       provide: APP_GUARD,
       useClass: RolesGuard,
     },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditContextInterceptor,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestContextMiddleware).forRoutes('*');
+  }
+}

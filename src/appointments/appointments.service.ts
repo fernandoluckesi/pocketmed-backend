@@ -17,6 +17,8 @@ import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { PatientsService } from 'src/patients/patients.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProfessionalRole } from '../auth/professional-role.enum';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 
 @Injectable()
 export class AppointmentsService {
@@ -34,6 +36,7 @@ export class AppointmentsService {
     private doctorsService: DoctorsService,
     private notificationsService: NotificationsService,
     private patientsService: PatientsService,
+    private auditService: AuditService,
   ) {}
 
   private async getClinicDoctorIds(clinicId: string): Promise<string[]> {
@@ -206,7 +209,15 @@ export class AppointmentsService {
       status: AppointmentStatus.PENDING,
     });
 
-    return await this.appointmentRepository.save(appointment);
+    const saved = await this.appointmentRepository.save(appointment);
+
+    // REQ-AUD-019 — Audit CREATE
+    await this.auditService.recordCreate(AuditResourceType.APPOINTMENT, saved.id, {
+      patientId: dto.patientId || undefined,
+      metadata: { doctorId, dependentId: dto.dependentId || null },
+    });
+
+    return saved;
   }
 
   private async createByPatient(patientId: string, dto: CreateAppointmentDto) {
@@ -291,7 +302,15 @@ export class AppointmentsService {
       status: AppointmentStatus.APPROVED,
     });
 
-    return await this.appointmentRepository.save(appointment);
+    const saved = await this.appointmentRepository.save(appointment);
+
+    // REQ-AUD-019 — Audit CREATE by patient
+    await this.auditService.recordCreate(AuditResourceType.APPOINTMENT, saved.id, {
+      patientId: patientId,
+      metadata: { createdBy: 'patient', dependentId: dto.dependentId || null },
+    });
+
+    return saved;
   }
 
   async findAll(
@@ -401,8 +420,19 @@ export class AppointmentsService {
     );
 
     if (!canAccess) {
+      // REQ-AUD-026 — Audit ACCESS_DENIED
+      await this.auditService.recordAccessDenied(AuditResourceType.APPOINTMENT, {
+        resourceId: id,
+        patientId: appointment.patientId || undefined,
+        reason: 'INSUFFICIENT_PERMISSION',
+      });
       throw new ForbiddenException('You do not have permission to view this appointment');
     }
+
+    // REQ-AUD-024 — Audit READ of clinical data
+    await this.auditService.recordRead(AuditResourceType.APPOINTMENT, id, {
+      patientId: appointment.patientId || undefined,
+    });
 
     if (userType === 'doctor' && userRole === ProfessionalRole.SECRETARY) {
       return this.sanitizeForSecretary(appointment);
@@ -438,9 +468,23 @@ export class AppointmentsService {
         (!appointment.createdByPatientId && appointment.patientId === userId));
 
     if (!isOwnerDoctor && !isOwnerPatient) {
+      // REQ-AUD-026 — Audit ACCESS_DENIED on update attempt
+      await this.auditService.recordAccessDenied(AuditResourceType.APPOINTMENT, {
+        resourceId: id,
+        patientId: appointment.patientId || undefined,
+        reason: 'INSUFFICIENT_PERMISSION',
+      });
       throw new ForbiddenException(
         'Only the doctor who created the appointment or the patient who owns it can update it',
       );
+    }
+
+    // Capture changed fields for audit (REQ-AUD-020/021)
+    const changedFields: Record<string, { before?: unknown; after?: unknown }> = {};
+    for (const key of Object.keys(dto) as (keyof UpdateAppointmentDto)[]) {
+      if (dto[key] !== undefined && (appointment as any)[key] !== dto[key]) {
+        changedFields[key] = { before: (appointment as any)[key], after: dto[key] };
+      }
     }
 
     const isDoctorRequestingCompletion = dto.isCompleted === true && isOwnerDoctor;
@@ -463,6 +507,13 @@ export class AppointmentsService {
     }
 
     const savedAppointment = await this.appointmentRepository.save(appointment);
+
+    // REQ-AUD-020 — Audit UPDATE
+    if (Object.keys(changedFields).length > 0) {
+      await this.auditService.recordUpdate(AuditResourceType.APPOINTMENT, id, changedFields, {
+        patientId: appointment.patientId || undefined,
+      });
+    }
 
     if (isDoctorRequestingCompletion) {
       await this.notifyPatientCompletionRequest(savedAppointment);
@@ -547,12 +598,24 @@ export class AppointmentsService {
         (!appointment.createdByPatientId && appointment.patientId === userId));
 
     if (!isOwnerDoctor && !isOwnerPatient) {
+      // REQ-AUD-026
+      await this.auditService.recordAccessDenied(AuditResourceType.APPOINTMENT, {
+        resourceId: id,
+        patientId: appointment.patientId || undefined,
+        reason: 'INSUFFICIENT_PERMISSION',
+      });
       throw new ForbiddenException(
         'Only the doctor who created the appointment or the patient who owns it can delete it',
       );
     }
 
     await this.appointmentRepository.remove(appointment);
+
+    // REQ-AUD-022 — Audit DELETE
+    await this.auditService.recordDelete(AuditResourceType.APPOINTMENT, id, {
+      patientId: appointment.patientId || undefined,
+      metadata: { doctorId: appointment.doctorId, reason: appointment.reason },
+    });
 
     return {
       message: 'Appointment deleted successfully',

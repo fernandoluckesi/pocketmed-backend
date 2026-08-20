@@ -134,7 +134,7 @@ export class AuthController {
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Request password reset code' })
+  @ApiOperation({ summary: 'Request password reset code (generic — prefers doctor)' })
   @ApiResponse({ status: 200, description: 'Reset code sent to email' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -142,14 +142,56 @@ export class AuthController {
   }
 
   @Public()
+  @Post('doctor/forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset code for doctor (web)' })
+  @ApiResponse({ status: 200, description: 'Reset code sent to email' })
+  @ApiResponse({ status: 404, description: 'Doctor not found' })
+  async forgotPasswordDoctor(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPasswordDoctor(dto.email);
+  }
+
+  @Public()
+  @Post('patient/forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request password reset code for patient (mobile)' })
+  @ApiResponse({ status: 200, description: 'Reset code sent to email' })
+  @ApiResponse({ status: 404, description: 'Patient not found' })
+  async forgotPasswordPatient(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPasswordPatient(dto.email);
+  }
+
+  @Public()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reset password with code' })
+  @ApiOperation({ summary: 'Reset password with code (generic — prefers doctor)' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 400, description: 'Invalid or expired reset code' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.email, dto.resetCode, dto.newPassword);
+  }
+
+  @Public()
+  @Post('doctor/reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with code for doctor (web)' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired reset code' })
+  @ApiResponse({ status: 404, description: 'Doctor not found' })
+  async resetPasswordDoctor(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPasswordDoctor(dto.email, dto.resetCode, dto.newPassword);
+  }
+
+  @Public()
+  @Post('patient/reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reset password with code for patient (mobile)' })
+  @ApiResponse({ status: 200, description: 'Password reset successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired reset code' })
+  @ApiResponse({ status: 404, description: 'Patient not found' })
+  async resetPasswordPatient(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPasswordPatient(dto.email, dto.resetCode, dto.newPassword);
   }
 
   @UseGuards(JwtAuthGuard)

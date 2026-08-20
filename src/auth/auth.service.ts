@@ -18,6 +18,8 @@ import { RegisterPatientShadowDto } from './dto/register-patient-shadow.dto';
 import { LoginDto } from './dto/login.dto';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from '../entities/secretary-profile.entity';
@@ -48,6 +50,7 @@ export class AuthService {
     private jwtService: JwtService,
     private uploadService: UploadService,
     private emailService: EmailService,
+    private auditService: AuditService,
     private dataSource: DataSource,
   ) {}
 
@@ -321,20 +324,38 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const loginUser = await this.findLoginUserByEmail(dto.email, dto.loginAs);
-    console.log('[AUTH] findLoginUserByEmail result:', loginUser ? `Found (type: ${(loginUser as any).type || 'role_profile'}, id: ${(loginUser as any).id})` : 'NOT FOUND');
 
     if (!loginUser) {
+      // REQ-AUD-027 — LOGIN_FAILURE
+      await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
+        resourceType: AuditResourceType.USER,
+        success: false,
+        reason: 'AUTHENTICATION_FAILED',
+        metadata: { email: dto.email },
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
     if (this.isRoleProfile(loginUser)) {
       if (!loginUser.password) {
+        await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
+          resourceType: AuditResourceType.USER,
+          resourceId: loginUser.id,
+          success: false,
+          reason: 'AUTHENTICATION_FAILED',
+        });
         throw new UnauthorizedException('Invalid credentials');
       }
 
       const isPasswordValid = await bcrypt.compare(dto.password, loginUser.password);
 
       if (!isPasswordValid) {
+        await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
+          resourceType: AuditResourceType.USER,
+          resourceId: loginUser.id,
+          success: false,
+          reason: 'AUTHENTICATION_FAILED',
+        });
         throw new UnauthorizedException('Invalid credentials');
       }
 
@@ -357,6 +378,13 @@ export class AuthService {
       const token = await this.generateToken(professional);
       const doctorContext = await this.getDoctorAuthContext(professional.id);
 
+      // REQ-AUD-027 — LOGIN success
+      await this.auditService.recordSecurityEvent(AuditAction.LOGIN, {
+        resourceType: AuditResourceType.USER,
+        resourceId: professional.id,
+        metadata: { loginAs: 'role_profile', role: doctorContext.role },
+      });
+
       return {
         user: this.sanitizeUser(professional, doctorContext),
         token,
@@ -370,12 +398,24 @@ export class AuthService {
     }
 
     if (!user.password) {
+      await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
+        resourceType: AuditResourceType.USER,
+        resourceId: user.id,
+        success: false,
+        reason: 'AUTHENTICATION_FAILED',
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
 
     if (!isPasswordValid) {
+      await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
+        resourceType: AuditResourceType.USER,
+        resourceId: user.id,
+        success: false,
+        reason: 'AUTHENTICATION_FAILED',
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -383,6 +423,13 @@ export class AuthService {
 
     const doctorContext =
       user.type === 'doctor' ? await this.getDoctorAuthContext(user.id) : undefined;
+
+    // REQ-AUD-027 — LOGIN success
+    await this.auditService.recordSecurityEvent(AuditAction.LOGIN, {
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      metadata: { type: user.type },
+    });
 
     return {
       user: this.sanitizeUser(user, doctorContext),
@@ -566,6 +613,49 @@ export class AuthService {
     };
   }
 
+  async forgotPasswordDoctor(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const doctor = await this.doctorRepository.findOne({ where: { email: normalizedEmail } });
+
+    if (!doctor) {
+      throw new NotFoundException('User not found');
+    }
+
+    const resetCode = this.generateVerificationCode();
+    const resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    doctor.passwordResetCode = resetCode;
+    doctor.passwordResetCodeExpiry = resetCodeExpiry;
+
+    await this.doctorRepository.save(doctor);
+    await this.syncProfessionalDataToRoleProfiles(doctor);
+    await this.emailService.sendPasswordResetCode(email, resetCode, doctor.name);
+
+    return { message: 'Password reset code sent to email' };
+  }
+
+  async forgotPasswordPatient(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const patient = await this.patientRepository.findOne({
+      where: { email: normalizedEmail, isShadow: false },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('User not found');
+    }
+
+    const resetCode = this.generateVerificationCode();
+    const resetCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    patient.passwordResetCode = resetCode;
+    patient.passwordResetCodeExpiry = resetCodeExpiry;
+
+    await this.patientRepository.save(patient);
+    await this.emailService.sendPasswordResetCode(email, resetCode, patient.name);
+
+    return { message: 'Password reset code sent to email' };
+  }
+
   async resetPassword(email: string, resetCode: string, newPassword: string) {
     const user = await this.findUserByEmail(email);
 
@@ -589,9 +679,82 @@ export class AuthService {
 
     await this.saveUser(user);
 
+    // REQ-AUD-027 — PASSWORD_RESET
+    await this.auditService.recordSecurityEvent(AuditAction.PASSWORD_RESET, {
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+    });
+
     return {
       message: 'Password reset successfully',
     };
+  }
+
+  async resetPasswordDoctor(email: string, resetCode: string, newPassword: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const doctor = await this.doctorRepository.findOne({ where: { email: normalizedEmail } });
+
+    if (!doctor) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (doctor.passwordResetCode !== resetCode) {
+      throw new BadRequestException('Invalid reset code');
+    }
+
+    if (new Date() > doctor.passwordResetCodeExpiry) {
+      throw new BadRequestException('Reset code expired');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    doctor.password = hashedPassword;
+    doctor.passwordResetCode = null;
+    doctor.passwordResetCodeExpiry = null;
+
+    await this.doctorRepository.save(doctor);
+    await this.syncProfessionalDataToRoleProfiles(doctor);
+
+    await this.auditService.recordSecurityEvent(AuditAction.PASSWORD_RESET, {
+      resourceType: AuditResourceType.USER,
+      resourceId: doctor.id,
+    });
+
+    return { message: 'Password reset successfully' };
+  }
+
+  async resetPasswordPatient(email: string, resetCode: string, newPassword: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const patient = await this.patientRepository.findOne({
+      where: { email: normalizedEmail, isShadow: false },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (patient.passwordResetCode !== resetCode) {
+      throw new BadRequestException('Invalid reset code');
+    }
+
+    if (new Date() > patient.passwordResetCodeExpiry) {
+      throw new BadRequestException('Reset code expired');
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    patient.password = hashedPassword;
+    patient.passwordResetCode = null;
+    patient.passwordResetCodeExpiry = null;
+
+    await this.patientRepository.save(patient);
+
+    await this.auditService.recordSecurityEvent(AuditAction.PASSWORD_RESET, {
+      resourceType: AuditResourceType.USER,
+      resourceId: patient.id,
+    });
+
+    return { message: 'Password reset successfully' };
   }
 
   async changePassword(userId: string, userType: string, oldPassword: string, newPassword: string) {
@@ -612,6 +775,12 @@ export class AuthService {
     user.password = hashedPassword;
 
     await this.saveUser(user);
+
+    // REQ-AUD-027 — PASSWORD_CHANGED
+    await this.auditService.recordSecurityEvent(AuditAction.PASSWORD_CHANGED, {
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+    });
 
     return {
       message: 'Password changed successfully',
@@ -688,7 +857,14 @@ export class AuthService {
   private async findUserByEmail(email: string): Promise<AuthUser | null> {
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Only find active (non-shadow) accounts
+    // Order must match findLoginUserByEmail: doctor first, then patient.
+    // This ensures forgot-password/reset-password targets the same entity that login will use.
+    const doctor = await this.doctorRepository.findOne({ where: { email: normalizedEmail } });
+    if (doctor) {
+      return doctor;
+    }
+
+    // Only find active (non-shadow) patient accounts
     const patient = await this.patientRepository.findOne({
       where: { email: normalizedEmail, isShadow: false },
     });
@@ -696,7 +872,7 @@ export class AuthService {
       return patient;
     }
 
-    return this.doctorRepository.findOne({ where: { email: normalizedEmail } });
+    return null;
   }
 
   private async findAnyShadowByEmail(email: string): Promise<Patient | null> {
@@ -892,6 +1068,13 @@ export class AuthService {
         await queryRunner.query('DELETE FROM `secretary_profiles` WHERE `professionalId` = ?', [userId]);
         await queryRunner.query('DELETE FROM `doctors` WHERE `id` = ?', [userId]);
       }
+
+      // REQ-AUD-003/004 — Audit inside the same transaction
+      await this.auditService.recordDelete(
+        AuditResourceType.USER,
+        userId,
+        { patientId: userType === 'patient' ? userId : undefined, reason: 'ACCOUNT_DELETION_REQUESTED', queryRunner },
+      );
 
       await queryRunner.commitTransaction();
       return { message: 'Account deleted successfully' };
