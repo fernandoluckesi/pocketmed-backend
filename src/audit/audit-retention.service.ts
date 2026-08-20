@@ -53,7 +53,7 @@ export class AuditRetentionService {
    * Scheduled job: runs daily at 3:00 AM to purge old audit events.
    * Only executes if AUDIT_RETENTION_ENABLED=true.
    */
-  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: 'audit-retention-cleanup' })
   async handleRetentionCleanup() {
     if (!this.enabled) {
       return;
