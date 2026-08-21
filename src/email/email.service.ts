@@ -13,7 +13,9 @@ export class EmailService {
   constructor(private configService: ConfigService) {
     const nodeEnv = String(this.configService.get<string>('NODE_ENV') ?? 'development').trim();
     const enabledDefault = nodeEnv === 'development' ? 'false' : 'true';
-    const enabledFlag = String(this.configService.get<string>('EMAIL_ENABLED') ?? enabledDefault).trim();
+    const enabledFlag = String(
+      this.configService.get<string>('EMAIL_ENABLED') ?? enabledDefault,
+    ).trim();
     this.emailEnabled = enabledFlag.toLowerCase() !== 'false';
 
     const mockFallbackDefault = nodeEnv === 'development' ? 'true' : 'false';
@@ -22,8 +24,11 @@ export class EmailService {
     ).trim();
     this.emailMockFallback = mockFallbackFlag.toLowerCase() !== 'false';
 
-    this.resend = new Resend(this.configService.get<string>('RESEND_API_KEY'));
-    this.emailFrom = this.configService.get<string>('EMAIL_FROM') || 'PocketMed <noreply@pocketmed.com>';
+    const apiKey =
+      this.configService.get<string>('RESEND_API_KEY') || 're_placeholder_not_configured';
+    this.resend = new Resend(apiKey);
+    this.emailFrom =
+      this.configService.get<string>('EMAIL_FROM') || 'PocketMed <noreply@pocketmed.com>';
 
     if (!this.emailEnabled) {
       this.logger.warn(
@@ -275,7 +280,8 @@ export class EmailService {
         html: this.buildEmailHtml({
           userName,
           title: 'Código de ativação',
-          message: 'Um profissional de saúde criou sua conta no PocketMed. Use o código abaixo para ativar sua conta e definir uma senha.',
+          message:
+            'Um profissional de saúde criou sua conta no PocketMed. Use o código abaixo para ativar sua conta e definir uma senha.',
           code,
           footer: 'Se você não reconhece esta solicitação, ignore este email.',
         }),
@@ -343,7 +349,8 @@ export class EmailService {
         html: this.buildEmailHtml({
           userName,
           title: 'Código de verificação',
-          message: 'Bem-vindo(a) ao PocketMed! Para concluir seu cadastro, insira o código abaixo no aplicativo.',
+          message:
+            'Bem-vindo(a) ao PocketMed! Para concluir seu cadastro, insira o código abaixo no aplicativo.',
           code,
           footer: 'Se você não criou uma conta no PocketMed, ignore este email.',
         }),
@@ -377,9 +384,11 @@ export class EmailService {
         html: this.buildEmailHtml({
           userName,
           title: 'Código de recuperação',
-          message: 'Você solicitou a recuperação de senha da sua conta PocketMed. Use o código abaixo para redefinir sua senha.',
+          message:
+            'Você solicitou a recuperação de senha da sua conta PocketMed. Use o código abaixo para redefinir sua senha.',
           code,
-          footer: 'Se você não solicitou a recuperação de senha, ignore este email. Sua senha permanecerá inalterada.',
+          footer:
+            'Se você não solicitou a recuperação de senha, ignore este email. Sua senha permanecerá inalterada.',
         }),
       });
 
@@ -411,9 +420,11 @@ export class EmailService {
         html: this.buildEmailHtml({
           userName,
           title: 'Código de confirmação',
-          message: 'Você solicitou a exclusão permanente da sua conta PocketMed. Use o código abaixo para confirmar. Esta ação é irreversível.',
+          message:
+            'Você solicitou a exclusão permanente da sua conta PocketMed. Use o código abaixo para confirmar. Esta ação é irreversível.',
           code,
-          footer: 'Se você não solicitou a exclusão da conta, ignore este email e altere sua senha imediatamente.',
+          footer:
+            'Se você não solicitou a exclusão da conta, ignore este email e altere sua senha imediatamente.',
         }),
       });
 
