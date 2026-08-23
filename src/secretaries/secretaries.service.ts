@@ -26,12 +26,12 @@ export class SecretariesService {
   async create(dto: CreateSecretaryDto, clinicId: string, invitedBy: string): Promise<Secretary> {
     const normalizedEmail = dto.email.trim().toLowerCase();
 
-    // Check uniqueness within secretaries table
+    // Check uniqueness within same clinic only
     const existing = await this.secretaryRepository.findOne({
-      where: { email: normalizedEmail },
+      where: { email: normalizedEmail, clinicId },
     });
     if (existing) {
-      throw new ConflictException('Email já cadastrado para um(a) secretário(a).');
+      throw new ConflictException('Email já cadastrado nesta clínica.');
     }
 
     const verificationCode = this.generateVerificationCode();
@@ -100,12 +100,12 @@ export class SecretariesService {
     if (dto.email) {
       const normalizedEmail = dto.email.trim().toLowerCase();
       if (normalizedEmail !== secretary.email) {
-        // Check uniqueness
+        // Check uniqueness within same clinic
         const existing = await this.secretaryRepository.findOne({
-          where: { email: normalizedEmail },
+          where: { email: normalizedEmail, clinicId },
         });
         if (existing && existing.id !== id) {
-          throw new ConflictException('Email já cadastrado para outro(a) secretário(a).');
+          throw new ConflictException('Email já cadastrado nesta clínica.');
         }
         changedFields.email = { before: secretary.email, after: normalizedEmail };
         secretary.email = normalizedEmail;
@@ -189,6 +189,7 @@ export class SecretariesService {
   async findByEmail(email: string): Promise<Secretary | null> {
     return this.secretaryRepository.findOne({
       where: { email: email.trim().toLowerCase(), isActive: true },
+      order: { createdAt: 'DESC' },
     });
   }
 
