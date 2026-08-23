@@ -132,6 +132,17 @@ export class AuthController {
   }
 
   @Public()
+  @Post('validate-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Validate verification code without activating' })
+  @ApiResponse({ status: 200, description: 'Code is valid' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired code' })
+  @ApiResponse({ status: 404, description: 'Account not found' })
+  async validateCode(@Body() body: { email: string; verificationCode: string }) {
+    return this.authService.validateCode(body.email, body.verificationCode);
+  }
+
+  @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset code (generic — prefers doctor)' })

@@ -550,6 +550,38 @@ export class AuthService {
     };
   }
 
+  async validateCode(email: string, verificationCode: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Check patients (shadow)
+    const patient = await this.findAnyShadowByEmail(normalizedEmail);
+    if (patient) {
+      if (patient.verificationCode !== verificationCode) {
+        throw new BadRequestException('Invalid verification code');
+      }
+      if (!patient.verificationCodeExpiry || new Date() > patient.verificationCodeExpiry) {
+        throw new BadRequestException('Verification code expired');
+      }
+      return { valid: true };
+    }
+
+    // Check secretaries
+    const secretary = await this.secretaryRepository.findOne({
+      where: { email: normalizedEmail, isShadow: true },
+    });
+    if (secretary) {
+      if (secretary.verificationCode !== verificationCode) {
+        throw new BadRequestException('Invalid verification code');
+      }
+      if (!secretary.verificationCodeExpiry || new Date() > secretary.verificationCodeExpiry) {
+        throw new BadRequestException('Verification code expired');
+      }
+      return { valid: true };
+    }
+
+    throw new NotFoundException('Account not found');
+  }
+
   async activateShadowAccount(email: string, verificationCode: string, password: string) {
     const user = await this.findAnyShadowByEmail(email);
 
