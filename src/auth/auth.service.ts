@@ -22,7 +22,6 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
-import { SecretaryProfile } from '../entities/secretary-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
 import { ProfessionalRole } from './professional-role.enum';
 
@@ -33,7 +32,7 @@ type DoctorAuthContext = {
   activeClinicId: string | null;
 };
 
-type LoginUser = AuthUser | ClinicAdminProfile | SecretaryProfile;
+type LoginUser = AuthUser | ClinicAdminProfile | Secretary;
 
 @Injectable()
 export class AuthService {
@@ -46,8 +45,6 @@ export class AuthService {
     private clinicMembershipRepository: Repository<ClinicMembership>,
     @InjectRepository(ClinicAdminProfile)
     private clinicAdminProfileRepository: Repository<ClinicAdminProfile>,
-    @InjectRepository(SecretaryProfile)
-    private secretaryProfileRepository: Repository<SecretaryProfile>,
     @InjectRepository(Secretary)
     private secretaryRepository: Repository<Secretary>,
     private jwtService: JwtService,
@@ -362,6 +359,41 @@ export class AuthService {
         throw new UnauthorizedException('Invalid credentials');
       }
 
+      // Check if this is a Secretary from the new table (has clinicId, no professionalId)
+      if ('clinicId' in loginUser && !('professionalId' in loginUser)) {
+        const secretary = loginUser as Secretary;
+        if (secretary.isShadow) {
+          throw new UnauthorizedException('Account needs to be activated first');
+        }
+
+        const token = this.jwtService.sign({
+          email: secretary.email,
+          sub: secretary.id,
+          type: 'doctor',
+          role: 'secretary',
+          activeClinicId: secretary.clinicId,
+        });
+
+        await this.auditService.recordSecurityEvent(AuditAction.LOGIN, {
+          resourceType: AuditResourceType.USER,
+          resourceId: secretary.id,
+          metadata: { loginAs: 'secretary', clinicId: secretary.clinicId },
+        });
+
+        return {
+          user: {
+            id: secretary.id,
+            name: secretary.name,
+            email: secretary.email,
+            type: 'doctor',
+            role: 'secretary',
+            activeClinicId: secretary.clinicId,
+          },
+          token,
+        };
+      }
+
+      // ClinicAdminProfile flow (legacy)
       if (!loginUser.professionalId) {
         throw new UnauthorizedException('Role profile is not linked to a professional account');
       }
@@ -871,7 +903,7 @@ export class AuthService {
     };
   }
 
-  private isRoleProfile(user: LoginUser): user is ClinicAdminProfile | SecretaryProfile {
+  private isRoleProfile(user: LoginUser): user is ClinicAdminProfile | Secretary {
     return !('type' in user);
   }
 
@@ -894,8 +926,8 @@ export class AuthService {
     });
     if (clinicAdmin) return clinicAdmin;
 
-    const secretary = await this.secretaryProfileRepository.findOne({
-      where: { email: normalizedEmail },
+    const secretary = await this.secretaryRepository.findOne({
+      where: { email: normalizedEmail, isActive: true },
     });
     if (secretary) return secretary;
 
@@ -968,7 +1000,6 @@ export class AuthService {
     };
 
     await this.clinicAdminProfileRepository.update({ professionalId: doctor.id }, updatedFields);
-    await this.secretaryProfileRepository.update({ professionalId: doctor.id }, updatedFields);
   }
 
   async mergeShadowAccounts(primaryPatientId: string, email: string): Promise<void> {
