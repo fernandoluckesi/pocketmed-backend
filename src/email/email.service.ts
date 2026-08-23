@@ -91,6 +91,8 @@ export class EmailService {
     message: string;
     code: string;
     footer: string;
+    actionUrl?: string;
+    actionLabel?: string;
   }): string {
     return `
 <!DOCTYPE html>
@@ -106,15 +108,17 @@ export class EmailService {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
           <!-- Header with brand -->
           <tr>
-            <td style="background: linear-gradient(135deg, #1B3FCC 0%, #2B5AED 100%);padding:32px 40px;text-align:center;">
+            <td style="background-color:#f1f5f9;padding:28px 40px;text-align:center;">
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
                 <tr>
-                  <td style="background-color:rgba(255,255,255,0.15);border-radius:12px;padding:10px 14px;">
-                    <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Pocket</span><span style="font-size:24px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">Med</span>
+                  <td style="padding-right:10px;vertical-align:middle;">
+                    <img src="https://pocketmed-web-production.up.railway.app/assets/icon-C5HVUvPx.png" alt="PocketMed" width="36" height="36" style="border-radius:8px;display:block;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="font-size:22px;font-weight:800;color:#1a1a2e;letter-spacing:-0.5px;">Pocket</span><span style="font-size:22px;font-weight:800;color:#1B3FCC;letter-spacing:-0.5px;">Med</span>
                   </td>
                 </tr>
               </table>
-              <p style="margin:12px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">Seu prontuário sempre com você</p>
             </td>
           </tr>
           <!-- Body -->
@@ -132,7 +136,15 @@ export class EmailService {
                 </tr>
               </table>
               <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">⏱ Este código expira em <strong>15 minutos</strong>.</p>
-              <p style="margin:8px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">${options.footer}</p>
+              ${options.actionUrl ? `
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${options.actionUrl}" style="display:inline-block;background-color:#1B3FCC;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:12px;">${options.actionLabel || 'Ativar minha conta'}</a>
+                  </td>
+                </tr>
+              </table>` : ''}
+              <p style="margin:12px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">${options.footer}</p>
             </td>
           </tr>
           <!-- Footer -->
@@ -308,16 +320,21 @@ export class EmailService {
         return;
       }
 
+      const webUrl = this.configService.get<string>('WEB_URL') || 'https://pocketmed-web-production.up.railway.app';
+      const activationUrl = `${webUrl}/activate-account?email=${encodeURIComponent(email)}`;
+
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: 'Código de Verificação - PocketMed',
+        subject: 'Ative sua conta - PocketMed',
         html: this.buildEmailHtml({
           userName,
-          title: 'Código de verificação',
-          message: 'Use o código abaixo para verificar sua conta shadow no PocketMed.',
+          title: 'Código de ativação',
+          message: 'Você foi convidado(a) para acessar o PocketMed. Use o código abaixo ou clique no botão para ativar sua conta e criar uma senha.',
           code,
-          footer: 'Se você não solicitou este código, ignore este email.',
+          footer: 'Se você não reconhece esta solicitação, ignore este email.',
+          actionUrl: activationUrl,
+          actionLabel: 'Ativar minha conta',
         }),
       });
 

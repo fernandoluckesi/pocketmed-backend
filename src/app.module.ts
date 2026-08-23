@@ -49,6 +49,7 @@ import { PatientAccessLog } from './entities/patient-access-log.entity';
 import { PatientDisease } from './entities/patient-disease.entity';
 import { PatientAllergy } from './entities/patient-allergy.entity';
 import { PatientVaccine } from './entities/patient-vaccine.entity';
+import { Secretary } from './entities/secretary.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
 import { ExamCatalogModule } from './exam-catalog/exam-catalog.module';
@@ -57,6 +58,7 @@ import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.modul
 import { FinancialModule } from './financial/financial.module';
 import { ClinicsModule } from './clinics/clinics.module';
 import { AuditModule } from './audit/audit.module';
+import { SecretariesModule } from './secretaries/secretaries.module';
 import { AuditEvent } from './audit/entities/audit-event.entity';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
 import { AuditContextInterceptor } from './audit/audit-context.interceptor';
@@ -131,6 +133,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           PatientDisease,
           PatientAllergy,
           PatientVaccine,
+          Secretary,
           AuditEvent,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
@@ -157,6 +160,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     FinancialModule,
     ClinicsModule,
     AuditModule,
+    SecretariesModule,
   ],
   controllers: [AppController],
   providers: [
