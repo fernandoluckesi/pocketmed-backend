@@ -11,6 +11,7 @@ import { Doctor } from '../entities/doctor.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from '../entities/secretary-profile.entity';
+import { Secretary } from '../entities/secretary.entity';
 import { UploadModule } from '../upload/upload.module';
 import { EmailModule } from '../email/email.module';
 
@@ -22,6 +23,7 @@ import { EmailModule } from '../email/email.module';
       ClinicMembership,
       ClinicAdminProfile,
       SecretaryProfile,
+      Secretary,
     ]),
     PassportModule,
     JwtModule.registerAsync({

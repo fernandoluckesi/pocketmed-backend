@@ -23,6 +23,7 @@ import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from '../entities/secretary-profile.entity';
+import { Secretary } from '../entities/secretary.entity';
 import { ProfessionalRole } from './professional-role.enum';
 
 type AuthUser = Patient | Doctor;
@@ -47,6 +48,8 @@ export class AuthService {
     private clinicAdminProfileRepository: Repository<ClinicAdminProfile>,
     @InjectRepository(SecretaryProfile)
     private secretaryProfileRepository: Repository<SecretaryProfile>,
+    @InjectRepository(Secretary)
+    private secretaryRepository: Repository<Secretary>,
     private jwtService: JwtService,
     private uploadService: UploadService,
     private emailService: EmailService,
@@ -468,6 +471,29 @@ export class AuthService {
       return { isShadow: false, exists: true };
     }
 
+    // Check secretaries table for shadow accounts
+    const secretaryShadow = await this.secretaryRepository.findOne({
+      where: { email: email.trim().toLowerCase(), isShadow: true },
+    });
+    if (secretaryShadow) {
+      const verificationCode = this.generateVerificationCode();
+      const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+      secretaryShadow.verificationCode = verificationCode;
+      secretaryShadow.verificationCodeExpiry = verificationCodeExpiry;
+
+      await this.secretaryRepository.save(secretaryShadow);
+      await this.emailService.sendVerificationCode(secretaryShadow.email, verificationCode, secretaryShadow.name);
+
+      return {
+        isShadow: true,
+        exists: true,
+        email: secretaryShadow.email,
+        name: secretaryShadow.name,
+        message: 'Verification code sent to email',
+      };
+    }
+
     return { isShadow: false, exists: false };
   }
 
@@ -495,8 +521,38 @@ export class AuthService {
   async activateShadowAccount(email: string, verificationCode: string, password: string) {
     const user = await this.findAnyShadowByEmail(email);
 
+    // Also check secretaries table
     if (!user) {
-      throw new NotFoundException('Shadow account not found');
+      const secretary = await this.secretaryRepository.findOne({
+        where: { email: email.trim().toLowerCase(), isShadow: true },
+      });
+
+      if (!secretary) {
+        throw new NotFoundException('Shadow account not found');
+      }
+
+      if (secretary.verificationCode !== verificationCode) {
+        throw new BadRequestException('Invalid verification code');
+      }
+
+      if (!secretary.verificationCodeExpiry || new Date() > secretary.verificationCodeExpiry) {
+        throw new BadRequestException('Verification code expired');
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      secretary.password = hashedPassword;
+      secretary.isShadow = false;
+      secretary.verificationCode = null;
+      secretary.verificationCodeExpiry = null;
+      secretary.emailVerified = true;
+
+      await this.secretaryRepository.save(secretary);
+
+      return {
+        message: 'Account activated successfully',
+        user: { id: secretary.id, name: secretary.name, email: secretary.email, type: 'secretary' },
+      };
     }
 
     if (user.verificationCode !== verificationCode) {
