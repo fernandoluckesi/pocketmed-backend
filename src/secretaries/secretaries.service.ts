@@ -132,6 +132,29 @@ export class SecretariesService {
     return this.sanitize(saved);
   }
 
+  async resendCode(id: string, clinicId: string) {
+    const secretary = await this.secretaryRepository.findOne({
+      where: { id, clinicId },
+    });
+    if (!secretary) {
+      throw new NotFoundException('Secretário(a) não encontrado(a).');
+    }
+    if (!secretary.isShadow) {
+      throw new ConflictException('Este secretário(a) já ativou a conta.');
+    }
+
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    secretary.verificationCode = verificationCode;
+    secretary.verificationCodeExpiry = verificationCodeExpiry;
+
+    await this.secretaryRepository.save(secretary);
+    await this.emailService.sendVerificationCode(secretary.email, verificationCode, secretary.name);
+
+    return { message: 'Código reenviado com sucesso.' };
+  }
+
   async remove(id: string, clinicId: string): Promise<void> {
     const secretary = await this.secretaryRepository.findOne({
       where: { id, clinicId },

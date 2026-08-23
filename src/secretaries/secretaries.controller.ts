@@ -77,4 +77,14 @@ export class SecretariesController {
     await this.secretariesService.remove(id, user.activeClinicId);
     return { message: 'Secretário(a) removido(a) com sucesso.' };
   }
+
+  @Post(':id/resend-code')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Resend activation code to a pending secretary' })
+  @ApiResponse({ status: 200, description: 'Code resent' })
+  @ApiResponse({ status: 400, description: 'Secretary already activated' })
+  @ApiResponse({ status: 404, description: 'Not found' })
+  async resendCode(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.secretariesService.resendCode(id, user.activeClinicId);
+  }
 }
