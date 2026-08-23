@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Patient } from '../../entities/patient.entity';
 import { Doctor } from '../../entities/doctor.entity';
+import { Secretary } from '../../entities/secretary.entity';
 import { ClinicMembership } from '../../entities/clinic-membership.entity';
 import { ProfessionalRole } from '../professional-role.enum';
 
@@ -17,6 +18,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private patientRepository: Repository<Patient>,
     @InjectRepository(Doctor)
     private doctorRepository: Repository<Doctor>,
+    @InjectRepository(Secretary)
+    private secretaryRepository: Repository<Secretary>,
     @InjectRepository(ClinicMembership)
     private clinicMembershipRepository: Repository<ClinicMembership>,
   ) {
@@ -28,6 +31,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    // Secretary login (role=secretary in JWT)
+    if (payload.role === 'secretary') {
+      const secretary = await this.secretaryRepository.findOne({ where: { id: payload.sub } });
+      if (!secretary || !secretary.isActive) {
+        throw new UnauthorizedException('Invalid token');
+      }
+      return {
+        userId: secretary.id,
+        email: secretary.email,
+        type: 'doctor',
+        role: ProfessionalRole.SECRETARY,
+        activeClinicId: secretary.clinicId,
+      };
+    }
+
     let user: Patient | Doctor | null = null;
 
     if (payload.type === 'patient') {
