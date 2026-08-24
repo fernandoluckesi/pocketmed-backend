@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
@@ -353,37 +358,33 @@ export class PatientsService {
       throw new ForbiddenException('Search query must be at least 3 characters');
     }
 
-    if (userRole === ProfessionalRole.SECRETARY || userRole === ProfessionalRole.ADMIN) {
-      if (!activeClinicId) {
-        throw new ForbiddenException('Active clinic context is required to search patients');
-      }
-
-      const clinicPatientIds = await this.getClinicPatientIds(activeClinicId);
-      if (clinicPatientIds.length === 0) {
-        return [];
-      }
-
+    // Secretary: busca em toda a plataforma mas retorna somente dados básicos (nome, email, telefone)
+    if (userRole === ProfessionalRole.SECRETARY) {
       const patients = await this.patientRepository.find({
         where: [
-          { id: In(clinicPatientIds), name: Like(`%${query}%`) },
-          { id: In(clinicPatientIds), email: Like(`%${query}%`) },
+          { name: Like(`%${query}%`), isShadow: false },
+          { email: Like(`%${query}%`), isShadow: false },
         ],
-        select: ['id', 'name', 'email'],
+        select: ['id', 'name', 'email', 'phone'],
       });
 
       return patients.map((patient) => ({
         id: patient.id,
         name: patient.name,
         email: patient.email,
+        phone: patient.phone,
       }));
     }
 
-    if (userRole !== ProfessionalRole.DOCTOR) {
+    if (userRole !== ProfessionalRole.DOCTOR && userRole !== ProfessionalRole.ADMIN) {
       throw new ForbiddenException('Only doctors can search patients');
     }
 
     const patients = await this.patientRepository.find({
-      where: [{ name: Like(`%${query}%`), isShadow: false }, { email: Like(`%${query}%`), isShadow: false }],
+      where: [
+        { name: Like(`%${query}%`), isShadow: false },
+        { email: Like(`%${query}%`), isShadow: false },
+      ],
       select: this.patientSelectFields,
     });
 
@@ -584,9 +585,14 @@ export class PatientsService {
     }
 
     // Get doctor info for the appointment record
-    const doctorEntity = await this.patientRepository.manager
+    const doctorEntity = (await this.patientRepository.manager
       .getRepository('Doctor')
-      .findOne({ where: { id: doctorId }, select: ['id', 'name', 'crm', 'specialty'] }) as { id: string; name: string; crm: string; specialty: string } | null;
+      .findOne({ where: { id: doctorId }, select: ['id', 'name', 'crm', 'specialty'] })) as {
+      id: string;
+      name: string;
+      crm: string;
+      specialty: string;
+    } | null;
 
     const appointment = this.appointmentRepository.create({
       patientId,
@@ -609,9 +615,12 @@ export class PatientsService {
 
     // Send push notification to patient if not shadow
     if (!isShadow) {
-      const doctorEntity = await this.patientRepository.manager
+      const doctorEntity = (await this.patientRepository.manager
         .getRepository('Doctor')
-        .findOne({ where: { id: doctorId }, select: ['id', 'name'] }) as { id: string; name: string } | null;
+        .findOne({ where: { id: doctorId }, select: ['id', 'name'] })) as {
+        id: string;
+        name: string;
+      } | null;
 
       const doctorName = doctorEntity?.name || 'Seu médico';
       const dateFormatted = new Date(data.date).toLocaleDateString('pt-BR');
@@ -661,7 +670,9 @@ export class PatientsService {
 
     // If patient tries to edit a doctor-locked consultation, deny
     if (userType === 'patient' && appointment.lockedByDoctor) {
-      throw new ForbiddenException('Esta consulta foi registrada pelo médico e não pode ser alterada.');
+      throw new ForbiddenException(
+        'Esta consulta foi registrada pelo médico e não pode ser alterada.',
+      );
     }
 
     if (data.date) appointment.dateTime = new Date(data.date);
@@ -688,9 +699,12 @@ export class PatientsService {
       if (patientEntity && !patientEntity.isShadow) {
         appointment.status = 'pending_approval' as any;
 
-        const doctorEntity = await this.patientRepository.manager
+        const doctorEntity = (await this.patientRepository.manager
           .getRepository('Doctor')
-          .findOne({ where: { id: userId }, select: ['id', 'name'] }) as { id: string; name: string } | null;
+          .findOne({ where: { id: userId }, select: ['id', 'name'] })) as {
+          id: string;
+          name: string;
+        } | null;
 
         const doctorName = doctorEntity?.name || 'Seu médico';
 
@@ -732,12 +746,17 @@ export class PatientsService {
       throw new ForbiddenException('This consultation is not pending approval');
     }
 
-    appointment.status = (approved ? (appointment.isCompleted ? 'completed' : 'approved') : 'rejected') as any;
+    appointment.status = (
+      approved ? (appointment.isCompleted ? 'completed' : 'approved') : 'rejected'
+    ) as any;
 
     const saved = await this.appointmentRepository.save(appointment);
 
     // Notify the doctor about the decision
-    const patientEntity = await this.patientRepository.findOne({ where: { id: patientId }, select: ['id', 'name'] });
+    const patientEntity = await this.patientRepository.findOne({
+      where: { id: patientId },
+      select: ['id', 'name'],
+    });
     const patientName = patientEntity?.name || 'Paciente';
 
     await this.notificationsService.createNotification(
@@ -790,9 +809,12 @@ export class PatientsService {
     const saved = await this.appointmentRepository.save(appointment);
 
     // Notify patient
-    const doctorEntity = await this.patientRepository.manager
+    const doctorEntity = (await this.patientRepository.manager
       .getRepository('Doctor')
-      .findOne({ where: { id: doctorId }, select: ['id', 'name'] }) as { id: string; name: string } | null;
+      .findOne({ where: { id: doctorId }, select: ['id', 'name'] })) as {
+      id: string;
+      name: string;
+    } | null;
 
     const doctorName = doctorEntity?.name || 'Seu médico';
 
@@ -912,7 +934,13 @@ export class PatientsService {
 
   // ─── Disease Management ─────────────────────────────────────────────────────
 
-  async getDiseases(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+  async getDiseases(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     return this.diseaseRepository.find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
@@ -923,7 +951,15 @@ export class PatientsService {
     userType: string,
     role: string,
     activeClinicId: string,
-    data: { name: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    data: {
+      name: string;
+      description?: string;
+      observations?: string;
+      status?: string;
+      diagnosisDate?: string;
+      treatmentStartDate?: string;
+      treatmentEndDate?: string;
+    },
   ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     await this.logAccess(patientId, userId, 'CREATE_DISEASE');
@@ -950,7 +986,15 @@ export class PatientsService {
     userType: string,
     role: string,
     activeClinicId: string,
-    data: { name?: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    data: {
+      name?: string;
+      description?: string;
+      observations?: string;
+      status?: string;
+      diagnosisDate?: string;
+      treatmentStartDate?: string;
+      treatmentEndDate?: string;
+    },
   ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
 
@@ -961,14 +1005,26 @@ export class PatientsService {
     if (data.description !== undefined) disease.description = data.description || null;
     if (data.observations !== undefined) disease.observations = data.observations || null;
     if (data.status !== undefined) disease.status = data.status;
-    if (data.diagnosisDate !== undefined) disease.diagnosisDate = data.diagnosisDate ? new Date(data.diagnosisDate) : null;
-    if (data.treatmentStartDate !== undefined) disease.treatmentStartDate = data.treatmentStartDate ? new Date(data.treatmentStartDate) : null;
-    if (data.treatmentEndDate !== undefined) disease.treatmentEndDate = data.treatmentEndDate ? new Date(data.treatmentEndDate) : null;
+    if (data.diagnosisDate !== undefined)
+      disease.diagnosisDate = data.diagnosisDate ? new Date(data.diagnosisDate) : null;
+    if (data.treatmentStartDate !== undefined)
+      disease.treatmentStartDate = data.treatmentStartDate
+        ? new Date(data.treatmentStartDate)
+        : null;
+    if (data.treatmentEndDate !== undefined)
+      disease.treatmentEndDate = data.treatmentEndDate ? new Date(data.treatmentEndDate) : null;
 
     return this.diseaseRepository.save(disease);
   }
 
-  async deleteDisease(patientId: string, diseaseId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+  async deleteDisease(
+    patientId: string,
+    diseaseId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     const disease = await this.diseaseRepository.findOne({ where: { id: diseaseId, patientId } });
     if (!disease) throw new NotFoundException('Disease not found');
@@ -978,18 +1034,46 @@ export class PatientsService {
 
   // ─── Allergy Management ─────────────────────────────────────────────────────
 
-  async getAllergies(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+  async getAllergies(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     return this.allergyRepository.find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
-  async createAllergy(patientId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name: string; severity?: string; reaction?: string; notes?: string }) {
+  async createAllergy(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: { name: string; severity?: string; reaction?: string; notes?: string },
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
-    const allergy = this.allergyRepository.create({ patientId, doctorId: userType === 'doctor' ? userId : null, name: data.name, severity: data.severity || 'moderate', reaction: data.reaction || null, notes: data.notes || null });
+    const allergy = this.allergyRepository.create({
+      patientId,
+      doctorId: userType === 'doctor' ? userId : null,
+      name: data.name,
+      severity: data.severity || 'moderate',
+      reaction: data.reaction || null,
+      notes: data.notes || null,
+    });
     return this.allergyRepository.save(allergy);
   }
 
-  async updateAllergy(patientId: string, allergyId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name?: string; severity?: string; reaction?: string; notes?: string }) {
+  async updateAllergy(
+    patientId: string,
+    allergyId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: { name?: string; severity?: string; reaction?: string; notes?: string },
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     const allergy = await this.allergyRepository.findOne({ where: { id: allergyId, patientId } });
     if (!allergy) throw new NotFoundException('Allergy not found');
@@ -1000,7 +1084,14 @@ export class PatientsService {
     return this.allergyRepository.save(allergy);
   }
 
-  async deleteAllergy(patientId: string, allergyId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+  async deleteAllergy(
+    patientId: string,
+    allergyId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     const allergy = await this.allergyRepository.findOne({ where: { id: allergyId, patientId } });
     if (!allergy) throw new NotFoundException('Allergy not found');
@@ -1010,31 +1101,84 @@ export class PatientsService {
 
   // ─── Vaccine Management ─────────────────────────────────────────────────────
 
-  async getVaccines(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+  async getVaccines(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     return this.vaccineRepository.find({ where: { patientId }, order: { createdAt: 'DESC' } });
   }
 
-  async createVaccine(patientId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }) {
+  async createVaccine(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: {
+      name: string;
+      dose?: string;
+      applicationDate?: string;
+      nextDoseDate?: string;
+      laboratory?: string;
+      notes?: string;
+    },
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
-    const vaccine = this.vaccineRepository.create({ patientId, doctorId: userType === 'doctor' ? userId : null, name: data.name, dose: data.dose || null, applicationDate: data.applicationDate ? new Date(data.applicationDate) : null, nextDoseDate: data.nextDoseDate ? new Date(data.nextDoseDate) : null, laboratory: data.laboratory || null, notes: data.notes || null });
+    const vaccine = this.vaccineRepository.create({
+      patientId,
+      doctorId: userType === 'doctor' ? userId : null,
+      name: data.name,
+      dose: data.dose || null,
+      applicationDate: data.applicationDate ? new Date(data.applicationDate) : null,
+      nextDoseDate: data.nextDoseDate ? new Date(data.nextDoseDate) : null,
+      laboratory: data.laboratory || null,
+      notes: data.notes || null,
+    });
     return this.vaccineRepository.save(vaccine);
   }
 
-  async updateVaccine(patientId: string, vaccineId: string, userId: string, userType: string, role: string, activeClinicId: string, data: { name?: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }) {
+  async updateVaccine(
+    patientId: string,
+    vaccineId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: {
+      name?: string;
+      dose?: string;
+      applicationDate?: string;
+      nextDoseDate?: string;
+      laboratory?: string;
+      notes?: string;
+    },
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     const vaccine = await this.vaccineRepository.findOne({ where: { id: vaccineId, patientId } });
     if (!vaccine) throw new NotFoundException('Vaccine not found');
     if (data.name !== undefined) vaccine.name = data.name;
     if (data.dose !== undefined) vaccine.dose = data.dose || null;
-    if (data.applicationDate !== undefined) vaccine.applicationDate = data.applicationDate ? new Date(data.applicationDate) : null;
-    if (data.nextDoseDate !== undefined) vaccine.nextDoseDate = data.nextDoseDate ? new Date(data.nextDoseDate) : null;
+    if (data.applicationDate !== undefined)
+      vaccine.applicationDate = data.applicationDate ? new Date(data.applicationDate) : null;
+    if (data.nextDoseDate !== undefined)
+      vaccine.nextDoseDate = data.nextDoseDate ? new Date(data.nextDoseDate) : null;
     if (data.laboratory !== undefined) vaccine.laboratory = data.laboratory || null;
     if (data.notes !== undefined) vaccine.notes = data.notes || null;
     return this.vaccineRepository.save(vaccine);
   }
 
-  async deleteVaccine(patientId: string, vaccineId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+  async deleteVaccine(
+    patientId: string,
+    vaccineId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
     const vaccine = await this.vaccineRepository.findOne({ where: { id: vaccineId, patientId } });
     if (!vaccine) throw new NotFoundException('Vaccine not found');
@@ -1044,7 +1188,13 @@ export class PatientsService {
 
   // ─── Dependents ─────────────────────────────────────────────────────────────
 
-  async getDependents(patientId: string, userId: string, userType: string, role: string, activeClinicId: string) {
+  async getDependents(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
     await this.findOne(patientId, userId, userType, role, activeClinicId);
 
     const patient = await this.patientRepository.findOne({
@@ -1083,13 +1233,27 @@ export class PatientsService {
 
     // Fetch all events
     const [appointments, medications, exams] = await Promise.all([
-      this.appointmentRepository.find({ where: { patientId }, order: { dateTime: 'DESC' }, take: limit }),
-      this.medicationRepository.find({ where: { patientId }, order: { createdAt: 'DESC' }, take: limit }),
+      this.appointmentRepository.find({
+        where: { patientId },
+        order: { dateTime: 'DESC' },
+        take: limit,
+      }),
+      this.medicationRepository.find({
+        where: { patientId },
+        order: { createdAt: 'DESC' },
+        take: limit,
+      }),
       this.examRepository.find({ where: { patientId }, order: { createdAt: 'DESC' }, take: limit }),
     ]);
 
     // Build unified timeline
-    const timeline: Array<{ type: string; date: string; title: string; description: string; data: any }> = [];
+    const timeline: Array<{
+      type: string;
+      date: string;
+      title: string;
+      description: string;
+      data: any;
+    }> = [];
 
     for (const apt of appointments) {
       timeline.push({
@@ -1165,7 +1329,9 @@ export class PatientsService {
     if (lastAppointment) {
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const aptDate = lastAppointment.dateTime ? new Date(lastAppointment.dateTime) : new Date(lastAppointment.createdAt);
+      const aptDate = lastAppointment.dateTime
+        ? new Date(lastAppointment.dateTime)
+        : new Date(lastAppointment.createdAt);
       if (aptDate < sixMonthsAgo) {
         alerts.push({
           type: 'NO_RECENT_CONSULTATION',
