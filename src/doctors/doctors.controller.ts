@@ -41,8 +41,8 @@ export class DoctorsController {
   }
 
   @Post('request-access')
-  @Roles('doctor')
-  @ApiOperation({ summary: 'Request access to patient or dependent data (doctors only)' })
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Request access to patient or dependent data (doctors and admins)' })
   @ApiResponse({ status: 201, description: 'Access request sent' })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Patient or Dependent not found' })
@@ -51,16 +51,16 @@ export class DoctorsController {
   }
 
   @Get('access-requests/me')
-  @Roles('doctor')
-  @ApiOperation({ summary: 'Get my access requests (doctors only)' })
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Get my access requests' })
   @ApiResponse({ status: 200, description: 'Return access requests' })
   async getMyAccessRequests(@CurrentUser() user: any) {
     return this.doctorsService.getMyAccessRequests(user.userId);
   }
 
   @Delete('access-requests/:id')
-  @Roles('doctor')
-  @ApiOperation({ summary: 'Cancel my own pending access request (doctors only)' })
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Cancel my own pending access request' })
   @ApiResponse({ status: 200, description: 'Access request cancelled' })
   @ApiResponse({ status: 400, description: 'Only pending requests can be cancelled' })
   @ApiResponse({ status: 403, description: 'Forbidden' })

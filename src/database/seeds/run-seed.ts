@@ -1,696 +1,527 @@
 import 'reflect-metadata';
+import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
-import { In } from 'typeorm';
 import AppDataSource from '../data-source';
-import { seedClinic } from './seed-clinic';
-import { seedExamCatalog } from './seed-exam-catalog';
-import { seedFinancial } from './seed-financial';
 import { Doctor } from '../../entities/doctor.entity';
 import { Patient } from '../../entities/patient.entity';
-import { Dependent } from '../../entities/dependent.entity';
-import { Appointment, AppointmentStatus } from '../../entities/appointment.entity';
-import { Medication, MedicationFrequency } from '../../entities/medication.entity';
-import { Exam, ExamStatus, ExamType } from '../../entities/exam.entity';
-import {
-  DoctorAccessRequest,
-  AccessRequestStatus,
-} from '../../entities/doctor-access-request.entity';
+import { Clinic } from '../../entities/clinic.entity';
+import { ClinicMembership } from '../../entities/clinic-membership.entity';
 import { DoctorPermission } from '../../entities/doctor-permission.entity';
+import { ProfessionalRole } from '../../auth/professional-role.enum';
 
-const COMMON_FIRST_NAMES = [
-  'Joao',
-  'Maria',
-  'Jose',
-  'Ana',
-  'Carlos',
-  'Paulo',
-  'Pedro',
-  'Lucas',
-  'Mateus',
-  'Gabriel',
-  'Rafael',
-  'Bruno',
-  'Ricardo',
-  'Marcos',
-  'Fernando',
-  'Roberto',
-  'Juliana',
-  'Camila',
-  'Fernanda',
-  'Patricia',
-  'Aline',
-  'Beatriz',
-  'Renata',
-  'Carla',
-  'Amanda',
+// ============================================================================
+// CONFIGURAÇÃO
+// ============================================================================
+
+const ADMIN_EMAIL = 'hipocrates@email.com';
+const ADMIN_PASSWORD = 'Fernando958969++';
+const ALL_DOCTORS_PASSWORD = 'Fernando958969++';
+
+const CLINIC_DATA = {
+  name: 'Policlínica',
+  cnpj: '12345678000199',
+  cep: '01310-100',
+  street: 'Av. Paulista',
+  number: '1000',
+  complement: 'Conjunto 501',
+  neighborhood: 'Bela Vista',
+  city: 'São Paulo',
+  state: 'SP',
+  noNumber: false,
+};
+
+const DOCTORS_DATA = [
+  {
+    name: 'Dra. Camila Ferreira',
+    email: 'camila.ferreira@email.com',
+    gender: 'Feminino',
+    phone: '11999000101',
+    birthDate: '1985-03-12',
+    specialty: 'Cardiologia',
+    crm: '200001/SP',
+    cpf: '20000000001',
+  },
+  {
+    name: 'Dr. Rafael Souza',
+    email: 'rafael.souza@email.com',
+    gender: 'Masculino',
+    phone: '11999000102',
+    birthDate: '1982-07-25',
+    specialty: 'Dermatologia',
+    crm: '200002/SP',
+    cpf: '20000000002',
+  },
+  {
+    name: 'Dra. Juliana Martins',
+    email: 'juliana.martins@email.com',
+    gender: 'Feminino',
+    phone: '11999000103',
+    birthDate: '1990-01-08',
+    specialty: 'Pediatria',
+    crm: '200003/SP',
+    cpf: '20000000003',
+  },
+  {
+    name: 'Dr. Bruno Oliveira',
+    email: 'bruno.oliveira@email.com',
+    gender: 'Masculino',
+    phone: '11999000104',
+    birthDate: '1978-11-30',
+    specialty: 'Ortopedia e Traumatologia',
+    crm: '200004/SP',
+    cpf: '20000000004',
+  },
+  {
+    name: 'Dra. Fernanda Lima',
+    email: 'fernanda.lima@email.com',
+    gender: 'Feminino',
+    phone: '11999000105',
+    birthDate: '1987-09-14',
+    specialty: 'Ginecologia e Obstetrícia',
+    crm: '200005/SP',
+    cpf: '20000000005',
+  },
+  {
+    name: 'Dr. Marcos Almeida',
+    email: 'marcos.almeida@email.com',
+    gender: 'Masculino',
+    phone: '11999000106',
+    birthDate: '1983-04-22',
+    specialty: 'Neurologia',
+    crm: '200006/SP',
+    cpf: '20000000006',
+  },
+  {
+    name: 'Dra. Patrícia Rocha',
+    email: 'patricia.rocha@email.com',
+    gender: 'Feminino',
+    phone: '11999000107',
+    birthDate: '1991-12-05',
+    specialty: 'Endocrinologia e Metabologia',
+    crm: '200007/SP',
+    cpf: '20000000007',
+  },
+  {
+    name: 'Dr. Diego Nascimento',
+    email: 'diego.nascimento@email.com',
+    gender: 'Masculino',
+    phone: '11999000108',
+    birthDate: '1986-08-18',
+    specialty: 'Pneumologia',
+    crm: '200008/SP',
+    cpf: '20000000008',
+  },
+  {
+    name: 'Dra. Larissa Teixeira',
+    email: 'larissa.teixeira@email.com',
+    gender: 'Feminino',
+    phone: '11999000109',
+    birthDate: '1989-05-27',
+    specialty: 'Psiquiatria',
+    crm: '200009/SP',
+    cpf: '20000000009',
+  },
+  {
+    name: 'Dr. Thiago Costa',
+    email: 'thiago.costa@email.com',
+    gender: 'Masculino',
+    phone: '11999000110',
+    birthDate: '1984-02-10',
+    specialty: 'Urologia',
+    crm: '200010/SP',
+    cpf: '20000000010',
+  },
 ];
 
-const COMMON_LAST_NAMES = [
-  'Silva',
-  'Santos',
-  'Oliveira',
-  'Souza',
-  'Lima',
-  'Pereira',
-  'Costa',
-  'Rodrigues',
-  'Almeida',
-  'Nascimento',
-  'Araujo',
-  'Fernandes',
-  'Carvalho',
-  'Gomes',
-  'Martins',
-  'Rocha',
-  'Dias',
-  'Ribeiro',
-  'Teixeira',
-  'Barbosa',
-  'Freitas',
-  'Mendes',
-  'Castro',
-  'Moura',
-  'Moreira',
+const PATIENT_NAMES = [
+  'Maria Silva Santos',
+  'João Pedro Oliveira',
+  'Ana Carolina Souza',
+  'Carlos Eduardo Lima',
+  'Fernanda Costa Alves',
+  'Ricardo Mendes Ferreira',
+  'Patrícia Rodrigues Nunes',
+  'Bruno Carvalho Dias',
+  'Camila Barbosa Martins',
+  'Diego Araújo Pereira',
+  'Juliana Nascimento Rocha',
+  'Thiago Gomes Ribeiro',
+  'Larissa Fernandes Castro',
+  'Rafael Santos Correia',
+  'Beatriz Moreira Vieira',
+  'Lucas Almeida Teixeira',
+  'Gabriela Lopes Cardoso',
+  'Marcos Vinícius Pinto',
+  'Aline Freitas Monteiro',
+  'Felipe Ramos Azevedo',
+  'Renata Cunha Borges',
+  'Gustavo Henrique Melo',
+  'Isabela Duarte Campos',
+  'Leandro Sousa Medeiros',
+  'Vanessa Pires Cavalcanti',
+  'Anderson Reis Figueiredo',
+  'Tatiana Moura Xavier',
+  'Rodrigo Fonseca Barros',
+  'Priscila Andrade Rezende',
+  'Eduardo Machado Sampaio',
+  'Daniela Vasconcelos Cruz',
+  'Henrique Batista Leal',
+  'Luciana Tavares Brito',
+  'Matheus Coelho Guimarães',
+  'Simone Pacheco Amaral',
+  'Vinícius Nogueira Sales',
+  'Amanda Pinheiro Lacerda',
+  'Pedro Henrique Siqueira',
+  'Raquel Aguiar Coutinho',
+  'Fábio Cardoso Miranda',
+  'Cristiane Magalhães Assis',
+  'Alexandre Bastos Alencar',
+  'Elisa Queiroz Faria',
+  'Roberto Silveira Lopes',
+  'Michele Torres Rangel',
+  'Caio Domingues Vargas',
+  'Mariana Esteves Paiva',
+  'Wagner Bezerra Trindade',
+  'Sabrina Matos Serrano',
+  'Leonardo Braga Fontenele',
+  'Adriana Mendonça Pereira',
+  'Sérgio Lemos Andrade',
+  'Mônica Farias Campos',
+  'Antônio Gomes Pereira',
+  'Cláudia Ribas Neves',
+  'Paulo César Moraes',
+  'Débora Lins Cordeiro',
+  'Otávio Rangel Machado',
+  'Lúcia Helena Dutra',
+  'Rogério Dantas Fonseca',
+  'Sandra Maia Bezerra',
+  'Márcio Leal Araújo',
+  'Viviane Borges Prado',
+  'Júlio César Queiroz',
+  'Carla Rezende Vieira',
+  'Nilton Braga Pacheco',
+  'Regina Lacerda Campos',
+  'Flávio Santana Nogueira',
+  'Valéria Costa Pinto',
+  'Hugo Bastos Alencar',
+  'Denise Fontes Tavares',
+  'Reginaldo Cruz Moreira',
+  'Elaine Brito Sampaio',
+  'Nelson Martins Souza',
+  'Rosana Duarte Alves',
+  'Geraldo Teixeira Lins',
+  'Sônia Barros Faria',
+  'Cássio Monteiro Lima',
+  'Tereza Gomes Rocha',
+  'Ronaldo Pires Medeiros',
+  'Helena Cardoso Neves',
+  'Edson Cavalcanti Reis',
+  'Luciene Andrade Melo',
+  'Valdir Correia Santos',
+  'Márcia Dantas Pinheiro',
+  'Cléber Fonseca Moura',
+  'Joice Almeida Trindade',
+  'Raimundo Costa Dias',
+  'Célia Ribeiro Xavier',
+  'Jorge Nascimento Barros',
+  'Shirley Vasconcelos Lima',
+  'Wander Guimarães Pinto',
+  'Naiara Coelho Ferreira',
+  'Davi Machado Oliveira',
+  'Selma Tavares Dutra',
+  'Laércio Braga Costa',
+  'Ivone Araújo Lopes',
+  'Tarcísio Freitas Borges',
+  'Glória Rezende Martins',
+  'Milton Siqueira Campos',
+  'Janete Melo Nunes',
+  'Erasmo Leal Souza',
+  'Neusa Barros Correia',
+  'Adilson Pires Gomes',
+  'Conceição Moreira Fontes',
+  'Benedito Sampaio Rangel',
+  'Iracema Dantas Vieira',
+  'Osvaldo Queiroz Pereira',
+  'Dalva Ferreira Rocha',
+  'Arlindo Souza Medeiros',
+  'Elza Monteiro Ribeiro',
+  'Silvio Andrade Nogueira',
+  'Aparecida Lima Castro',
+  'Josué Figueiredo Braga',
+  'Odete Cavalcanti Melo',
+  'Alcides Brito Tavares',
+  'Madalena Pinheiro Santos',
+  'Domingos Lacerda Reis',
+  'Eunice Correia Bastos',
+  'Valdomiro Alves Fonseca',
+  'Aurora Pacheco Lima',
+  'Getúlio Moura Cardoso',
+  'Perpétua Nascimento Dias',
+  'Anísio Gomes Oliveira',
+  'Zilda Rocha Teixeira',
+  'Ernesto Vieira Lopes',
+  'Teodora Almeida Rangel',
+  'Felício Barbosa Cruz',
+  'Leonor Freitas Souza',
+  'Amaro Martins Araújo',
+  'Iolanda Costa Ferreira',
+  'Norberto Dutra Pinto',
+  'Francisca Leal Borges',
+  'Amadeu Correia Vasconcelos',
+  'Raimunda Campos Pereira',
+  'Juvenal Souza Nogueira',
+  'Sebastiana Matos Lima',
+  'Aristides Mendes Braga',
+  'Clotilde Andrade Sampaio',
+  'Hermínio Faria Xavier',
+  'Berenice Tavares Lins',
+  'Almiro Ribeiro Dantas',
+  'Graziela Pires Moreira',
+  'Heráclito Cardoso Melo',
+  'Olívia Santos Pacheco',
+  'Salomão Vieira Rezende',
+  'Leocádia Moraes Fontes',
+  'Euclides Alves Trindade',
+  'Petronília Gomes Dutra',
+  'Tibúrcio Nascimento Brito',
+  'Norma Costa Leal',
+  'Astolfo Reis Machado',
+  'Magnólia Souza Alencar',
+  'Deoclécio Lima Fonseca',
+  'Alzira Martins Cavalcanti',
+  'Venâncio Borges Dias',
+  'Efigênia Rocha Prado',
+  'Bartolomeu Ferreira Queiroz',
+  'Hortência Oliveira Medeiros',
+  'Plínio Barros Moura',
 ];
 
-function normalizeEmailPart(value: string) {
-  return value
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function normalizeEmail(name: string): string {
+  const parts = name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z]/g, '');
+    .split(' ');
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  return `${first}.${last}@email.com`;
 }
 
-function buildPatientBase(index: number) {
-  const firstName = COMMON_FIRST_NAMES[index % COMMON_FIRST_NAMES.length];
-  const lastName =
-    COMMON_LAST_NAMES[Math.floor(index / COMMON_FIRST_NAMES.length) % COMMON_LAST_NAMES.length];
-
-  return {
-    name: `${firstName} da ${lastName}`,
-    email: `${normalizeEmailPart(firstName)}.${normalizeEmailPart(lastName)}@email.com`,
-  };
-}
+// ============================================================================
+// MAIN SEED
+// ============================================================================
 
 export async function seedDatabase() {
-  const shouldDestroyConnection = !AppDataSource.isInitialized;
-
   if (!AppDataSource.isInitialized) {
     await AppDataSource.initialize();
   }
 
-  const doctorRepository = AppDataSource.getRepository(Doctor);
-  const patientRepository = AppDataSource.getRepository(Patient);
-  const dependentRepository = AppDataSource.getRepository(Dependent);
-  const appointmentRepository = AppDataSource.getRepository(Appointment);
-  const medicationRepository = AppDataSource.getRepository(Medication);
-  const examRepository = AppDataSource.getRepository(Exam);
-  const accessRequestRepository = AppDataSource.getRepository(DoctorAccessRequest);
-  const permissionRepository = AppDataSource.getRepository(DoctorPermission);
+  console.log('🗑️  Limpando banco...');
 
-  const doctorPasswordHash = await bcrypt.hash('123456', 10);
-  const patientPasswordHash = await bcrypt.hash('958969', 10);
+  // Disable FK checks and truncate all relevant tables
+  await AppDataSource.query('SET FOREIGN_KEY_CHECKS = 0');
+  const tables = [
+    'doctor_permissions',
+    'doctor_access_requests',
+    'appointments',
+    'medications',
+    'exams',
+    'exam_schedules',
+    'exam_schedule_items',
+    'clinic_memberships',
+    'secretary_profiles',
+    'clinic_admin_profiles',
+    'dependents',
+    'patients',
+    'doctors',
+    'clinics',
+    'notifications',
+    'device_tokens',
+    'patient_access_logs',
+    'patient_diseases',
+    'patient_allergies',
+    'patient_vaccines',
+    'doctor_documents',
+    'financial_settings',
+    'financial_cost_centers',
+    'financial_convenios',
+    'financial_revenues',
+    'financial_expenses',
+    'financial_doctor_transfers',
+    'financial_cashflow_entries',
+    'audit_events',
+  ];
+  for (const table of tables) {
+    try {
+      await AppDataSource.query(`DELETE FROM \`${table}\``);
+    } catch {
+      /* table may not exist */
+    }
+  }
+  await AppDataSource.query('SET FOREIGN_KEY_CHECKS = 1');
 
-  let doctor = await doctorRepository.findOne({
-    where: { email: 'doctor.seed@pocketmed.com' },
+  const doctorRepo = AppDataSource.getRepository(Doctor);
+  const patientRepo = AppDataSource.getRepository(Patient);
+  const clinicRepo = AppDataSource.getRepository(Clinic);
+  const membershipRepo = AppDataSource.getRepository(ClinicMembership);
+  const permissionRepo = AppDataSource.getRepository(DoctorPermission);
+
+  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
+
+  // ── 1. Clínica ──────────────────────────────────────────────────────────────
+  console.log('🏥 Criando clínica...');
+  const clinic = clinicRepo.create({ ...CLINIC_DATA, isActive: true });
+  const savedClinic = await clinicRepo.save(clinic);
+
+  // ── 2. Médico Admin (Hipócrates) ────────────────────────────────────────────
+  console.log('👨‍⚕️ Criando admin (Hipócrates)...');
+  const admin = doctorRepo.create({
+    name: 'Dr. Hipócrates Medeiros',
+    email: ADMIN_EMAIL,
+    password: passwordHash,
+    gender: 'Masculino',
+    phone: '11999000001',
+    birthDate: new Date('1980-06-15'),
+    specialty: 'Clínica Geral',
+    crm: '100001/SP',
+    cpf: '10000000001',
+    type: 'doctor',
+    isShadow: false,
+    emailVerified: true,
+    verificationStatus: 'APPROVED',
   });
+  const savedAdmin = await doctorRepo.save(admin);
 
-  if (!doctor) {
-    doctor = doctorRepository.create({
-      name: 'Dr. Seed PocketMed',
-      email: 'doctor.seed@pocketmed.com',
-      password: doctorPasswordHash,
-      gender: 'male',
-      phone: '11999999999',
-      birthDate: new Date('1985-05-10'),
-      specialty: 'Cardiologia',
-      crm: 'CRM-SP-12345',
-      cpf: '12345678901',
-      profileImage: null,
+  // Membership admin
+  const adminMembership = membershipRepo.create({
+    clinicId: savedClinic.id,
+    professionalId: savedAdmin.id,
+    role: ProfessionalRole.ADMIN,
+    isActive: true,
+  });
+  await membershipRepo.save(adminMembership);
+
+  // ── 3. 10 Médicos ──────────────────────────────────────────────────────────
+  console.log('👩‍⚕️ Criando 10 médicos...');
+  const savedDoctors: Doctor[] = [];
+
+  for (const docData of DOCTORS_DATA) {
+    const doc = doctorRepo.create({
+      ...docData,
+      password: passwordHash,
+      birthDate: new Date(docData.birthDate),
       type: 'doctor',
       isShadow: false,
+      emailVerified: true,
+      verificationStatus: 'APPROVED',
     });
+    const saved = await doctorRepo.save(doc);
+    savedDoctors.push(saved);
 
-    doctor = await doctorRepository.save(doctor);
+    // Membership como doctor na clínica
+    const membership = membershipRepo.create({
+      clinicId: savedClinic.id,
+      professionalId: saved.id,
+      role: ProfessionalRole.DOCTOR,
+      isActive: true,
+    });
+    await membershipRepo.save(membership);
   }
 
-  let patient = await patientRepository.findOne({
-    where: { email: 'patient.seed@pocketmed.com' },
-  });
+  // ── 4. 160 Pacientes ───────────────────────────────────────────────────────
+  console.log('🧑‍🤝‍🧑 Criando 160 pacientes...');
+  const savedPatients: Patient[] = [];
 
-  if (!patient) {
-    patient = patientRepository.create({
-      name: 'Paciente Seed PocketMed',
-      email: 'patient.seed@pocketmed.com',
-      password: patientPasswordHash,
-      gender: 'female',
-      phone: '11988888888',
-      birthDate: new Date('1993-11-20'),
-      profileImage: null,
+  for (let i = 0; i < PATIENT_NAMES.length; i++) {
+    const name = PATIENT_NAMES[i];
+    const gender = i % 2 === 0 ? 'Feminino' : 'Masculino';
+    const day = (i % 28) + 1;
+    const month = (i % 12) + 1;
+    const year = 1970 + (i % 30);
+
+    // Primeiros 120 pacientes criados por médicos (distribuídos)
+    let creatorId: string | null = null;
+    if (i < 20) {
+      creatorId = savedAdmin.id; // Admin: pacientes 0-19
+    } else if (i < 120) {
+      const docIndex = Math.floor((i - 20) / 10); // Cada médico: 10 pacientes
+      if (docIndex < savedDoctors.length) {
+        creatorId = savedDoctors[docIndex].id;
+      }
+    }
+    // Pacientes 120-159: sem vínculo (aparecem só na busca global)
+
+    const patient = patientRepo.create({
+      name,
+      email: normalizeEmail(name),
+      password: passwordHash,
+      gender,
+      phone: `1198765${String(i + 1).padStart(4, '0')}`,
+      birthDate: new Date(
+        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+      ),
       type: 'patient',
       isShadow: false,
-      doctorCreatorId: null,
+      emailVerified: true,
+      doctorCreatorId: creatorId,
     });
-
-    patient = await patientRepository.save(patient);
+    const saved = await patientRepo.save(patient);
+    savedPatients.push(saved);
   }
 
-  const targetPatientCount = 150;
-  const generatedPatients = Array.from({ length: targetPatientCount }, (_, index) =>
-    buildPatientBase(index),
-  );
+  // ── 5. Permissões ──────────────────────────────────────────────────────────
+  console.log('🔑 Criando permissões...');
 
-  const generatedEmails = generatedPatients.map((item) => item.email);
-  const existingPatients = await patientRepository.find({
-    where: { email: In(generatedEmails) },
-    select: ['email'],
-  });
-
-  const existingEmailSet = new Set(existingPatients.map((item) => item.email));
-
-  const patientsToCreate = generatedPatients
-    .filter((item) => !existingEmailSet.has(item.email))
-    .map((item, index) => {
-      const gender = index % 2 === 0 ? 'male' : 'female';
-      const day = (index % 28) + 1;
-      const month = (index % 12) + 1;
-      const year = 1970 + (index % 35);
-
-      return patientRepository.create({
-        name: item.name,
-        email: item.email,
-        password: patientPasswordHash,
-        gender,
-        phone: `1197${String(index + 1000000).slice(-7)}`,
-        birthDate: new Date(
-          `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-        ),
-        profileImage: null,
-        type: 'patient',
-        isShadow: false,
-        doctorCreatorId: null,
-      });
-    });
-
-  if (patientsToCreate.length > 0) {
-    await patientRepository.save(patientsToCreate);
-  }
-
-  let dependent = await dependentRepository.findOne({
-    where: { name: 'Dependente Seed PocketMed', adminResponsibleId: patient.id },
-    relations: ['responsibles'],
-  });
-
-  if (!dependent) {
-    dependent = dependentRepository.create({
-      name: 'Dependente Seed PocketMed',
-      gender: 'male',
-      type: 'filho',
-      birthDate: new Date('2016-03-15'),
-      profileImage: null,
-      adminResponsibleId: patient.id,
-      responsibles: [patient],
-    });
-
-    dependent = await dependentRepository.save(dependent);
-  } else {
-    const hasResponsible = dependent.responsibles?.some(
-      (responsible) => responsible.id === patient.id,
-    );
-
-    if (!hasResponsible) {
-      dependent.responsibles = [...(dependent.responsibles || []), patient];
-      dependent = await dependentRepository.save(dependent);
-    }
-  }
-
-  let patientPermission = await permissionRepository.findOne({
-    where: { doctorId: doctor.id, patientId: patient.id, dependentId: null },
-  });
-
-  if (!patientPermission) {
-    patientPermission = permissionRepository.create({
-      doctorId: doctor.id,
-      patientId: patient.id,
-      dependentId: null,
+  // Admin: acesso aos primeiros 20 pacientes
+  for (let i = 0; i < 20; i++) {
+    const perm = permissionRepo.create({
+      doctorId: savedAdmin.id,
+      patientId: savedPatients[i].id,
       isActive: true,
     });
-    await permissionRepository.save(patientPermission);
+    await permissionRepo.save(perm);
   }
 
-  let dependentPermission = await permissionRepository.findOne({
-    where: { doctorId: doctor.id, patientId: null, dependentId: dependent.id },
-  });
-
-  if (!dependentPermission) {
-    dependentPermission = permissionRepository.create({
-      doctorId: doctor.id,
-      patientId: null,
-      dependentId: dependent.id,
-      isActive: true,
-    });
-    await permissionRepository.save(dependentPermission);
-  }
-
-  let patientAppointment = await appointmentRepository.findOne({
-    where: { doctorId: doctor.id, patientId: patient.id, dependentId: null },
-  });
-
-  if (!patientAppointment) {
-    patientAppointment = appointmentRepository.create({
-      doctorId: doctor.id,
-      patientId: patient.id,
-      dependentId: null,
-      doctorCrm: doctor.crm,
-      doctorName: doctor.name,
-      doctorSpecialty: doctor.specialty,
-      reason: 'Consulta de rotina para teste de response',
-      dateTime: new Date(),
-      isCompleted: false,
-      status: AppointmentStatus.APPROVED,
-    });
-
-    patientAppointment = await appointmentRepository.save(patientAppointment);
-  }
-
-  let dependentAppointment = await appointmentRepository.findOne({
-    where: { doctorId: doctor.id, patientId: null, dependentId: dependent.id },
-  });
-
-  if (!dependentAppointment) {
-    dependentAppointment = appointmentRepository.create({
-      doctorId: doctor.id,
-      patientId: null,
-      dependentId: dependent.id,
-      doctorCrm: doctor.crm,
-      doctorName: doctor.name,
-      doctorSpecialty: doctor.specialty,
-      reason: 'Acompanhamento pediátrico para teste de response',
-      dateTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      isCompleted: false,
-      status: AppointmentStatus.PENDING,
-    });
-
-    dependentAppointment = await appointmentRepository.save(dependentAppointment);
-  }
-
-  let medication = await medicationRepository.findOne({
-    where: { doctorId: doctor.id, patientId: patient.id, name: 'Losartana 50mg' },
-  });
-
-  if (!medication) {
-    medication = medicationRepository.create({
-      name: 'Losartana 50mg',
-      dosage: '1 comprimido',
-      frequency: MedicationFrequency.ONCE_DAILY,
-      times: ['08:00'],
-      startDate: new Date(),
-      endDate: null,
-      duration: null,
-      instructions: 'Tomar após o café da manhã',
-      isActive: true,
-      isFinished: false,
-      doctorId: doctor.id,
-      patientId: patient.id,
-      dependentId: null,
-      appointmentId: patientAppointment.id,
-    });
-
-    await medicationRepository.save(medication);
-  }
-
-  let exam = await examRepository.findOne({
-    where: { doctorId: doctor.id, dependentId: dependent.id, name: 'Hemograma completo' },
-  });
-
-  if (!exam) {
-    exam = examRepository.create({
-      name: 'Hemograma completo',
-      type: ExamType.BLOOD_TEST,
-      description: 'Exame de rotina para teste',
-      scheduledDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
-      status: ExamStatus.SCHEDULED,
-      observations: 'Levar documento com foto',
-      laboratory: 'Laboratório Central',
-      doctorId: doctor.id,
-      patientId: null,
-      dependentId: dependent.id,
-      appointmentId: dependentAppointment.id,
-    });
-
-    await examRepository.save(exam);
-  }
-
-  let accessRequest = await accessRequestRepository.findOne({
-    where: {
-      doctorId: doctor.id,
-      patientId: patient.id,
-      dependentId: null,
-      status: AccessRequestStatus.APPROVED,
-    },
-  });
-
-  if (!accessRequest) {
-    accessRequest = accessRequestRepository.create({
-      doctorId: doctor.id,
-      patientId: patient.id,
-      dependentId: null,
-      status: AccessRequestStatus.APPROVED,
-      message: 'Solicitação seed para validar joins de doctor/patient',
-    });
-
-    await accessRequestRepository.save(accessRequest);
-  }
-
-  // ── Dr. Fernando Luckesi ──────────────────────────────────────────────────────
-  const fernandoPasswordHash = await bcrypt.hash('958969', 10);
-
-  let drFernando = await doctorRepository.findOne({
-    where: { email: 'fernando.luckesi.dr@gmail.com' },
-  });
-
-  if (!drFernando) {
-    drFernando = doctorRepository.create({
-      name: 'DR. Fernando Luckesi',
-      email: 'fernando.luckesi.dr@gmail.com',
-      password: fernandoPasswordHash,
-      gender: 'male',
-      phone: '11977777777',
-      birthDate: new Date('1990-08-15'),
-      specialty: 'Clínica Geral',
-      crm: 'CRM-SP-99999',
-      cpf: '99988877766',
-      profileImage: null,
-      type: 'doctor',
-      isShadow: false,
-    });
-
-    drFernando = await doctorRepository.save(drFernando);
-  }
-
-  // ── 50 pacientes extras para Dr. Fernando ───────────────────────────────────
-  const FERNANDO_PATIENT_NAMES = [
-    'Thiago Mendes',
-    'Larissa Campos',
-    'Diego Ferreira',
-    'Isabela Rocha',
-    'Vinicius Alves',
-    'Natalia Borges',
-    'Gustavo Pinto',
-    'Mariana Duarte',
-    'Leandro Cunha',
-    'Priscila Monteiro',
-    'Henrique Lopes',
-    'Tatiana Vieira',
-    'Rodrigo Barros',
-    'Vanessa Cardoso',
-    'Fabio Teixeira',
-    'Daniela Ramos',
-    'Marcelo Farias',
-    'Simone Correia',
-    'Andre Nogueira',
-    'Leticia Melo',
-    'Caio Rezende',
-    'Raquel Azevedo',
-    'Felipe Braga',
-    'Juliana Pires',
-    'Eduardo Sampaio',
-    'Adriana Fonseca',
-    'Renato Machado',
-    'Cristiane Neves',
-    'Sergio Alencar',
-    'Monica Tavares',
-    'Alexandre Brito',
-    'Flavia Guimaraes',
-    'Luciano Andrade',
-    'Elaine Siqueira',
-    'Matheus Coelho',
-    'Debora Lacerda',
-    'Wagner Bastos',
-    'Cintia Marques',
-    'Otavio Rangel',
-    'Sabrina Pacheco',
-    'Leonardo Vasconcelos',
-    'Bianca Medeiros',
-    'Renan Cavalcanti',
-    'Camila Fontes',
-    'Hugo Batista',
-    'Fernanda Queiroz',
-    'Tiago Moraes',
-    'Aline Santana',
-    'Murilo Dantas',
-    'Carolina Esteves',
-  ];
-
-  const fernandoPatients: Patient[] = [];
-
-  for (let i = 0; i < FERNANDO_PATIENT_NAMES.length; i++) {
-    const fullName = FERNANDO_PATIENT_NAMES[i];
-    const emailName = fullName
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/\s+/g, '.');
-    const email = `${emailName}@email.com`;
-
-    let p = await patientRepository.findOne({ where: { email } });
-
-    if (!p) {
-      const gender = i % 2 === 0 ? 'male' : 'female';
-      const day = (i % 28) + 1;
-      const month = (i % 12) + 1;
-      const year = 1975 + (i % 30);
-
-      p = patientRepository.create({
-        name: fullName,
-        email,
-        password: patientPasswordHash,
-        gender,
-        phone: `1196${String(i + 2000000).slice(-7)}`,
-        birthDate: new Date(
-          `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-        ),
-        profileImage: null,
-        type: 'patient',
-        isShadow: false,
-        doctorCreatorId: null,
-      });
-
-      p = await patientRepository.save(p);
-    }
-
-    fernandoPatients.push(p);
-  }
-
-  // ── Permissões: Dr. Fernando tem acesso aos 10 primeiros pacientes ──────────
-  const patientsWithAccess = fernandoPatients.slice(0, 10);
-
-  for (const fp of patientsWithAccess) {
-    const existingPermission = await permissionRepository.findOne({
-      where: { doctorId: drFernando.id, patientId: fp.id, dependentId: null },
-    });
-
-    if (!existingPermission) {
-      const perm = permissionRepository.create({
-        doctorId: drFernando.id,
-        patientId: fp.id,
-        dependentId: null,
+  // Cada médico: acesso a 10 pacientes
+  for (let docIdx = 0; docIdx < savedDoctors.length; docIdx++) {
+    const startIdx = 20 + docIdx * 10;
+    for (let i = startIdx; i < startIdx + 10 && i < savedPatients.length; i++) {
+      const perm = permissionRepo.create({
+        doctorId: savedDoctors[docIdx].id,
+        patientId: savedPatients[i].id,
         isActive: true,
       });
-      await permissionRepository.save(perm);
-    }
-
-    // Criar access request aprovado correspondente
-    const existingRequest = await accessRequestRepository.findOne({
-      where: {
-        doctorId: drFernando.id,
-        patientId: fp.id,
-        dependentId: null,
-        status: AccessRequestStatus.APPROVED,
-      },
-    });
-
-    if (!existingRequest) {
-      const req = accessRequestRepository.create({
-        doctorId: drFernando.id,
-        patientId: fp.id,
-        dependentId: null,
-        status: AccessRequestStatus.APPROVED,
-        message: 'Acesso concedido via seed',
-      });
-      await accessRequestRepository.save(req);
+      await permissionRepo.save(perm);
     }
   }
 
-  console.log('Seed finalizada com sucesso.');
-  console.log('Doctor login: doctor.seed@pocketmed.com / 123456');
-  console.log('Doctor login: fernando.luckesi.dr@gmail.com / 958969');
-  console.log('Patient login: patient.seed@pocketmed.com / 958969');
-  console.log(
-    `Pacientes comuns existentes/criados para login: ${generatedPatients.length} com senha 958969`,
-  );
-  console.log(
-    `Pacientes Dr. Fernando: ${fernandoPatients.length} criados, ${patientsWithAccess.length} com acesso concedido`,
-  );
-
-  // ── Dra. Camila Rocha ──────────────────────────────────────────────────────
-  const camilaPasswordHash = await bcrypt.hash('123456', 10);
-
-  let draCamila = await doctorRepository.findOne({
-    where: { email: 'camila.rocha@pocketmed.com' },
-  });
-
-  if (!draCamila) {
-    draCamila = doctorRepository.create({
-      name: 'Dra. Camila Rocha',
-      email: 'camila.rocha@pocketmed.com',
-      password: camilaPasswordHash,
-      gender: 'female',
-      phone: '11966554433',
-      birthDate: new Date('1988-03-22'),
-      specialty: 'Dermatologia',
-      crm: 'CRM-SP-54321',
-      cpf: '98765432100',
-      profileImage: null,
-      type: 'doctor',
-      isShadow: false,
-    });
-
-    draCamila = await doctorRepository.save(draCamila);
+  // ── Resumo ─────────────────────────────────────────────────────────────────
+  console.log('');
+  console.log('✅ Seed finalizado!');
+  console.log('═══════════════════════════════════════════════');
+  console.log(`🏥 Clínica: ${savedClinic.name} (${savedClinic.id})`);
+  console.log(`👨‍⚕️ Admin: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
+  console.log(`👩‍⚕️ Médicos: ${savedDoctors.length} (mesma senha)`);
+  console.log(`🧑‍🤝‍🧑 Pacientes: ${savedPatients.length}`);
+  console.log(`🔑 Permissões: ${20 + savedDoctors.length * 10}`);
+  console.log('═══════════════════════════════════════════════');
+  console.log('');
+  console.log('Médicos da clínica:');
+  for (const doc of savedDoctors) {
+    console.log(`  • ${doc.name} (${doc.email}) — ${doc.specialty}`);
   }
 
-  // ── 30 pacientes para Dra. Camila ──────────────────────────────────────────
-  const CAMILA_PATIENT_NAMES = [
-    'Amanda Ferreira',
-    'Bruno Cardoso',
-    'Cecília Martins',
-    'Daniel Oliveira',
-    'Elisa Nascimento',
-    'Fábio Correia',
-    'Gabriela Souza',
-    'Heitor Barbosa',
-    'Ingrid Almeida',
-    'João Pedro Lima',
-    'Karen Teixeira',
-    'Leonardo Dias',
-    'Manuela Costa',
-    'Nicolas Ribeiro',
-    'Olívia Gomes',
-    'Paulo Henrique Moura',
-    'Rafaela Pinto',
-    'Samuel Araújo',
-    'Tatiana Freitas',
-    'Ulisses Neves',
-    'Valentina Rocha',
-    'Wesley Campos',
-    'Ximena Borges',
-    'Yuri Fonseca',
-    'Zilda Machado',
-    'Arthur Lacerda',
-    'Bianca Siqueira',
-    'Caio Rangel',
-    'Diana Pacheco',
-    'Eduardo Vasconcelos',
-  ];
-
-  const camilaPatients: Patient[] = [];
-
-  for (let i = 0; i < CAMILA_PATIENT_NAMES.length; i++) {
-    const fullName = CAMILA_PATIENT_NAMES[i];
-    const emailName = fullName
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/\s+/g, '.');
-    const email = `${emailName}.camila@email.com`;
-
-    let p = await patientRepository.findOne({ where: { email } });
-
-    if (!p) {
-      const gender = i % 2 === 0 ? 'female' : 'male';
-      const day = (i % 28) + 1;
-      const month = (i % 12) + 1;
-      const year = 1978 + (i % 30);
-
-      p = patientRepository.create({
-        name: fullName,
-        email,
-        password: patientPasswordHash,
-        gender,
-        phone: `1195${String(i + 3000000).slice(-7)}`,
-        birthDate: new Date(
-          `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-        ),
-        profileImage: null,
-        type: 'patient',
-        isShadow: false,
-        doctorCreatorId: null,
-      });
-
-      p = await patientRepository.save(p);
-    }
-
-    camilaPatients.push(p);
-  }
-
-  // ── Permissões: Dra. Camila tem acesso aos 10 primeiros pacientes ──────────
-  const camilaPatientsWithAccess = camilaPatients.slice(0, 10);
-
-  for (const cp of camilaPatientsWithAccess) {
-    const existingPermission = await permissionRepository.findOne({
-      where: { doctorId: draCamila.id, patientId: cp.id, dependentId: null },
-    });
-
-    if (!existingPermission) {
-      const perm = permissionRepository.create({
-        doctorId: draCamila.id,
-        patientId: cp.id,
-        dependentId: null,
-        isActive: true,
-      });
-      await permissionRepository.save(perm);
-    }
-
-    const existingRequest = await accessRequestRepository.findOne({
-      where: {
-        doctorId: draCamila.id,
-        patientId: cp.id,
-        dependentId: null,
-        status: AccessRequestStatus.APPROVED,
-      },
-    });
-
-    if (!existingRequest) {
-      const req = accessRequestRepository.create({
-        doctorId: draCamila.id,
-        patientId: cp.id,
-        dependentId: null,
-        status: AccessRequestStatus.APPROVED,
-        message: 'Acesso concedido via seed',
-      });
-      await accessRequestRepository.save(req);
-    }
-  }
-
-  console.log(
-    `Pacientes Dra. Camila: ${camilaPatients.length} criados, ${camilaPatientsWithAccess.length} com acesso concedido`,
-  );
-
-  await seedClinic();
-  await seedExamCatalog();
-  await seedFinancial();
-
-  if (shouldDestroyConnection && AppDataSource.isInitialized) {
-    await AppDataSource.destroy();
-  }
+  await AppDataSource.destroy();
 }
 
+// Executar se chamado diretamente
 if (require.main === module) {
-  seedDatabase().catch(async (error) => {
-    console.error('Erro ao executar seed:', error);
-    if (AppDataSource.isInitialized) {
-      await AppDataSource.destroy();
-    }
+  seedDatabase().catch((error) => {
+    console.error('❌ Erro ao executar seed:', error.message || error);
     process.exit(1);
   });
 }
