@@ -322,7 +322,7 @@ export class PatientsService {
     }
 
     if (userType === 'doctor' && userId) {
-      if (userRole !== ProfessionalRole.DOCTOR) {
+      if (userRole !== ProfessionalRole.DOCTOR && userRole !== ProfessionalRole.ADMIN) {
         throw new ForbiddenException('Only doctors can access patient profile details');
       }
 
