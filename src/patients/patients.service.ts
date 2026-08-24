@@ -184,8 +184,12 @@ export class PatientsService {
     userRole?: string | null,
     activeClinicId?: string | null,
   ) {
-    if (userType !== 'doctor' || userRole !== ProfessionalRole.DOCTOR) {
+    if (userType !== 'doctor') {
       throw new ForbiddenException('Only doctors can view patients');
+    }
+
+    if (userRole !== ProfessionalRole.DOCTOR && userRole !== ProfessionalRole.ADMIN) {
+      throw new ForbiddenException('Only doctors and admins can view patients');
     }
 
     if (!userId) {
@@ -217,8 +221,12 @@ export class PatientsService {
     userRole?: string | null,
     activeClinicId?: string | null,
   ) {
-    if (userType !== 'doctor' || userRole !== ProfessionalRole.DOCTOR) {
+    if (userType !== 'doctor') {
       throw new ForbiddenException('Only doctors can view all patients');
+    }
+
+    if (userRole !== ProfessionalRole.DOCTOR && userRole !== ProfessionalRole.ADMIN) {
+      throw new ForbiddenException('Only doctors and admins can view all patients');
     }
 
     const patients = await this.patientRepository.find({
