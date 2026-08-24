@@ -119,6 +119,14 @@ export class ClinicsService {
         name: dto.clinicName.trim(),
         cnpj: dto.cnpj || null,
         isActive: true,
+        cep: dto.cep || null,
+        street: dto.street || null,
+        number: dto.noNumber ? null : dto.number || null,
+        complement: dto.complement || null,
+        neighborhood: dto.neighborhood || null,
+        city: dto.city || null,
+        state: dto.state || null,
+        noNumber: dto.noNumber ?? false,
       });
       const savedClinic = await queryRunner.manager.save(clinic);
 
@@ -162,6 +170,14 @@ export class ClinicsService {
           name: savedClinic.name,
           cnpj: savedClinic.cnpj,
           isActive: savedClinic.isActive,
+          cep: savedClinic.cep,
+          street: savedClinic.street,
+          number: savedClinic.number,
+          complement: savedClinic.complement,
+          neighborhood: savedClinic.neighborhood,
+          city: savedClinic.city,
+          state: savedClinic.state,
+          noNumber: savedClinic.noNumber,
         },
         token,
       };

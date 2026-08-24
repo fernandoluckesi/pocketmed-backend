@@ -22,6 +22,30 @@ export class Clinic {
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
+  @Column({ type: 'varchar', length: 9, nullable: true })
+  cep: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  street: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  number: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  complement: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  neighborhood: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  city: string | null;
+
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  state: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  noNumber: boolean;
+
   @OneToMany(() => ClinicMembership, (membership) => membership.clinic)
   memberships: ClinicMembership[];
 

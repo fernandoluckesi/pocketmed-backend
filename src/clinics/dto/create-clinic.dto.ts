@@ -5,9 +5,11 @@ import {
   IsOptional,
   IsEmail,
   IsDateString,
+  IsBoolean,
   MaxLength,
   MinLength,
   Matches,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateClinicDto {
@@ -30,6 +32,59 @@ export class CreateClinicDto {
     message: 'CNPJ deve estar no formato XX.XXX.XXX/XXXX-XX',
   })
   cnpj?: string;
+
+  // ── Endereço da Clínica ───────────────────────────────────────────────────
+  @ApiProperty({ example: '01001-000', description: 'CEP (formato XXXXX-XXX ou XXXXXXXX)' })
+  @IsString()
+  @IsNotEmpty({ message: 'CEP é obrigatório' })
+  @Matches(/^\d{5}-?\d{3}$/, { message: 'CEP deve ter 8 dígitos (XXXXX-XXX ou XXXXXXXX)' })
+  cep: string;
+
+  @ApiProperty({ example: 'Praça da Sé', description: 'Logradouro' })
+  @IsString()
+  @IsNotEmpty({ message: 'Endereço é obrigatório' })
+  @MaxLength(255)
+  street: string;
+
+  @ApiProperty({ example: '100', description: 'Número do endereço', required: false })
+  @ValidateIf((o) => !o.noNumber)
+  @IsString()
+  @IsNotEmpty({ message: 'Número é obrigatório quando "Sem Número" não está marcado' })
+  @MaxLength(20)
+  number?: string;
+
+  @ApiProperty({ example: 'Sala 101', description: 'Complemento', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  complement?: string;
+
+  @ApiProperty({ example: 'Sé', description: 'Bairro' })
+  @IsString()
+  @IsNotEmpty({ message: 'Bairro é obrigatório' })
+  @MaxLength(100)
+  neighborhood: string;
+
+  @ApiProperty({ example: 'São Paulo', description: 'Cidade' })
+  @IsString()
+  @IsNotEmpty({ message: 'Cidade é obrigatória' })
+  @MaxLength(100)
+  city: string;
+
+  @ApiProperty({ example: 'SP', description: 'Estado (UF - 2 caracteres)' })
+  @IsString()
+  @IsNotEmpty({ message: 'Estado é obrigatório' })
+  @MaxLength(2)
+  state: string;
+
+  @ApiProperty({
+    example: false,
+    description: 'Indica que o endereço não possui número',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'noNumber deve ser um valor booleano' })
+  noNumber?: boolean;
 
   // ── Dados do Médico Admin ─────────────────────────────────────────────────
   @ApiProperty({ example: 'Dr. Fernando Luckesi' })

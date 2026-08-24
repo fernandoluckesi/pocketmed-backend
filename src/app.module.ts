@@ -59,6 +59,7 @@ import { FinancialModule } from './financial/financial.module';
 import { ClinicsModule } from './clinics/clinics.module';
 import { AuditModule } from './audit/audit.module';
 import { SecretariesModule } from './secretaries/secretaries.module';
+import { CepModule } from './cep/cep.module';
 import { AuditEvent } from './audit/entities/audit-event.entity';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
 import { AuditContextInterceptor } from './audit/audit-context.interceptor';
@@ -161,6 +162,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     ClinicsModule,
     AuditModule,
     SecretariesModule,
+    CepModule,
   ],
   controllers: [AppController],
   providers: [
