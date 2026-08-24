@@ -15,7 +15,7 @@ Implementação de campos de endereço com auto-preenchimento via CEP no formul�
     - Registrar `CepModule` no `AppModule`
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-  - [ ]\* 1.2 Write property test: ViaCEP response mapping preserves all address fields
+  - [x]\* 1.2 Write property test: ViaCEP response mapping preserves all address fields
     - **Property 1: ViaCEP response mapping preserves all address fields**
     - Instalar `fast-check` como devDependency
     - Criar `src/cep/cep.service.spec.ts` com arbitrary para objetos ViaCEP válidos
@@ -23,14 +23,14 @@ Implementação de campos de endereço com auto-preenchimento via CEP no formul�
     - Mínimo 100 iterações
     - **Validates: Requirements 1.1, 1.2**
 
-  - [ ]\* 1.3 Write property test: Invalid CEP format rejection
+  - [x]\* 1.3 Write property test: Invalid CEP format rejection
     - **Property 2: Invalid CEP format rejection at endpoint**
     - Criar arbitrary que gera strings que NÃO são 8 dígitos numéricos
     - Verificar que `lookup()` lança `BadRequestException` para todos os inputs inválidos
     - Mínimo 100 iterações
     - **Validates: Requirements 1.4**
 
-  - [ ]\* 1.4 Write unit tests for CepController
+  - [x]\* 1.4 Write unit tests for CepController
     - Criar `src/cep/cep.controller.spec.ts`
     - Testar cenários: CEP válido retorna 200, CEP não encontrado retorna 404, formato inválido retorna 400, ViaCEP indisponível retorna 502
     - Usar mocks do CepService
@@ -62,7 +62,7 @@ Implementação de campos de endereço com auto-preenchimento via CEP no formul�
     - Incluir `@ApiProperty` decorators para Swagger
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [ ]\* 3.2 Write property test: Conditional number validation based on noNumber flag
+  - [x]\* 3.2 Write property test: Conditional number validation based on noNumber flag
     - **Property 3: Conditional number validation based on noNumber flag**
     - Criar `src/clinics/dto/create-clinic.dto.spec.ts`
     - Gerar DTOs com `noNumber: true` e `number` vazio → validação deve passar
@@ -71,7 +71,7 @@ Implementação de campos de endereço com auto-preenchimento via CEP no formul�
     - Mínimo 100 iterações
     - **Validates: Requirements 2.2, 2.3, 3.3, 3.4**
 
-  - [ ]\* 3.3 Write property test: Required address fields and CEP format validation
+  - [x]\* 3.3 Write property test: Required address fields and CEP format validation
     - **Property 4: Required address fields and CEP format in DTO validation**
     - Gerar DTOs onde pelo menos um campo obrigatório (cep, street, neighborhood, city, state) está vazio
     - Verificar que `validate()` retorna erros
@@ -119,7 +119,7 @@ Implementação de campos de endereço com auto-preenchimento via CEP no formul�
     - Mensagens de erro individuais em português
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ]\* 7.4 Write property test: Frontend auto-fill populates all address fields
+  - [x]\* 7.4 Write property test: Frontend auto-fill populates all address fields
     - **Property 5: Frontend auto-fill populates all address fields from CEP response**
     - Gerar objetos `CepResponseDto` válidos com arbitrary para street, neighborhood, city, state
     - Simular chamada bem-sucedida e verificar que todos os 4 campos do formulário ficam preenchidos (non-empty)
@@ -127,7 +127,7 @@ Implementação de campos de endereço com auto-preenchimento via CEP no formul�
     - Mínimo 100 iterações
     - **Validates: Requirements 4.3**
 
-  - [ ]\* 7.5 Write property test: Frontend validation shows individual error per missing field
+  - [x]\* 7.5 Write property test: Frontend validation shows individual error per missing field
     - **Property 6: Frontend validation shows individual error for each missing required field**
     - Gerar subconjuntos não-vazios dos campos obrigatórios (cep, street, number, neighborhood, city, state) deixados vazios
     - Submeter formulário e verificar que cada campo vazio exibe mensagem de erro correspondente
@@ -135,7 +135,7 @@ Implementação de campos de endereço com auto-preenchimento via CEP no formul�
     - Mínimo 100 iterações
     - **Validates: Requirements 7.1, 7.2**
 
-  - [ ]\* 7.6 Write unit tests for Signup address fields
+  - [x]\* 7.6 Write unit tests for Signup address fields
     - Testar comportamento do Checkbox "Sem Número" (desabilita/habilita campo número)
     - Testar indicador de loading durante consulta CEP
     - Testar exibição de mensagens informativas em caso de erro
