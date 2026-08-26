@@ -105,6 +105,11 @@ export class AuthService {
 
       await queryRunner.commitTransaction();
 
+      // Merge any existing shadow accounts with the same email so the freshly
+      // registered (auto-logged-in) patient immediately owns all prior data,
+      // including dependents. This runs after commit so the new patient exists.
+      await this.mergeShadowAccounts(savedPatient.id, savedPatient.email);
+
       const token = await this.generateToken(savedPatient);
 
       return {
@@ -515,7 +520,11 @@ export class AuthService {
       secretaryShadow.verificationCodeExpiry = verificationCodeExpiry;
 
       await this.secretaryRepository.save(secretaryShadow);
-      await this.emailService.sendVerificationCode(secretaryShadow.email, verificationCode, secretaryShadow.name);
+      await this.emailService.sendVerificationCode(
+        secretaryShadow.email,
+        verificationCode,
+        secretaryShadow.name,
+      );
 
       return {
         isShadow: true,
@@ -1055,14 +1064,54 @@ export class AuthService {
         const shadowId = shadow.id;
 
         // Migrate all related data to the primary patient
-        await queryRunner.query('UPDATE `appointments` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
-        await queryRunner.query('UPDATE `medications` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
-        await queryRunner.query('UPDATE `exams` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
-        await queryRunner.query('UPDATE `patient_diseases` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
-        await queryRunner.query('UPDATE `patient_allergies` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
-        await queryRunner.query('UPDATE `patient_vaccines` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
-        await queryRunner.query('UPDATE `doctor_access_requests` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
-        await queryRunner.query('UPDATE `patient_access_logs` SET `patientId` = ? WHERE `patientId` = ?', [primaryPatientId, shadowId]);
+        await queryRunner.query('UPDATE `appointments` SET `patientId` = ? WHERE `patientId` = ?', [
+          primaryPatientId,
+          shadowId,
+        ]);
+        await queryRunner.query('UPDATE `medications` SET `patientId` = ? WHERE `patientId` = ?', [
+          primaryPatientId,
+          shadowId,
+        ]);
+        await queryRunner.query('UPDATE `exams` SET `patientId` = ? WHERE `patientId` = ?', [
+          primaryPatientId,
+          shadowId,
+        ]);
+        await queryRunner.query(
+          'UPDATE `patient_diseases` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        await queryRunner.query(
+          'UPDATE `patient_allergies` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        await queryRunner.query(
+          'UPDATE `patient_vaccines` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        await queryRunner.query(
+          'UPDATE `doctor_access_requests` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        await queryRunner.query(
+          'UPDATE `patient_access_logs` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+
+        // Migrate dependents: transfer admin responsibility to the primary patient
+        await queryRunner.query(
+          'UPDATE `dependents` SET `adminResponsibleId` = ? WHERE `adminResponsibleId` = ?',
+          [primaryPatientId, shadowId],
+        );
+
+        // Migrate the responsibles join table, avoiding duplicate (dependentId, patientId) rows
+        await queryRunner.query(
+          'UPDATE IGNORE `dependent_responsibles` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        // Remove any leftover rows that couldn't be updated due to an existing duplicate
+        await queryRunner.query('DELETE FROM `dependent_responsibles` WHERE `patientId` = ?', [
+          shadowId,
+        ]);
 
         // Create doctor permission for the doctor who created this shadow
         if (shadow.doctorCreatorId) {
@@ -1174,26 +1223,38 @@ export class AuthService {
         await queryRunner.query('DELETE FROM `patient_diseases` WHERE `patientId` = ?', [userId]);
         await queryRunner.query('DELETE FROM `patient_allergies` WHERE `patientId` = ?', [userId]);
         await queryRunner.query('DELETE FROM `patient_vaccines` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `patientId` = ?', [
+          userId,
+        ]);
         await queryRunner.query('DELETE FROM `doctor_permissions` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `patient_access_logs` WHERE `patientId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `patient_access_logs` WHERE `patientId` = ?', [
+          userId,
+        ]);
         await queryRunner.query('DELETE FROM `patients` WHERE `id` = ?', [userId]);
       } else if (userType === 'doctor') {
-        await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `doctorId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `doctorId` = ?', [
+          userId,
+        ]);
         await queryRunner.query('DELETE FROM `doctor_permissions` WHERE `doctorId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `clinic_memberships` WHERE `professionalId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `clinic_memberships` WHERE `professionalId` = ?', [
+          userId,
+        ]);
         await queryRunner.query('DELETE FROM `doctor_documents` WHERE `doctorId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `clinic_admin_profiles` WHERE `professionalId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `secretary_profiles` WHERE `professionalId` = ?', [userId]);
+        await queryRunner.query('DELETE FROM `clinic_admin_profiles` WHERE `professionalId` = ?', [
+          userId,
+        ]);
+        await queryRunner.query('DELETE FROM `secretary_profiles` WHERE `professionalId` = ?', [
+          userId,
+        ]);
         await queryRunner.query('DELETE FROM `doctors` WHERE `id` = ?', [userId]);
       }
 
       // REQ-AUD-003/004 — Audit inside the same transaction
-      await this.auditService.recordDelete(
-        AuditResourceType.USER,
-        userId,
-        { patientId: userType === 'patient' ? userId : undefined, reason: 'ACCOUNT_DELETION_REQUESTED', queryRunner },
-      );
+      await this.auditService.recordDelete(AuditResourceType.USER, userId, {
+        patientId: userType === 'patient' ? userId : undefined,
+        reason: 'ACCOUNT_DELETION_REQUESTED',
+        queryRunner,
+      });
 
       await queryRunner.commitTransaction();
       return { message: 'Account deleted successfully' };
@@ -1208,7 +1269,15 @@ export class AuthService {
   async updateProfile(
     userId: string,
     userType: string,
-    data: { name?: string; phone?: string; gender?: string; birthDate?: string; specialty?: string; crm?: string; rqe?: string },
+    data: {
+      name?: string;
+      phone?: string;
+      gender?: string;
+      birthDate?: string;
+      specialty?: string;
+      crm?: string;
+      rqe?: string;
+    },
     file?: Express.Multer.File,
   ) {
     let profileImageUrl: string | null = null;

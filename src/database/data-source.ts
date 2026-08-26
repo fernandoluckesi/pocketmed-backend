@@ -9,6 +9,7 @@ import { Medication } from '../entities/medication.entity';
 import { Exam } from '../entities/exam.entity';
 import { DoctorAccessRequest } from '../entities/doctor-access-request.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
+import { DependentResponsibleInvite } from '../entities/dependent-responsible-invite.entity';
 import { DeviceToken } from '../entities/device-token.entity';
 import { Notification } from '../entities/notification.entity';
 import { Clinic } from '../entities/clinic.entity';
@@ -48,6 +49,7 @@ const AppDataSource = new DataSource({
     Exam,
     DoctorAccessRequest,
     DoctorPermission,
+    DependentResponsibleInvite,
     DeviceToken,
     Notification,
     Clinic,

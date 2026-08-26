@@ -165,6 +165,35 @@ export class NotificationsService {
     );
   }
 
+  /**
+   * Generic helper to stamp a `status` onto the stored `data` of every
+   * notification matching a given related entity id and type. Used so the
+   * invitee's notification UI reflects accepted/rejected after they respond.
+   */
+  async syncNotificationStatusByType(
+    relatedEntityId: string,
+    type: string,
+    status: string,
+  ): Promise<void> {
+    const notifications = await this.notificationRepository.find({
+      where: { relatedEntityId, type },
+    });
+
+    if (!notifications.length) {
+      return;
+    }
+
+    await this.notificationRepository.save(
+      notifications.map((notification) => ({
+        ...notification,
+        data: {
+          ...(notification.data ?? {}),
+          status,
+        },
+      })),
+    );
+  }
+
   async syncAppointmentCompletionNotificationStatus(
     relatedEntityId: string,
     status: AppointmentStatus,

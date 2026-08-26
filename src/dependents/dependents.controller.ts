@@ -4,13 +4,21 @@ import {
   Post,
   Delete,
   Param,
+  Query,
   Body,
   UseGuards,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { DependentsService } from './dependents.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -18,6 +26,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateDependentDto } from './dto/create-dependent.dto';
 import { AddResponsibleDto } from './dto/add-responsible.dto';
+import { InviteResponsibleDto } from './dto/invite-responsible.dto';
+import { RespondResponsibleInviteDto } from './dto/respond-responsible-invite.dto';
 
 @ApiTags('Dependents')
 @Controller('dependents')
@@ -47,6 +57,49 @@ export class DependentsController {
   @ApiResponse({ status: 200, description: 'Return all dependents' })
   async findAll(@CurrentUser() user: any) {
     return this.dependentsService.findAll(user.userId);
+  }
+
+  @Post('responsible-invites/:id/respond')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Accept or reject a responsible invite (invitee only)' })
+  @ApiResponse({ status: 200, description: 'Invite responded successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only the invitee can respond' })
+  @ApiResponse({ status: 404, description: 'Invite not found' })
+  async respondToInvite(
+    @Param('id') id: string,
+    @Body() dto: RespondResponsibleInviteDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.dependentsService.respondToInvite(id, dto.status, user.userId);
+  }
+
+  @Get(':id/search-user')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Search an active user by exact email to invite as responsible' })
+  @ApiQuery({ name: 'email', description: 'Exact email of the user to invite' })
+  @ApiResponse({ status: 200, description: 'Return matching user' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admin can invite' })
+  @ApiResponse({ status: 404, description: 'Dependent or user not found' })
+  async searchUser(
+    @Param('id') id: string,
+    @Query('email') email: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.dependentsService.searchUserByEmail(id, email, user.userId);
+  }
+
+  @Post(':id/invite-responsible')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Invite a user (by email) to become a responsible (admin only)' })
+  @ApiResponse({ status: 201, description: 'Invite sent successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admin can invite' })
+  @ApiResponse({ status: 404, description: 'Dependent or user not found' })
+  async inviteResponsible(
+    @Param('id') id: string,
+    @Body() dto: InviteResponsibleDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.dependentsService.inviteResponsible(id, dto.email, user.userId);
   }
 
   @Get(':id')
