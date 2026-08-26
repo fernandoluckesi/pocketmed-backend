@@ -2,526 +2,531 @@ import 'reflect-metadata';
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import AppDataSource from '../data-source';
-import { Doctor } from '../../entities/doctor.entity';
-import { Patient } from '../../entities/patient.entity';
-import { Clinic } from '../../entities/clinic.entity';
-import { ClinicMembership } from '../../entities/clinic-membership.entity';
-import { DoctorPermission } from '../../entities/doctor-permission.entity';
-import { ProfessionalRole } from '../../auth/professional-role.enum';
 
-// ============================================================================
-// CONFIGURAÇÃO
-// ============================================================================
+/**
+ * Seed completo — replica exatamente o seed-full-data.sql em TypeScript.
+ * Uso: npm run seed:run
+ *
+ * Cria: 1 clínica, 10 médicos, 150 pacientes, permissões, consultas,
+ * exames, medicamentos, doenças, alergias, vacinas, dependentes.
+ *
+ * Senha de todos: Fernando958969++
+ * Admin: hipocrates@email.com
+ */
 
-const ADMIN_EMAIL = 'hipocrates@email.com';
-const ADMIN_PASSWORD = 'Fernando958969++';
-const ALL_DOCTORS_PASSWORD = 'Fernando958969++';
+const PASSWORD = 'Fernando958969++';
 
-const CLINIC_DATA = {
-  name: 'Policlínica',
-  cnpj: '12345678000199',
-  cep: '01310-100',
-  street: 'Av. Paulista',
-  number: '1000',
-  complement: 'Conjunto 501',
-  neighborhood: 'Bela Vista',
-  city: 'São Paulo',
-  state: 'SP',
-  noNumber: false,
-};
+const TABLES_TO_CLEAR = [
+  'doctor_permissions',
+  'doctor_access_requests',
+  'appointments',
+  'medications',
+  'exams',
+  'exam_schedules',
+  'exam_schedule_items',
+  'clinic_memberships',
+  'secretary_profiles',
+  'clinic_admin_profiles',
+  'dependent_responsibles',
+  'dependents',
+  'patients',
+  'doctors',
+  'clinics',
+  'notifications',
+  'device_tokens',
+  'patient_access_logs',
+  'patient_diseases',
+  'patient_allergies',
+  'patient_vaccines',
+  'doctor_documents',
+  'financial_settings',
+  'financial_cost_centers',
+  'financial_convenios',
+  'financial_revenues',
+  'financial_expenses',
+  'financial_doctor_transfers',
+  'financial_cashflow_entries',
+  'audit_events',
+];
 
-const DOCTORS_DATA = [
+const DOCTORS = [
+  {
+    name: 'Dr. Hipócrates',
+    email: 'hipocrates@email.com',
+    gender: 'Masculino',
+    phone: '11900000001',
+    birthDate: '1975-03-15',
+    specialty: 'Clínica Geral',
+    crm: '100001/SP',
+    cpf: '10000000001',
+  },
+  {
+    name: 'Dra. Helena Cardoso',
+    email: 'helena.cardoso@email.com',
+    gender: 'Feminino',
+    phone: '11900000002',
+    birthDate: '1980-07-22',
+    specialty: 'Cardiologia',
+    crm: '100002/SP',
+    cpf: '10000000002',
+  },
+  {
+    name: 'Dr. Ricardo Mendes',
+    email: 'ricardo.mendes@email.com',
+    gender: 'Masculino',
+    phone: '11900000003',
+    birthDate: '1978-11-10',
+    specialty: 'Neurologia',
+    crm: '100003/SP',
+    cpf: '10000000003',
+  },
   {
     name: 'Dra. Camila Ferreira',
     email: 'camila.ferreira@email.com',
     gender: 'Feminino',
-    phone: '11999000101',
-    birthDate: '1985-03-12',
-    specialty: 'Cardiologia',
-    crm: '200001/SP',
-    cpf: '20000000001',
-  },
-  {
-    name: 'Dr. Rafael Souza',
-    email: 'rafael.souza@email.com',
-    gender: 'Masculino',
-    phone: '11999000102',
-    birthDate: '1982-07-25',
-    specialty: 'Dermatologia',
-    crm: '200002/SP',
-    cpf: '20000000002',
-  },
-  {
-    name: 'Dra. Juliana Martins',
-    email: 'juliana.martins@email.com',
-    gender: 'Feminino',
-    phone: '11999000103',
-    birthDate: '1990-01-08',
+    phone: '11900000004',
+    birthDate: '1982-04-05',
     specialty: 'Pediatria',
-    crm: '200003/SP',
-    cpf: '20000000003',
+    crm: '100004/SP',
+    cpf: '10000000004',
   },
   {
-    name: 'Dr. Bruno Oliveira',
-    email: 'bruno.oliveira@email.com',
+    name: 'Dr. André Oliveira',
+    email: 'andre.oliveira@email.com',
     gender: 'Masculino',
-    phone: '11999000104',
-    birthDate: '1978-11-30',
-    specialty: 'Ortopedia e Traumatologia',
-    crm: '200004/SP',
-    cpf: '20000000004',
+    phone: '11900000005',
+    birthDate: '1976-09-18',
+    specialty: 'Ortopedia',
+    crm: '100005/SP',
+    cpf: '10000000005',
+  },
+  {
+    name: 'Dra. Juliana Costa',
+    email: 'juliana.costa@email.com',
+    gender: 'Feminino',
+    phone: '11900000006',
+    birthDate: '1984-01-30',
+    specialty: 'Dermatologia',
+    crm: '100006/SP',
+    cpf: '10000000006',
+  },
+  {
+    name: 'Dr. Marcos Pereira',
+    email: 'marcos.pereira@email.com',
+    gender: 'Masculino',
+    phone: '11900000007',
+    birthDate: '1979-06-12',
+    specialty: 'Endocrinologia',
+    crm: '100007/SP',
+    cpf: '10000000007',
   },
   {
     name: 'Dra. Fernanda Lima',
     email: 'fernanda.lima@email.com',
     gender: 'Feminino',
-    phone: '11999000105',
-    birthDate: '1987-09-14',
-    specialty: 'Ginecologia e Obstetrícia',
-    crm: '200005/SP',
-    cpf: '20000000005',
+    phone: '11900000008',
+    birthDate: '1981-08-25',
+    specialty: 'Ginecologia',
+    crm: '100008/SP',
+    cpf: '10000000008',
   },
   {
-    name: 'Dr. Marcos Almeida',
-    email: 'marcos.almeida@email.com',
+    name: 'Dr. Lucas Ribeiro',
+    email: 'lucas.ribeiro@email.com',
     gender: 'Masculino',
-    phone: '11999000106',
-    birthDate: '1983-04-22',
-    specialty: 'Neurologia',
-    crm: '200006/SP',
-    cpf: '20000000006',
-  },
-  {
-    name: 'Dra. Patrícia Rocha',
-    email: 'patricia.rocha@email.com',
-    gender: 'Feminino',
-    phone: '11999000107',
-    birthDate: '1991-12-05',
-    specialty: 'Endocrinologia e Metabologia',
-    crm: '200007/SP',
-    cpf: '20000000007',
-  },
-  {
-    name: 'Dr. Diego Nascimento',
-    email: 'diego.nascimento@email.com',
-    gender: 'Masculino',
-    phone: '11999000108',
-    birthDate: '1986-08-18',
+    phone: '11900000009',
+    birthDate: '1983-12-03',
     specialty: 'Pneumologia',
-    crm: '200008/SP',
-    cpf: '20000000008',
+    crm: '100009/SP',
+    cpf: '10000000009',
   },
   {
-    name: 'Dra. Larissa Teixeira',
-    email: 'larissa.teixeira@email.com',
+    name: 'Dra. Beatriz Santos',
+    email: 'beatriz.santos@email.com',
     gender: 'Feminino',
-    phone: '11999000109',
-    birthDate: '1989-05-27',
-    specialty: 'Psiquiatria',
-    crm: '200009/SP',
-    cpf: '20000000009',
-  },
-  {
-    name: 'Dr. Thiago Costa',
-    email: 'thiago.costa@email.com',
-    gender: 'Masculino',
-    phone: '11999000110',
-    birthDate: '1984-02-10',
-    specialty: 'Urologia',
-    crm: '200010/SP',
-    cpf: '20000000010',
+    phone: '11900000010',
+    birthDate: '1985-02-14',
+    specialty: 'Oftalmologia',
+    crm: '100010/SP',
+    cpf: '10000000010',
   },
 ];
 
-const PATIENT_NAMES = [
-  'Maria Silva Santos',
-  'João Pedro Oliveira',
-  'Ana Carolina Souza',
-  'Carlos Eduardo Lima',
-  'Fernanda Costa Alves',
-  'Ricardo Mendes Ferreira',
-  'Patrícia Rodrigues Nunes',
-  'Bruno Carvalho Dias',
-  'Camila Barbosa Martins',
-  'Diego Araújo Pereira',
-  'Juliana Nascimento Rocha',
-  'Thiago Gomes Ribeiro',
-  'Larissa Fernandes Castro',
-  'Rafael Santos Correia',
-  'Beatriz Moreira Vieira',
-  'Lucas Almeida Teixeira',
-  'Gabriela Lopes Cardoso',
-  'Marcos Vinícius Pinto',
-  'Aline Freitas Monteiro',
-  'Felipe Ramos Azevedo',
-  'Renata Cunha Borges',
-  'Gustavo Henrique Melo',
-  'Isabela Duarte Campos',
-  'Leandro Sousa Medeiros',
-  'Vanessa Pires Cavalcanti',
-  'Anderson Reis Figueiredo',
-  'Tatiana Moura Xavier',
-  'Rodrigo Fonseca Barros',
-  'Priscila Andrade Rezende',
-  'Eduardo Machado Sampaio',
-  'Daniela Vasconcelos Cruz',
-  'Henrique Batista Leal',
-  'Luciana Tavares Brito',
-  'Matheus Coelho Guimarães',
-  'Simone Pacheco Amaral',
-  'Vinícius Nogueira Sales',
-  'Amanda Pinheiro Lacerda',
-  'Pedro Henrique Siqueira',
-  'Raquel Aguiar Coutinho',
-  'Fábio Cardoso Miranda',
-  'Cristiane Magalhães Assis',
-  'Alexandre Bastos Alencar',
-  'Elisa Queiroz Faria',
-  'Roberto Silveira Lopes',
-  'Michele Torres Rangel',
-  'Caio Domingues Vargas',
-  'Mariana Esteves Paiva',
-  'Wagner Bezerra Trindade',
-  'Sabrina Matos Serrano',
-  'Leonardo Braga Fontenele',
-  'Adriana Mendonça Pereira',
-  'Sérgio Lemos Andrade',
-  'Mônica Farias Campos',
-  'Antônio Gomes Pereira',
-  'Cláudia Ribas Neves',
-  'Paulo César Moraes',
-  'Débora Lins Cordeiro',
-  'Otávio Rangel Machado',
-  'Lúcia Helena Dutra',
-  'Rogério Dantas Fonseca',
-  'Sandra Maia Bezerra',
-  'Márcio Leal Araújo',
-  'Viviane Borges Prado',
-  'Júlio César Queiroz',
-  'Carla Rezende Vieira',
-  'Nilton Braga Pacheco',
-  'Regina Lacerda Campos',
-  'Flávio Santana Nogueira',
-  'Valéria Costa Pinto',
-  'Hugo Bastos Alencar',
-  'Denise Fontes Tavares',
-  'Reginaldo Cruz Moreira',
-  'Elaine Brito Sampaio',
-  'Nelson Martins Souza',
-  'Rosana Duarte Alves',
-  'Geraldo Teixeira Lins',
-  'Sônia Barros Faria',
-  'Cássio Monteiro Lima',
-  'Tereza Gomes Rocha',
-  'Ronaldo Pires Medeiros',
-  'Helena Cardoso Neves',
-  'Edson Cavalcanti Reis',
-  'Luciene Andrade Melo',
-  'Valdir Correia Santos',
-  'Márcia Dantas Pinheiro',
-  'Cléber Fonseca Moura',
-  'Joice Almeida Trindade',
-  'Raimundo Costa Dias',
-  'Célia Ribeiro Xavier',
-  'Jorge Nascimento Barros',
-  'Shirley Vasconcelos Lima',
-  'Wander Guimarães Pinto',
-  'Naiara Coelho Ferreira',
-  'Davi Machado Oliveira',
-  'Selma Tavares Dutra',
-  'Laércio Braga Costa',
-  'Ivone Araújo Lopes',
-  'Tarcísio Freitas Borges',
-  'Glória Rezende Martins',
-  'Milton Siqueira Campos',
-  'Janete Melo Nunes',
-  'Erasmo Leal Souza',
-  'Neusa Barros Correia',
-  'Adilson Pires Gomes',
-  'Conceição Moreira Fontes',
-  'Benedito Sampaio Rangel',
-  'Iracema Dantas Vieira',
-  'Osvaldo Queiroz Pereira',
-  'Dalva Ferreira Rocha',
-  'Arlindo Souza Medeiros',
-  'Elza Monteiro Ribeiro',
-  'Silvio Andrade Nogueira',
-  'Aparecida Lima Castro',
-  'Josué Figueiredo Braga',
-  'Odete Cavalcanti Melo',
-  'Alcides Brito Tavares',
-  'Madalena Pinheiro Santos',
-  'Domingos Lacerda Reis',
-  'Eunice Correia Bastos',
-  'Valdomiro Alves Fonseca',
-  'Aurora Pacheco Lima',
-  'Getúlio Moura Cardoso',
-  'Perpétua Nascimento Dias',
-  'Anísio Gomes Oliveira',
-  'Zilda Rocha Teixeira',
-  'Ernesto Vieira Lopes',
-  'Teodora Almeida Rangel',
-  'Felício Barbosa Cruz',
-  'Leonor Freitas Souza',
-  'Amaro Martins Araújo',
-  'Iolanda Costa Ferreira',
-  'Norberto Dutra Pinto',
-  'Francisca Leal Borges',
-  'Amadeu Correia Vasconcelos',
-  'Raimunda Campos Pereira',
-  'Juvenal Souza Nogueira',
-  'Sebastiana Matos Lima',
-  'Aristides Mendes Braga',
-  'Clotilde Andrade Sampaio',
-  'Hermínio Faria Xavier',
-  'Berenice Tavares Lins',
-  'Almiro Ribeiro Dantas',
-  'Graziela Pires Moreira',
-  'Heráclito Cardoso Melo',
-  'Olívia Santos Pacheco',
-  'Salomão Vieira Rezende',
-  'Leocádia Moraes Fontes',
-  'Euclides Alves Trindade',
-  'Petronília Gomes Dutra',
-  'Tibúrcio Nascimento Brito',
-  'Norma Costa Leal',
-  'Astolfo Reis Machado',
-  'Magnólia Souza Alencar',
-  'Deoclécio Lima Fonseca',
-  'Alzira Martins Cavalcanti',
-  'Venâncio Borges Dias',
-  'Efigênia Rocha Prado',
-  'Bartolomeu Ferreira Queiroz',
-  'Hortência Oliveira Medeiros',
-  'Plínio Barros Moura',
+const FIRST_NAMES = [
+  'Ana',
+  'Bruno',
+  'Carla',
+  'Diego',
+  'Elisa',
+  'Fabio',
+  'Gabriela',
+  'Henrique',
+  'Isabela',
+  'João',
+  'Karen',
+  'Leonardo',
+  'Mariana',
+  'Nicolas',
+  'Olivia',
+  'Paulo',
+  'Rafaela',
+  'Samuel',
+  'Tatiana',
+  'Ulisses',
+  'Valentina',
+  'Wesley',
+  'Ximena',
+  'Yuri',
+  'Zilda',
 ];
+const LAST_NAMES = ['Silva', 'Santos', 'Oliveira', 'Souza', 'Ferreira', 'Almeida'];
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function normalizeEmail(name: string): string {
-  const parts = name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .split(' ');
-  const first = parts[0];
-  const last = parts[parts.length - 1];
-  return `${first}.${last}@email.com`;
+function getPatientName(i: number): string {
+  const first = FIRST_NAMES[i % FIRST_NAMES.length];
+  const last = LAST_NAMES[Math.floor(i / FIRST_NAMES.length) % LAST_NAMES.length];
+  return `${first} ${last}`;
 }
 
-// ============================================================================
-// MAIN SEED
-// ============================================================================
+function getPatientBirth(i: number): string {
+  const base = new Date('1970-01-01');
+  base.setDate(base.getDate() + i * 73);
+  return base.toISOString().split('T')[0];
+}
 
-export async function seedDatabase() {
-  if (!AppDataSource.isInitialized) {
-    await AppDataSource.initialize();
-  }
+async function run() {
+  console.log('');
+  console.log('═══════════════════════════════════════════════');
+  console.log('  PocketMed — Seed Completo (TypeScript)');
+  console.log('═══════════════════════════════════════════════');
+  console.log('');
 
+  await AppDataSource.initialize();
+  const qr = AppDataSource.createQueryRunner();
+  await qr.connect();
+
+  // ── 1. LIMPAR BANCO ──
   console.log('🗑️  Limpando banco...');
-
-  // Disable FK checks and truncate all relevant tables
-  await AppDataSource.query('SET FOREIGN_KEY_CHECKS = 0');
-  const tables = [
-    'doctor_permissions',
-    'doctor_access_requests',
-    'appointments',
-    'medications',
-    'exams',
-    'exam_schedules',
-    'exam_schedule_items',
-    'clinic_memberships',
-    'secretary_profiles',
-    'clinic_admin_profiles',
-    'dependents',
-    'patients',
-    'doctors',
-    'clinics',
-    'notifications',
-    'device_tokens',
-    'patient_access_logs',
-    'patient_diseases',
-    'patient_allergies',
-    'patient_vaccines',
-    'doctor_documents',
-    'financial_settings',
-    'financial_cost_centers',
-    'financial_convenios',
-    'financial_revenues',
-    'financial_expenses',
-    'financial_doctor_transfers',
-    'financial_cashflow_entries',
-    'audit_events',
-  ];
-  for (const table of tables) {
+  await qr.query('SET FOREIGN_KEY_CHECKS = 0');
+  for (const table of TABLES_TO_CLEAR) {
     try {
-      await AppDataSource.query(`DELETE FROM \`${table}\``);
+      await qr.query(`DELETE FROM \`${table}\``);
     } catch {
-      /* table may not exist */
+      /* skip */
     }
   }
-  await AppDataSource.query('SET FOREIGN_KEY_CHECKS = 1');
+  await qr.query('SET FOREIGN_KEY_CHECKS = 1');
+  console.log('   ✓ Banco limpo');
 
-  const doctorRepo = AppDataSource.getRepository(Doctor);
-  const patientRepo = AppDataSource.getRepository(Patient);
-  const clinicRepo = AppDataSource.getRepository(Clinic);
-  const membershipRepo = AppDataSource.getRepository(ClinicMembership);
-  const permissionRepo = AppDataSource.getRepository(DoctorPermission);
+  // ── 2. HASH DA SENHA ──
+  const pwd = await bcrypt.hash(PASSWORD, 10);
 
-  const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-
-  // ── 1. Clínica ──────────────────────────────────────────────────────────────
+  // ── 3. CLÍNICA ──
   console.log('🏥 Criando clínica...');
-  const clinic = clinicRepo.create({ ...CLINIC_DATA, isActive: true });
-  const savedClinic = await clinicRepo.save(clinic);
+  await qr.query(
+    `INSERT INTO clinics (id, name, cnpj, isActive, city, state, createdAt, updatedAt) VALUES (UUID(), 'Clínica Hipócrates', '12345678000199', 1, 'São Paulo', 'SP', NOW(), NOW())`,
+  );
+  const clinicRows = await qr.query(`SELECT id FROM clinics LIMIT 1`);
+  const clinicId = clinicRows[0].id;
+  console.log(`   ✓ Clínica: ${clinicId}`);
 
-  // ── 2. Médico Admin (Hipócrates) ────────────────────────────────────────────
-  console.log('👨‍⚕️ Criando admin (Hipócrates)...');
-  const admin = doctorRepo.create({
-    name: 'Dr. Hipócrates Medeiros',
-    email: ADMIN_EMAIL,
-    password: passwordHash,
-    gender: 'Masculino',
-    phone: '11999000001',
-    birthDate: new Date('1980-06-15'),
-    specialty: 'Clínica Geral',
-    crm: '100001/SP',
-    cpf: '10000000001',
-    type: 'doctor',
-    isShadow: false,
-    emailVerified: true,
-    verificationStatus: 'APPROVED',
-  });
-  const savedAdmin = await doctorRepo.save(admin);
+  // ── 4. MÉDICOS ──
+  console.log('👨‍⚕️ Criando 10 médicos...');
+  const doctorIds: string[] = [];
 
-  // Membership admin
-  const adminMembership = membershipRepo.create({
-    clinicId: savedClinic.id,
-    professionalId: savedAdmin.id,
-    role: ProfessionalRole.ADMIN,
-    isActive: true,
-  });
-  await membershipRepo.save(adminMembership);
-
-  // ── 3. 10 Médicos ──────────────────────────────────────────────────────────
-  console.log('👩‍⚕️ Criando 10 médicos...');
-  const savedDoctors: Doctor[] = [];
-
-  for (const docData of DOCTORS_DATA) {
-    const doc = doctorRepo.create({
-      ...docData,
-      password: passwordHash,
-      birthDate: new Date(docData.birthDate),
-      type: 'doctor',
-      isShadow: false,
-      emailVerified: true,
-      verificationStatus: 'APPROVED',
-    });
-    const saved = await doctorRepo.save(doc);
-    savedDoctors.push(saved);
-
-    // Membership como doctor na clínica
-    const membership = membershipRepo.create({
-      clinicId: savedClinic.id,
-      professionalId: saved.id,
-      role: ProfessionalRole.DOCTOR,
-      isActive: true,
-    });
-    await membershipRepo.save(membership);
+  for (const doc of DOCTORS) {
+    await qr.query(
+      `INSERT INTO doctors (id, name, email, password, gender, phone, birthDate, specialty, crm, cpf, type, isShadow, emailVerified, verificationStatus, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, 'doctor', 0, 1, 'APPROVED', NOW(), NOW())`,
+      [
+        doc.name,
+        doc.email,
+        pwd,
+        doc.gender,
+        doc.phone,
+        doc.birthDate,
+        doc.specialty,
+        doc.crm,
+        doc.cpf,
+      ],
+    );
+    const docRows = await qr.query(`SELECT id FROM doctors WHERE email = ? LIMIT 1`, [doc.email]);
+    doctorIds.push(docRows[0].id);
   }
+  console.log(`   ✓ ${doctorIds.length} médicos criados`);
 
-  // ── 4. 160 Pacientes ───────────────────────────────────────────────────────
-  console.log('🧑‍🤝‍🧑 Criando 160 pacientes...');
-  const savedPatients: Patient[] = [];
+  // ── 5. MEMBROS DA CLÍNICA ──
+  console.log('🔗 Criando memberships...');
+  for (let i = 0; i < doctorIds.length; i++) {
+    const role = i === 0 ? 'admin' : 'doctor';
+    const invitedBy = i === 0 ? null : doctorIds[0];
+    await qr.query(
+      `INSERT INTO clinic_memberships (id, clinicId, professionalId, role, isActive, invitedBy, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, 1, ?, NOW(), NOW())`,
+      [clinicId, doctorIds[i], role, invitedBy],
+    );
+  }
+  console.log('   ✓ Memberships criadas');
 
-  for (let i = 0; i < PATIENT_NAMES.length; i++) {
-    const name = PATIENT_NAMES[i];
+  // ── 6. PACIENTES (150) ──
+  console.log('🧑‍🤝‍🧑 Criando 150 pacientes...');
+  const patientIds: string[] = [];
+
+  for (let i = 1; i <= 150; i++) {
+    const name = getPatientName(i);
+    const email = `paciente${i}@email.com`;
     const gender = i % 2 === 0 ? 'Feminino' : 'Masculino';
-    const day = (i % 28) + 1;
-    const month = (i % 12) + 1;
-    const year = 1970 + (i % 30);
+    const phone = `1198${String(i).padStart(7, '0')}`;
+    const birth = getPatientBirth(i);
 
-    // Primeiros 120 pacientes criados por médicos (distribuídos)
-    let creatorId: string | null = null;
-    if (i < 20) {
-      creatorId = savedAdmin.id; // Admin: pacientes 0-19
-    } else if (i < 120) {
-      const docIndex = Math.floor((i - 20) / 10); // Cada médico: 10 pacientes
-      if (docIndex < savedDoctors.length) {
-        creatorId = savedDoctors[docIndex].id;
-      }
-    }
-    // Pacientes 120-159: sem vínculo (aparecem só na busca global)
-
-    const patient = patientRepo.create({
-      name,
-      email: normalizeEmail(name),
-      password: passwordHash,
-      gender,
-      phone: `1198765${String(i + 1).padStart(4, '0')}`,
-      birthDate: new Date(
-        `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-      ),
-      type: 'patient',
-      isShadow: false,
-      emailVerified: true,
-      doctorCreatorId: creatorId,
-    });
-    const saved = await patientRepo.save(patient);
-    savedPatients.push(saved);
+    await qr.query(
+      `INSERT INTO patients (id, name, email, password, gender, phone, birthDate, type, isShadow, emailVerified, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, ?, ?, ?, 'patient', 0, 1, NOW(), NOW())`,
+      [name, email, pwd, gender, phone, birth],
+    );
+    const patRows = await qr.query(`SELECT id FROM patients WHERE email = ? LIMIT 1`, [email]);
+    patientIds.push(patRows[0].id);
   }
+  console.log(`   ✓ ${patientIds.length} pacientes criados`);
 
-  // ── 5. Permissões ──────────────────────────────────────────────────────────
+  // ── 7. PERMISSÕES ──
+  // Pacientes 1-20: doc1, 21-30: doc2, 31-40: doc3, 41-50: doc4, 51-60: doc5
+  // 61-70: doc6, 71-80: doc7, 81-90: doc8, 91-100: doc9, 101-110: doc10
+  // 111-150: sem permissão
   console.log('🔑 Criando permissões...');
+  let permCount = 0;
 
-  // Admin: acesso aos primeiros 20 pacientes
+  for (let i = 0; i < 120; i++) {
+    let docIdx: number;
+    if (i < 20) docIdx = 0;
+    else if (i < 30) docIdx = 1;
+    else if (i < 40) docIdx = 2;
+    else if (i < 50) docIdx = 3;
+    else if (i < 60) docIdx = 4;
+    else if (i < 70) docIdx = 5;
+    else if (i < 80) docIdx = 6;
+    else if (i < 90) docIdx = 7;
+    else if (i < 100) docIdx = 8;
+    else docIdx = 9;
+
+    await qr.query(
+      `INSERT INTO doctor_permissions (id, doctorId, patientId, isActive, grantedAt) VALUES (UUID(), ?, ?, 1, NOW())`,
+      [doctorIds[docIdx], patientIds[i]],
+    );
+    permCount++;
+  }
+  console.log(`   ✓ ${permCount} permissões`);
+
+  // ── 8. CONSULTAS (3 por paciente, primeiros 50) ──
+  console.log('📅 Criando consultas...');
+  let aptCount = 0;
+
+  for (let i = 0; i < 50; i++) {
+    let docIdx: number;
+    if (i < 20) docIdx = 0;
+    else if (i < 30) docIdx = 1;
+    else if (i < 40) docIdx = 2;
+    else docIdx = 3;
+
+    const doc = DOCTORS[docIdx];
+    const dId = doctorIds[docIdx];
+    const pId = patientIds[i];
+
+    // Consulta passada concluída
+    await qr.query(
+      `INSERT INTO appointments (id, doctorId, patientId, doctorName, doctorCrm, doctorSpecialty, reason, dateTime, isCompleted, status, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, ?, ?, 'Consulta de rotina', DATE_SUB(NOW(), INTERVAL ? DAY), 1, 'completed', NOW(), NOW())`,
+      [dId, pId, doc.name, doc.crm, doc.specialty, 90 + i],
+    );
+    // Retorno passado concluído
+    await qr.query(
+      `INSERT INTO appointments (id, doctorId, patientId, doctorName, doctorCrm, doctorSpecialty, reason, dateTime, isCompleted, status, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, ?, ?, 'Retorno', DATE_SUB(NOW(), INTERVAL ? DAY), 1, 'completed', NOW(), NOW())`,
+      [dId, pId, doc.name, doc.crm, doc.specialty, 30 + i],
+    );
+    // Consulta futura agendada
+    await qr.query(
+      `INSERT INTO appointments (id, doctorId, patientId, doctorName, doctorCrm, doctorSpecialty, reason, dateTime, isCompleted, status, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, ?, ?, 'Acompanhamento', DATE_ADD(NOW(), INTERVAL ? DAY), 0, 'approved', NOW(), NOW())`,
+      [dId, pId, doc.name, doc.crm, doc.specialty, i * 2],
+    );
+    aptCount += 3;
+  }
+  console.log(`   ✓ ${aptCount} consultas`);
+
+  // ── 9. EXAMES (3 por paciente, primeiros 40) ──
+  console.log('🔬 Criando exames...');
+  let examCount = 0;
+
+  for (let i = 0; i < 40; i++) {
+    const dId = doctorIds[0]; // Hipócrates
+    const pId = patientIds[i];
+
+    await qr.query(
+      `INSERT INTO exams (id, name, type, description, scheduledDate, status, laboratory, doctorId, patientId, createdAt, updatedAt) VALUES (UUID(), 'Hemograma Completo', 'blood_test', 'Exame de sangue de rotina', DATE_SUB(CURDATE(), INTERVAL ? DAY), 'completed', 'Lab São Paulo', ?, ?, NOW(), NOW())`,
+      [60 + i, dId, pId],
+    );
+    await qr.query(
+      `INSERT INTO exams (id, name, type, description, scheduledDate, status, laboratory, doctorId, patientId, createdAt, updatedAt) VALUES (UUID(), 'Glicose em Jejum', 'blood_test', 'Controle glicêmico', DATE_SUB(CURDATE(), INTERVAL ? DAY), 'completed', 'Lab São Paulo', ?, ?, NOW(), NOW())`,
+      [30 + i, dId, pId],
+    );
+    await qr.query(
+      `INSERT INTO exams (id, name, type, description, scheduledDate, status, laboratory, doctorId, patientId, createdAt, updatedAt) VALUES (UUID(), 'Ultrassonografia Abdominal', 'ultrasound', 'Avaliação abdominal', DATE_ADD(CURDATE(), INTERVAL ? DAY), 'scheduled', 'Clínica Imagem', ?, ?, NOW(), NOW())`,
+      [i * 3, dId, pId],
+    );
+    examCount += 3;
+  }
+  console.log(`   ✓ ${examCount} exames`);
+
+  // ── 10. MEDICAMENTOS (3 por paciente, primeiros 30) ──
+  console.log('💊 Criando medicamentos...');
+  let medCount = 0;
+
+  for (let i = 0; i < 30; i++) {
+    const dId = doctorIds[0];
+    const pId = patientIds[i];
+
+    await qr.query(
+      `INSERT INTO medications (id, name, dosage, frequency, times, startDate, isActive, isFinished, doctorId, patientId, createdAt, updatedAt) VALUES (UUID(), 'Losartana 50mg', '1 comprimido', 'once_daily', '["08:00"]', CURDATE(), 1, 0, ?, ?, NOW(), NOW())`,
+      [dId, pId],
+    );
+    await qr.query(
+      `INSERT INTO medications (id, name, dosage, frequency, times, startDate, isActive, isFinished, doctorId, patientId, createdAt, updatedAt) VALUES (UUID(), 'Metformina 850mg', '1 comprimido', 'twice_daily', '["08:00","20:00"]', CURDATE(), 1, 0, ?, ?, NOW(), NOW())`,
+      [dId, pId],
+    );
+    await qr.query(
+      `INSERT INTO medications (id, name, dosage, frequency, times, startDate, isActive, isFinished, doctorId, patientId, createdAt, updatedAt) VALUES (UUID(), 'Omeprazol 20mg', '1 cápsula', 'once_daily', '["07:00"]', DATE_SUB(CURDATE(), INTERVAL 30 DAY), 0, 1, ?, ?, NOW(), NOW())`,
+      [dId, pId],
+    );
+    medCount += 3;
+  }
+  console.log(`   ✓ ${medCount} medicamentos`);
+
+  // ── 11. DOENÇAS (3 por paciente, primeiros 25) ──
+  console.log('🩺 Criando doenças...');
+  let diseaseCount = 0;
+
+  for (let i = 0; i < 25; i++) {
+    const dId = doctorIds[0];
+    const pId = patientIds[i];
+
+    await qr.query(
+      `INSERT INTO patient_diseases (id, name, status, diagnosisDate, patientId, doctorId, createdAt, updatedAt) VALUES (UUID(), 'Hipertensão Arterial', 'in_treatment', DATE_SUB(CURDATE(), INTERVAL 365 DAY), ?, ?, NOW(), NOW())`,
+      [pId, dId],
+    );
+    await qr.query(
+      `INSERT INTO patient_diseases (id, name, status, diagnosisDate, patientId, doctorId, createdAt, updatedAt) VALUES (UUID(), 'Diabetes Tipo 2', 'in_treatment', DATE_SUB(CURDATE(), INTERVAL 200 DAY), ?, ?, NOW(), NOW())`,
+      [pId, dId],
+    );
+    await qr.query(
+      `INSERT INTO patient_diseases (id, name, status, diagnosisDate, patientId, doctorId, createdAt, updatedAt) VALUES (UUID(), 'Hipotireoidismo', 'in_treatment', DATE_SUB(CURDATE(), INTERVAL 100 DAY), ?, ?, NOW(), NOW())`,
+      [pId, dId],
+    );
+    diseaseCount += 3;
+  }
+  console.log(`   ✓ ${diseaseCount} doenças`);
+
+  // ── 12. ALERGIAS (3 por paciente, primeiros 20) ──
+  console.log('⚠️  Criando alergias...');
+  let allergyCount = 0;
+
   for (let i = 0; i < 20; i++) {
-    const perm = permissionRepo.create({
-      doctorId: savedAdmin.id,
-      patientId: savedPatients[i].id,
-      isActive: true,
-    });
-    await permissionRepo.save(perm);
-  }
+    const dId = doctorIds[0];
+    const pId = patientIds[i];
 
-  // Cada médico: acesso a 10 pacientes
-  for (let docIdx = 0; docIdx < savedDoctors.length; docIdx++) {
-    const startIdx = 20 + docIdx * 10;
-    for (let i = startIdx; i < startIdx + 10 && i < savedPatients.length; i++) {
-      const perm = permissionRepo.create({
-        doctorId: savedDoctors[docIdx].id,
-        patientId: savedPatients[i].id,
-        isActive: true,
-      });
-      await permissionRepo.save(perm);
-    }
+    await qr.query(
+      `INSERT INTO patient_allergies (id, name, severity, reaction, patientId, doctorId, createdAt) VALUES (UUID(), 'Dipirona', 'severe', 'Edema de glote', ?, ?, NOW())`,
+      [pId, dId],
+    );
+    await qr.query(
+      `INSERT INTO patient_allergies (id, name, severity, reaction, patientId, doctorId, createdAt) VALUES (UUID(), 'Penicilina', 'moderate', 'Urticária generalizada', ?, ?, NOW())`,
+      [pId, dId],
+    );
+    await qr.query(
+      `INSERT INTO patient_allergies (id, name, severity, reaction, patientId, doctorId, createdAt) VALUES (UUID(), 'Frutos do mar', 'mild', 'Coceira leve', ?, ?, NOW())`,
+      [pId, dId],
+    );
+    allergyCount += 3;
   }
+  console.log(`   ✓ ${allergyCount} alergias`);
 
-  // ── Resumo ─────────────────────────────────────────────────────────────────
-  console.log('');
-  console.log('✅ Seed finalizado!');
-  console.log('═══════════════════════════════════════════════');
-  console.log(`🏥 Clínica: ${savedClinic.name} (${savedClinic.id})`);
-  console.log(`👨‍⚕️ Admin: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
-  console.log(`👩‍⚕️ Médicos: ${savedDoctors.length} (mesma senha)`);
-  console.log(`🧑‍🤝‍🧑 Pacientes: ${savedPatients.length}`);
-  console.log(`🔑 Permissões: ${20 + savedDoctors.length * 10}`);
-  console.log('═══════════════════════════════════════════════');
-  console.log('');
-  console.log('Médicos da clínica:');
-  for (const doc of savedDoctors) {
-    console.log(`  • ${doc.name} (${doc.email}) — ${doc.specialty}`);
+  // ── 13. VACINAS (3 por paciente, primeiros 20) ──
+  console.log('💉 Criando vacinas...');
+  let vaccineCount = 0;
+
+  for (let i = 0; i < 20; i++) {
+    const dId = doctorIds[0];
+    const pId = patientIds[i];
+
+    await qr.query(
+      `INSERT INTO patient_vaccines (id, name, dose, applicationDate, laboratory, patientId, doctorId, createdAt) VALUES (UUID(), 'COVID-19 Pfizer', '3ª dose', '2024-03-15', 'Pfizer/BioNTech', ?, ?, NOW())`,
+      [pId, dId],
+    );
+    await qr.query(
+      `INSERT INTO patient_vaccines (id, name, dose, applicationDate, laboratory, patientId, doctorId, createdAt) VALUES (UUID(), 'Influenza 2024', 'Dose única', '2024-04-20', 'Butantan', ?, ?, NOW())`,
+      [pId, dId],
+    );
+    await qr.query(
+      `INSERT INTO patient_vaccines (id, name, dose, applicationDate, laboratory, patientId, doctorId, createdAt) VALUES (UUID(), 'Hepatite B', '3ª dose', '2023-08-10', 'Fiocruz', ?, ?, NOW())`,
+      [pId, dId],
+    );
+    vaccineCount += 3;
   }
+  console.log(`   ✓ ${vaccineCount} vacinas`);
+
+  // ── 14. DEPENDENTES (10 pacientes terão dependentes) ──
+  console.log('👶 Criando dependentes...');
+  let depCount = 0;
+
+  for (let i = 0; i < 10; i++) {
+    const pId = patientIds[i];
+    const depName = `Dependente de Pac ${i + 1}`;
+    const depGender = i % 2 === 0 ? 'Feminino' : 'Masculino';
+    const depBirth = new Date();
+    depBirth.setDate(depBirth.getDate() - (i * 365 + 1000));
+    const depBirthStr = depBirth.toISOString().split('T')[0];
+
+    await qr.query(
+      `INSERT INTO dependents (id, name, gender, type, birthDate, adminResponsibleId, createdAt, updatedAt) VALUES (UUID(), ?, ?, 'filho', ?, ?, NOW(), NOW())`,
+      [depName, depGender, depBirthStr, pId],
+    );
+    const depRows = await qr.query(
+      `SELECT id FROM dependents WHERE adminResponsibleId = ? ORDER BY createdAt DESC LIMIT 1`,
+      [pId],
+    );
+    const depId = depRows[0].id;
+    await qr.query(`INSERT INTO dependent_responsibles (dependentId, patientId) VALUES (?, ?)`, [
+      depId,
+      pId,
+    ]);
+    depCount++;
+  }
+  console.log(`   ✓ ${depCount} dependentes`);
+
+  await qr.release();
+
+  // ── RESUMO ──
+  console.log('');
+  console.log('═══════════════════════════════════════════════');
+  console.log('  ✅ Seed finalizado!');
+  console.log('═══════════════════════════════════════════════');
+  console.log(`  🏥 Clínica:      1 (Clínica Hipócrates)`);
+  console.log(`  👨‍⚕️ Médicos:      ${doctorIds.length}`);
+  console.log(`  🧑‍🤝‍🧑 Pacientes:    ${patientIds.length}`);
+  console.log(`  🔑 Permissões:   ${permCount}`);
+  console.log(`  📅 Consultas:    ${aptCount}`);
+  console.log(`  🔬 Exames:       ${examCount}`);
+  console.log(`  💊 Medicamentos: ${medCount}`);
+  console.log(`  🩺 Doenças:      ${diseaseCount}`);
+  console.log(`  ⚠️  Alergias:     ${allergyCount}`);
+  console.log(`  💉 Vacinas:      ${vaccineCount}`);
+  console.log(`  👶 Dependentes:  ${depCount}`);
+  console.log('');
+  console.log('  Login: hipocrates@email.com / Fernando958969++');
+  console.log('  (Todos os emails usam a mesma senha)');
+  console.log('═══════════════════════════════════════════════');
+  console.log('');
 
   await AppDataSource.destroy();
 }
 
-// Executar se chamado diretamente
-if (require.main === module) {
-  seedDatabase().catch((error) => {
-    console.error('❌ Erro ao executar seed:', error.message || error);
-    process.exit(1);
-  });
-}
+run().catch(async (error) => {
+  console.error('❌ Erro ao executar seed:', error.message || error);
+  if (AppDataSource.isInitialized) {
+    await AppDataSource.destroy();
+  }
+  process.exit(1);
+});
