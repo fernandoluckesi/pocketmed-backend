@@ -32,14 +32,24 @@ import { PatientAccessLog } from '../entities/patient-access-log.entity';
 import { PatientDisease } from '../entities/patient-disease.entity';
 import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
+import { ClinicDoctorInvite } from '../clinic-doctor-association/entities/clinic-doctor-invite.entity';
 
 const AppDataSource = new DataSource({
   type: 'mysql',
   host: process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MYSQLHOST || 'localhost',
   port: Number(process.env.DB_PORT || process.env.MYSQL_PORT || process.env.MYSQLPORT || 3306),
-  username: process.env.DB_USERNAME || process.env.MYSQL_USER || process.env.MYSQLUSER || 'pocketmed_user',
-  password: process.env.DB_PASSWORD || process.env.MYSQL_PASSWORD || process.env.MYSQLPASSWORD || 'pocketmed_pass',
-  database: process.env.DB_DATABASE || process.env.MYSQL_DATABASE || process.env.MYSQLDATABASE || 'pocketmed',
+  username:
+    process.env.DB_USERNAME || process.env.MYSQL_USER || process.env.MYSQLUSER || 'pocketmed_user',
+  password:
+    process.env.DB_PASSWORD ||
+    process.env.MYSQL_PASSWORD ||
+    process.env.MYSQLPASSWORD ||
+    'pocketmed_pass',
+  database:
+    process.env.DB_DATABASE ||
+    process.env.MYSQL_DATABASE ||
+    process.env.MYSQLDATABASE ||
+    'pocketmed',
   entities: [
     Patient,
     Doctor,
@@ -72,6 +82,7 @@ const AppDataSource = new DataSource({
     PatientDisease,
     PatientAllergy,
     PatientVaccine,
+    ClinicDoctorInvite,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

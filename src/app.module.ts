@@ -62,6 +62,8 @@ import { AuditModule } from './audit/audit.module';
 import { SecretariesModule } from './secretaries/secretaries.module';
 import { CepModule } from './cep/cep.module';
 import { AuditEvent } from './audit/entities/audit-event.entity';
+import { ClinicDoctorInvite } from './clinic-doctor-association/entities/clinic-doctor-invite.entity';
+import { ClinicDoctorAssociationModule } from './clinic-doctor-association/clinic-doctor-association.module';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
 import { AuditContextInterceptor } from './audit/audit-context.interceptor';
 
@@ -138,6 +140,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           PatientVaccine,
           Secretary,
           AuditEvent,
+          ClinicDoctorInvite,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -165,6 +168,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     AuditModule,
     SecretariesModule,
     CepModule,
+    ClinicDoctorAssociationModule,
   ],
   controllers: [AppController],
   providers: [
