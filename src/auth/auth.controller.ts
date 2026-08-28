@@ -244,6 +244,15 @@ export class AuthController {
     return this.authService.verifyEmail(user.userId, user.type, dto.code);
   }
 
+  @Post('profile/send-verification')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Send verification code for profile update' })
+  @ApiResponse({ status: 200, description: 'Verification code sent to email' })
+  async sendProfileUpdateVerification(@CurrentUser() user: any) {
+    return this.authService.sendProfileUpdateVerification(user.userId, user.type);
+  }
+
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
@@ -253,7 +262,17 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Profile updated' })
   async updateProfile(
     @CurrentUser() user: any,
-    @Body() body: { name?: string; phone?: string; gender?: string; birthDate?: string; specialty?: string; crm?: string; rqe?: string },
+    @Body()
+    body: {
+      name?: string;
+      phone?: string;
+      gender?: string;
+      birthDate?: string;
+      specialty?: string;
+      crm?: string;
+      rqe?: string;
+      verificationCode?: string;
+    },
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.authService.updateProfile(user.userId, user.type, body, file);

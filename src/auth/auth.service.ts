@@ -1266,6 +1266,24 @@ export class AuthService {
     }
   }
 
+  async sendProfileUpdateVerification(userId: string, userType: string) {
+    const user = await this.findUserById(userId, userType);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const verificationCode = this.generateVerificationCode();
+    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpiry = verificationCodeExpiry;
+
+    await this.saveUser(user);
+    await this.emailService.sendEmailVerificationCode(user.email, verificationCode, user.name);
+
+    return { message: 'Verification code sent to your email' };
+  }
+
   async updateProfile(
     userId: string,
     userType: string,
@@ -1277,9 +1295,43 @@ export class AuthService {
       specialty?: string;
       crm?: string;
       rqe?: string;
+      verificationCode?: string;
     },
     file?: Express.Multer.File,
   ) {
+    const hasDataChanges =
+      data.name ||
+      data.phone ||
+      data.gender ||
+      data.birthDate ||
+      data.specialty ||
+      data.crm ||
+      data.rqe !== undefined;
+    // Require verification code for data changes (not for photo-only updates)
+    if (hasDataChanges) {
+      if (!data.verificationCode) {
+        throw new BadRequestException('Verification code is required to update profile data');
+      }
+
+      const user = await this.findUserById(userId, userType);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.verificationCode !== data.verificationCode) {
+        throw new BadRequestException('Invalid verification code');
+      }
+
+      if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
+        throw new BadRequestException('Verification code expired');
+      }
+
+      // Clear the code after successful validation
+      user.verificationCode = null;
+      user.verificationCodeExpiry = null;
+      await this.saveUser(user);
+    }
+
     let profileImageUrl: string | null = null;
     if (file) {
       try {
