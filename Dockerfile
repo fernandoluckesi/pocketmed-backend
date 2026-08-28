@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 RUN apk add --no-cache python3 make g++
 
@@ -11,7 +11,7 @@ COPY . .
 RUN npm run build
 
 # ── Production image ──────────────────────────────────────────────────────────
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Install netcat for DB readiness check and build tools for native modules
 RUN apk add --no-cache netcat-openbsd python3 make g++
