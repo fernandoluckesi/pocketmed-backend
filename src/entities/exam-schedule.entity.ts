@@ -39,6 +39,12 @@ export class ExamSchedule {
   })
   status: ExamScheduleStatus;
 
+  @Column({ type: 'text', nullable: true })
+  resultText: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  resultFileUrl: string | null;
+
   @OneToMany(() => ExamScheduleItem, (item) => item.examSchedule)
   items: ExamScheduleItem[];
 
