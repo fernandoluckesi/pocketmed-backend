@@ -1,5 +1,20 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { ExamSchedulingService } from './exam-scheduling.service';
 import { CreateExamScheduleDto } from './dto/create-exam-schedule.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -40,14 +55,38 @@ export class ExamSchedulingController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update status or scheduledDateTime of an exam schedule' })
+  @ApiOperation({ summary: 'Update status, scheduledDateTime or exams of an exam schedule' })
   @ApiResponse({ status: 200, description: 'Updated successfully' })
   async update(
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body() body: { status?: string; scheduledDateTime?: string },
+    @Body()
+    body: {
+      status?: string;
+      scheduledDateTime?: string;
+      exams?: { examCatalogId?: string | null; customExamName?: string | null }[];
+    },
   ) {
     return this.examSchedulingService.update(id, user.userId, body);
+  }
+
+  @Patch(':id/result')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 15 * 1024 * 1024 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Save the exam result (text and/or file) and mark as confirmed' })
+  @ApiResponse({ status: 200, description: 'Result saved successfully' })
+  async saveResult(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() body: { resultText?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.examSchedulingService.saveResult(id, user.userId, body, file);
   }
 
   @Delete(':id')
