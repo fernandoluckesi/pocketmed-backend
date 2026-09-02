@@ -196,7 +196,7 @@ function getPatientBirth(i: number): string {
 async function run() {
   console.log('');
   console.log('═══════════════════════════════════════════════');
-  console.log('  PocketMed — Seed Completo (TypeScript)');
+  console.log('  Hispora — Seed Completo (TypeScript)');
   console.log('═══════════════════════════════════════════════');
   console.log('');
 

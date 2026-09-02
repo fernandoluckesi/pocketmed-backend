@@ -5,7 +5,7 @@ export class AppService {
   getHealth() {
     return {
       status: 'ok',
-      message: 'PocketMed API is running',
+      message: 'Hispora API is running',
       timestamp: new Date().toISOString(),
     };
   }

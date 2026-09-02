@@ -28,7 +28,7 @@ export async function seedFinancial() {
   const cashflowRepo = AppDataSource.getRepository(FinancialCashflowEntry);
 
   // Find the seed clinic
-  const clinic = await clinicRepo.findOne({ where: { name: 'Clínica PocketMed Seed' } });
+  const clinic = await clinicRepo.findOne({ where: { name: 'Clínica Hispora Seed' } });
   if (!clinic) {
     console.log('⚠️  Clínica seed não encontrada. Execute seed:clinic primeiro.');
     return;
@@ -556,7 +556,7 @@ export async function seedFinancial() {
       },
       {
         category: 'Tecnologia',
-        provider: 'PocketMed SaaS',
+        provider: 'Hispora SaaS',
         description: 'Assinatura plataforma',
         grossValue: 599,
         status: 'PAGO',

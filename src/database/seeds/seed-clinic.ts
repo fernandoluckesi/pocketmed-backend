@@ -21,12 +21,12 @@ export async function seedClinic() {
 
   // ── Clínica ──────────────────────────────────────────────────────────────────
   let clinic = await clinicRepository.findOne({
-    where: { name: 'Clínica PocketMed Seed' },
+    where: { name: 'Clínica Hispora Seed' },
   });
 
   if (!clinic) {
     clinic = clinicRepository.create({
-      name: 'Clínica PocketMed Seed',
+      name: 'Clínica Hispora Seed',
       cnpj: '12.345.678/0001-99',
       isActive: true,
     });
@@ -40,7 +40,7 @@ export async function seedClinic() {
 
   if (!adminDoctor) {
     adminDoctor = doctorRepository.create({
-      name: 'Admin Clínica PocketMed',
+      name: 'Admin Clínica Hispora',
       email: 'admin.clinic@pocketmed.com',
       password: passwordHash,
       gender: 'male',
@@ -78,7 +78,7 @@ export async function seedClinic() {
 
   if (!clinicDoctor) {
     clinicDoctor = doctorRepository.create({
-      name: 'Médico Clínica PocketMed',
+      name: 'Médico Clínica Hispora',
       email: 'doctor.clinic@pocketmed.com',
       password: passwordHash,
       gender: 'female',
@@ -116,7 +116,7 @@ export async function seedClinic() {
 
   if (!secretary) {
     secretary = doctorRepository.create({
-      name: 'Secretária Clínica PocketMed',
+      name: 'Secretária Clínica Hispora',
       email: 'secretary.clinic@pocketmed.com',
       password: passwordHash,
       gender: 'female',

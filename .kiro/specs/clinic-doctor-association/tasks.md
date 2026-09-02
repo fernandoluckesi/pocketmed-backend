@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implementação do sistema de associação entre clínicas e médicos na plataforma PocketMed. O plano segue uma abordagem incremental: primeiro a infraestrutura (entidade, migration, módulo), depois a lógica de convites, respostas, memberships, pesquisa e dashboard, com testes intercalados.
+Implementação do sistema de associação entre clínicas e médicos na plataforma Hispora. O plano segue uma abordagem incremental: primeiro a infraestrutura (entidade, migration, módulo), depois a lógica de convites, respostas, memberships, pesquisa e dashboard, com testes intercalados.
 
 ## Tasks
 

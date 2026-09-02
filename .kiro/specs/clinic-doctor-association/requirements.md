@@ -2,11 +2,11 @@
 
 ## Introduction
 
-Este documento define os requisitos para o sistema de associação entre clínicas e médicos na plataforma PocketMed. A funcionalidade permite que clínicas convidem médicos para se associarem, que médicos aceitem ou rejeitem convites, e que ambas as partes possam encerrar a associação. O sistema segue o padrão de solicitação/aprovação já existente para acesso médico-paciente, adaptado para o contexto clínica-médico.
+Este documento define os requisitos para o sistema de associação entre clínicas e médicos na plataforma Hispora. A funcionalidade permite que clínicas convidem médicos para se associarem, que médicos aceitem ou rejeitem convites, e que ambas as partes possam encerrar a associação. O sistema segue o padrão de solicitação/aprovação já existente para acesso médico-paciente, adaptado para o contexto clínica-médico.
 
 ## Glossary
 
-- **Sistema**: A plataforma PocketMed (backend NestJS + frontend React)
+- **Sistema**: A plataforma Hispora (backend NestJS + frontend React)
 - **Clínica**: Entidade organizacional cadastrada no sistema, representada pela entidade `Clinic`
 - **Médico**: Profissional de saúde cadastrado no sistema, representado pela entidade `Doctor`
 - **Admin_da_Clínica**: Médico com papel `admin` na `ClinicMembership` de uma clínica específica

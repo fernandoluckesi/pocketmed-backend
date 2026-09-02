@@ -28,7 +28,7 @@ export class EmailService {
       this.configService.get<string>('RESEND_API_KEY') || 're_placeholder_not_configured';
     this.resend = new Resend(apiKey);
     this.emailFrom =
-      this.configService.get<string>('EMAIL_FROM') || 'PocketMed <noreply@pocketmed.com>';
+      this.configService.get<string>('EMAIL_FROM') || 'Hispora <noreply@pocketmed.com>';
 
     if (!this.emailEnabled) {
       this.logger.warn(
@@ -112,10 +112,10 @@ export class EmailService {
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
                 <tr>
                   <td style="padding-right:10px;vertical-align:middle;">
-                    <img src="https://pocketmed-web-production.up.railway.app/assets/icon-C5HVUvPx.png" alt="PocketMed" width="36" height="36" style="border-radius:8px;display:block;" />
+                    <img src="https://pocketmed-web-production.up.railway.app/assets/icon-C5HVUvPx.png" alt="Hispora" width="36" height="36" style="border-radius:8px;display:block;" />
                   </td>
                   <td style="vertical-align:middle;">
-                    <span style="font-size:22px;font-weight:800;color:#1a1a2e;letter-spacing:-0.5px;">Pocket</span><span style="font-size:22px;font-weight:800;color:#1B3FCC;letter-spacing:-0.5px;">Med</span>
+                    <span style="font-size:22px;font-weight:800;color:#1a1a2e;letter-spacing:-0.5px;">His</span><span style="font-size:22px;font-weight:800;color:#1B3FCC;letter-spacing:-0.5px;">pora</span>
                   </td>
                 </tr>
               </table>
@@ -136,14 +136,18 @@ export class EmailService {
                 </tr>
               </table>
               <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">⏱ Este código expira em <strong>15 minutos</strong>.</p>
-              ${options.actionUrl ? `
+              ${
+                options.actionUrl
+                  ? `
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0;">
                 <tr>
                   <td align="center">
                     <a href="${options.actionUrl}" style="display:inline-block;background-color:#1B3FCC;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:12px;">${options.actionLabel || 'Ativar minha conta'}</a>
                   </td>
                 </tr>
-              </table>` : ''}
+              </table>`
+                  : ''
+              }
               <p style="margin:12px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">${options.footer}</p>
             </td>
           </tr>
@@ -152,7 +156,7 @@ export class EmailService {
             <td style="padding:20px 40px 28px;border-top:1px solid #f1f5f9;">
               <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;">
                 Este é um email automático. Não responda.<br>
-                © ${new Date().getFullYear()} PocketMed. Todos os direitos reservados.
+                © ${new Date().getFullYear()} Hispora. Todos os direitos reservados.
               </p>
             </td>
           </tr>
@@ -177,7 +181,7 @@ export class EmailService {
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: `${doctorName} adicionou você ao PocketMed`,
+        subject: `${doctorName} adicionou você ao Hispora`,
         html: this.buildInviteEmailHtml(patientName, doctorName),
       });
 
@@ -217,7 +221,7 @@ export class EmailService {
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
                 <tr>
                   <td style="background-color:rgba(255,255,255,0.15);border-radius:12px;padding:10px 14px;">
-                    <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">Pocket</span><span style="font-size:24px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">Med</span>
+                    <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">His</span><span style="font-size:24px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">pora</span>
                   </td>
                 </tr>
               </table>
@@ -229,10 +233,10 @@ export class EmailService {
             <td style="padding:36px 40px 24px;">
               <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1a1a2e;">Olá, ${patientName}!</h1>
               <p style="margin:0 0 20px;font-size:14px;color:#64748b;line-height:1.6;">
-                O(a) <strong>Dr(a). ${doctorName}</strong> cadastrou seus dados no PocketMed para que você tenha acesso ao seu prontuário digital.
+                O(a) <strong>Dr(a). ${doctorName}</strong> cadastrou seus dados no Hispora para que você tenha acesso ao seu prontuário digital.
               </p>
               <p style="margin:0 0 24px;font-size:14px;color:#64748b;line-height:1.6;">
-                Com o PocketMed você pode:
+                Com o Hispora você pode:
               </p>
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;">
                 <tr><td style="padding:4px 0;font-size:14px;color:#334155;">✓ Acessar consultas e resultados de exames</td></tr>
@@ -267,7 +271,7 @@ export class EmailService {
             <td style="padding:20px 40px 28px;border-top:1px solid #f1f5f9;">
               <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;">
                 Este é um email automático. Não responda.<br>
-                © ${new Date().getFullYear()} PocketMed. Todos os direitos reservados.
+                © ${new Date().getFullYear()} Hispora. Todos os direitos reservados.
               </p>
             </td>
           </tr>
@@ -288,12 +292,12 @@ export class EmailService {
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: 'Ative sua conta - PocketMed',
+        subject: 'Ative sua conta - Hispora',
         html: this.buildEmailHtml({
           userName,
           title: 'Código de ativação',
           message:
-            'Um profissional de saúde criou sua conta no PocketMed. Use o código abaixo para ativar sua conta e definir uma senha.',
+            'Um profissional de saúde criou sua conta no Hispora. Use o código abaixo para ativar sua conta e definir uma senha.',
           code,
           footer: 'Se você não reconhece esta solicitação, ignore este email.',
         }),
@@ -320,17 +324,20 @@ export class EmailService {
         return;
       }
 
-      const webUrl = this.configService.get<string>('WEB_URL') || 'https://pocketmed-web-production.up.railway.app';
+      const webUrl =
+        this.configService.get<string>('WEB_URL') ||
+        'https://pocketmed-web-production.up.railway.app';
       const activationUrl = `${webUrl}/activate-account?email=${encodeURIComponent(email)}`;
 
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: 'Ative sua conta - PocketMed',
+        subject: 'Ative sua conta - Hispora',
         html: this.buildEmailHtml({
           userName,
           title: 'Código de ativação',
-          message: 'Você foi convidado(a) para acessar o PocketMed. Use o código abaixo ou clique no botão para ativar sua conta e criar uma senha.',
+          message:
+            'Você foi convidado(a) para acessar o Hispora. Use o código abaixo ou clique no botão para ativar sua conta e criar uma senha.',
           code,
           footer: 'Se você não reconhece esta solicitação, ignore este email.',
           actionUrl: activationUrl,
@@ -362,14 +369,14 @@ export class EmailService {
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: 'Confirme seu email - PocketMed',
+        subject: 'Confirme seu email - Hispora',
         html: this.buildEmailHtml({
           userName,
           title: 'Código de verificação',
           message:
-            'Bem-vindo(a) ao PocketMed! Para concluir seu cadastro, insira o código abaixo no aplicativo.',
+            'Bem-vindo(a) ao Hispora! Para concluir seu cadastro, insira o código abaixo no aplicativo.',
           code,
-          footer: 'Se você não criou uma conta no PocketMed, ignore este email.',
+          footer: 'Se você não criou uma conta no Hispora, ignore este email.',
         }),
       });
 
@@ -397,12 +404,12 @@ export class EmailService {
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: 'Recuperação de Senha - PocketMed',
+        subject: 'Recuperação de Senha - Hispora',
         html: this.buildEmailHtml({
           userName,
           title: 'Código de recuperação',
           message:
-            'Você solicitou a recuperação de senha da sua conta PocketMed. Use o código abaixo para redefinir sua senha.',
+            'Você solicitou a recuperação de senha da sua conta Hispora. Use o código abaixo para redefinir sua senha.',
           code,
           footer:
             'Se você não solicitou a recuperação de senha, ignore este email. Sua senha permanecerá inalterada.',
@@ -433,12 +440,12 @@ export class EmailService {
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: 'Confirmação de Exclusão de Conta - PocketMed',
+        subject: 'Confirmação de Exclusão de Conta - Hispora',
         html: this.buildEmailHtml({
           userName,
           title: 'Código de confirmação',
           message:
-            'Você solicitou a exclusão permanente da sua conta PocketMed. Use o código abaixo para confirmar. Esta ação é irreversível.',
+            'Você solicitou a exclusão permanente da sua conta Hispora. Use o código abaixo para confirmar. Esta ação é irreversível.',
           code,
           footer:
             'Se você não solicitou a exclusão da conta, ignore este email e altere sua senha imediatamente.',

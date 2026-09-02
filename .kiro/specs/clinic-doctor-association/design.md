@@ -2,7 +2,7 @@
 
 ## Overview
 
-Este design descreve a implementação do sistema de associação entre clínicas e médicos na plataforma PocketMed. A funcionalidade segue o padrão de solicitação/aprovação já existente no sistema (similar ao `DoctorAccessRequest` para médico-paciente), adaptado para o contexto clínica-médico.
+Este design descreve a implementação do sistema de associação entre clínicas e médicos na plataforma Hispora. A funcionalidade segue o padrão de solicitação/aprovação já existente no sistema (similar ao `DoctorAccessRequest` para médico-paciente), adaptado para o contexto clínica-médico.
 
 O fluxo principal é:
 

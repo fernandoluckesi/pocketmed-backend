@@ -1,8 +1,8 @@
-# PocketMed API — Documentação do Sistema
+# Hispora API — Documentação do Sistema
 
 ## Visão Geral
 
-O PocketMed é uma plataforma de gerenciamento de histórico médico que conecta médicos, pacientes e clínicas. A API é construída com NestJS, TypeORM e MySQL.
+O Hispora é uma plataforma de gerenciamento de histórico médico que conecta médicos, pacientes e clínicas. A API é construída com NestJS, TypeORM e MySQL.
 
 - **Framework:** NestJS 10.x
 - **ORM:** TypeORM 0.3.x

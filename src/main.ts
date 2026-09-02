@@ -17,7 +17,7 @@ async function bootstrap() {
   );
 
   const config = new DocumentBuilder()
-    .setTitle('PocketMed API')
+    .setTitle('Hispora API')
     .setDescription('API para gerenciamento de histórico médico')
     .setVersion('1.0')
     .addBearerAuth(
