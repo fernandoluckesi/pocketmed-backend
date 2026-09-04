@@ -28,7 +28,7 @@ export class EmailService {
       this.configService.get<string>('RESEND_API_KEY') || 're_placeholder_not_configured';
     this.resend = new Resend(apiKey);
     this.emailFrom =
-      this.configService.get<string>('EMAIL_FROM') || 'Hispora <noreply@pocketmed.com>';
+      this.configService.get<string>('EMAIL_FROM') || 'Hispora <noreply@hispora.com.br>';
 
     if (!this.emailEnabled) {
       this.logger.warn(
