@@ -9,6 +9,8 @@ export class EmailService {
   private readonly emailMockFallback: boolean;
   private readonly resend: Resend;
   private readonly emailFrom: string;
+  private readonly webUrl: string;
+  private readonly logoUrl: string;
 
   constructor(private configService: ConfigService) {
     const nodeEnv = String(this.configService.get<string>('NODE_ENV') ?? 'development').trim();
@@ -29,6 +31,13 @@ export class EmailService {
     this.resend = new Resend(apiKey);
     this.emailFrom =
       this.configService.get<string>('EMAIL_FROM') || 'Hispora <noreply@hispora.com.br>';
+
+    // Base URL of the published web app (used for links and email logo asset).
+    this.webUrl = (
+      this.configService.get<string>('WEB_URL') || 'https://pocketmed-web-production.up.railway.app'
+    ).replace(/\/+$/, '');
+    // The brand icon lives in the web app's public/ folder (served at root).
+    this.logoUrl = this.configService.get<string>('EMAIL_LOGO_URL') || `${this.webUrl}/icon.png`;
 
     if (!this.emailEnabled) {
       this.logger.warn(
@@ -108,24 +117,25 @@ export class EmailService {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
           <!-- Header with brand -->
           <tr>
-            <td style="background-color:#f1f5f9;padding:28px 40px;text-align:center;">
+            <td style="background:linear-gradient(135deg,#0d47a1 0%,#1B3FCC 55%,#2B5AED 100%);padding:32px 40px;text-align:center;">
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
                 <tr>
-                  <td style="padding-right:10px;vertical-align:middle;">
-                    <img src="https://pocketmed-web-production.up.railway.app/assets/icon-C5HVUvPx.png" alt="Hispora" width="36" height="36" style="border-radius:8px;display:block;" />
+                  <td style="padding-right:12px;vertical-align:middle;">
+                    <img src="${this.logoUrl}" alt="Hispora" width="40" height="40" style="border-radius:10px;display:block;background-color:rgba(255,255,255,0.15);" />
                   </td>
                   <td style="vertical-align:middle;">
-                    <span style="font-size:22px;font-weight:800;color:#1a1a2e;letter-spacing:-0.5px;">His</span><span style="font-size:22px;font-weight:800;color:#1B3FCC;letter-spacing:-0.5px;">pora</span>
+                    <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">His</span><span style="font-size:26px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">pora</span>
                   </td>
                 </tr>
               </table>
+              <p style="margin:12px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Seu histórico de saúde, sempre com você</p>
             </td>
           </tr>
           <!-- Body -->
           <tr>
             <td style="padding:36px 40px 24px;">
               <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1a1a2e;">Olá, ${options.userName}!</h1>
-              <p style="margin:0 0 24px;font-size:14px;color:#64748b;line-height:1.6;">${options.message}</p>
+              <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6;">${options.message}</p>
               <!-- Code box -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
@@ -217,15 +227,18 @@ export class EmailService {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
           <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #1B3FCC 0%, #2B5AED 100%);padding:32px 40px;text-align:center;">
+            <td style="background: linear-gradient(135deg,#0d47a1 0%,#1B3FCC 55%,#2B5AED 100%);padding:32px 40px;text-align:center;">
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
                 <tr>
-                  <td style="background-color:rgba(255,255,255,0.15);border-radius:12px;padding:10px 14px;">
-                    <span style="font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">His</span><span style="font-size:24px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">pora</span>
+                  <td style="padding-right:12px;vertical-align:middle;">
+                    <img src="${this.logoUrl}" alt="Hispora" width="40" height="40" style="border-radius:10px;display:block;background-color:rgba(255,255,255,0.15);" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">His</span><span style="font-size:26px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">pora</span>
                   </td>
                 </tr>
               </table>
-              <p style="margin:12px 0 0;font-size:13px;color:rgba(255,255,255,0.75);">Seu prontuário sempre com você</p>
+              <p style="margin:12px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Seu histórico de saúde, sempre com você</p>
             </td>
           </tr>
           <!-- Body -->
@@ -297,9 +310,9 @@ export class EmailService {
           userName,
           title: 'Código de ativação',
           message:
-            'Um profissional de saúde criou sua conta no Hispora. Use o código abaixo para ativar sua conta e definir uma senha.',
+            'Um profissional de saúde criou sua conta no Hispora. Use o código abaixo para ativá-la e definir sua senha de acesso.',
           code,
-          footer: 'Se você não reconhece esta solicitação, ignore este email.',
+          footer: 'Se você não reconhece esta solicitação, pode ignorar este email com segurança.',
         }),
       });
 
@@ -324,10 +337,7 @@ export class EmailService {
         return;
       }
 
-      const webUrl =
-        this.configService.get<string>('WEB_URL') ||
-        'https://pocketmed-web-production.up.railway.app';
-      const activationUrl = `${webUrl}/activate-account?email=${encodeURIComponent(email)}`;
+      const activationUrl = `${this.webUrl}/activate-account?email=${encodeURIComponent(email)}`;
 
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
@@ -337,9 +347,9 @@ export class EmailService {
           userName,
           title: 'Código de ativação',
           message:
-            'Você foi convidado(a) para acessar o Hispora. Use o código abaixo ou clique no botão para ativar sua conta e criar uma senha.',
+            'Você foi convidado(a) para acessar o Hispora. Use o código abaixo ou clique no botão para ativar sua conta e criar sua senha.',
           code,
-          footer: 'Se você não reconhece esta solicitação, ignore este email.',
+          footer: 'Se você não reconhece esta solicitação, pode ignorar este email com segurança.',
           actionUrl: activationUrl,
           actionLabel: 'Ativar minha conta',
         }),
@@ -374,9 +384,9 @@ export class EmailService {
           userName,
           title: 'Código de verificação',
           message:
-            'Bem-vindo(a) ao Hispora! Para concluir seu cadastro, insira o código abaixo no aplicativo.',
+            'Bem-vindo(a) ao Hispora! Para concluir seu cadastro, insira o código de verificação abaixo no aplicativo.',
           code,
-          footer: 'Se você não criou uma conta no Hispora, ignore este email.',
+          footer: 'Se você não criou uma conta no Hispora, pode ignorar este email com segurança.',
         }),
       });
 
