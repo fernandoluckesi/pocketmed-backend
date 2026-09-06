@@ -1,10 +1,17 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { ExamSchedule, ExamScheduleStatus } from '../entities/exam-schedule.entity';
 import { ExamScheduleItem } from '../entities/exam-schedule-item.entity';
+import { Dependent } from '../entities/dependent.entity';
 import { CreateExamScheduleDto } from './dto/create-exam-schedule.dto';
 import { UploadService } from '../upload/upload.service';
+
+const SCHEDULE_RELATIONS = [
+  'items',
+  'items.examCatalog',
+  'items.examCatalog.category',
+];
 
 @Injectable()
 export class ExamSchedulingService {
@@ -13,8 +20,33 @@ export class ExamSchedulingService {
     private examScheduleRepository: Repository<ExamSchedule>,
     @InjectRepository(ExamScheduleItem)
     private examScheduleItemRepository: Repository<ExamScheduleItem>,
+    @InjectRepository(Dependent)
+    private dependentRepository: Repository<Dependent>,
     private readonly uploadService: UploadService,
   ) {}
+
+  /** IDs of the dependents the given patient is responsible for. */
+  private async getDependentIds(patientId: string): Promise<string[]> {
+    const dependents = await this.dependentRepository
+      .createQueryBuilder('dependent')
+      .leftJoin('dependent.responsibles', 'responsible')
+      .where('responsible.id = :patientId', { patientId })
+      .getMany();
+    return dependents.map((d) => d.id);
+  }
+
+  /** Ensure the patient is a responsible for the dependent, or throw. */
+  private async assertDependentAccess(
+    patientId: string,
+    dependentId: string,
+  ): Promise<void> {
+    const dependentIds = await this.getDependentIds(patientId);
+    if (!dependentIds.includes(dependentId)) {
+      throw new ForbiddenException(
+        'Você não tem permissão para gerenciar agendamentos deste dependente.',
+      );
+    }
+  }
 
   async create(patientId: string, dto: CreateExamScheduleDto): Promise<ExamSchedule> {
     if (!dto.exams || dto.exams.length === 0) {
@@ -30,8 +62,14 @@ export class ExamSchedulingService {
       );
     }
 
+    // When scheduling for a dependent, verify the caller is a responsible.
+    if (dto.dependentId) {
+      await this.assertDependentAccess(patientId, dto.dependentId);
+    }
+
     const schedule = this.examScheduleRepository.create({
       patientId,
+      dependentId: dto.dependentId ?? null,
       scheduledDateTime,
       status: ExamScheduleStatus.PENDING,
     });
@@ -50,23 +88,52 @@ export class ExamSchedulingService {
 
     return this.examScheduleRepository.findOne({
       where: { id: savedSchedule.id },
-      relations: ['items', 'items.examCatalog', 'items.examCatalog.category'],
+      relations: SCHEDULE_RELATIONS,
     });
   }
 
   async findAllByPatient(patientId: string): Promise<ExamSchedule[]> {
+    const dependentIds = await this.getDependentIds(patientId);
+
+    // The patient's own schedules (dependentId = NULL) plus their dependents'.
+    const where: any[] = [{ patientId, dependentId: IsNull() }];
+    if (dependentIds.length > 0) {
+      where.push({ dependentId: In(dependentIds) });
+    }
+
     return this.examScheduleRepository.find({
-      where: { patientId },
-      relations: ['items', 'items.examCatalog', 'items.examCatalog.category'],
+      where,
+      relations: SCHEDULE_RELATIONS,
       order: { scheduledDateTime: 'ASC' },
     });
   }
 
+  /**
+   * Finds a schedule and authorizes the caller: allowed when it's the patient's
+   * own schedule OR it belongs to a dependent the patient is responsible for.
+   */
   async findOneByPatient(id: string, patientId: string): Promise<ExamSchedule | null> {
-    return this.examScheduleRepository.findOne({
-      where: { id, patientId },
-      relations: ['items', 'items.examCatalog', 'items.examCatalog.category'],
+    const schedule = await this.examScheduleRepository.findOne({
+      where: { id },
+      relations: SCHEDULE_RELATIONS,
     });
+    if (!schedule) {
+      return null;
+    }
+
+    const isOwn = schedule.patientId === patientId && !schedule.dependentId;
+    if (isOwn) {
+      return schedule;
+    }
+
+    if (schedule.dependentId) {
+      const dependentIds = await this.getDependentIds(patientId);
+      if (dependentIds.includes(schedule.dependentId)) {
+        return schedule;
+      }
+    }
+
+    return null;
   }
 
   async update(

@@ -51,4 +51,15 @@ export class CreateExamScheduleDto {
   })
   @IsDateString()
   scheduledDateTime: string;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description:
+      'Dependent ID when scheduling for a dependent. Omit to schedule for the authenticated patient.',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID()
+  dependentId?: string | null;
 }

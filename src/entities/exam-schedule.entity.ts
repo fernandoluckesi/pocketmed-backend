@@ -9,6 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Patient } from './patient.entity';
+import { Dependent } from './dependent.entity';
 import { ExamScheduleItem } from './exam-schedule-item.entity';
 
 export enum ExamScheduleStatus {
@@ -28,6 +29,15 @@ export class ExamSchedule {
   @ManyToOne(() => Patient)
   @JoinColumn({ name: 'patientId' })
   patient: Patient;
+
+  // When set, the schedule belongs to this dependent (the responsible patient
+  // in patientId manages it). Null means it belongs to the patient directly.
+  @Column({ type: 'uuid', nullable: true })
+  dependentId: string | null;
+
+  @ManyToOne(() => Dependent, { nullable: true })
+  @JoinColumn({ name: 'dependentId' })
+  dependent: Dependent | null;
 
   @Column({ type: 'timestamp' })
   scheduledDateTime: Date;

@@ -11,6 +11,7 @@ export class EmailService {
   private readonly emailFrom: string;
   private readonly webUrl: string;
   private readonly logoUrl: string;
+  private readonly logoHorizontalUrl: string;
 
   constructor(private configService: ConfigService) {
     const nodeEnv = String(this.configService.get<string>('NODE_ENV') ?? 'development').trim();
@@ -38,6 +39,11 @@ export class EmailService {
     ).replace(/\/+$/, '');
     // The brand icon lives in the web app's public/ folder (served at root).
     this.logoUrl = this.configService.get<string>('EMAIL_LOGO_URL') || `${this.webUrl}/icon.png`;
+    // Horizontal white wordmark logo (already contains the "Hispora" name),
+    // used in the email header on the blue gradient background.
+    this.logoHorizontalUrl =
+      this.configService.get<string>('EMAIL_LOGO_HORIZONTAL_URL') ||
+      `${this.webUrl}/hispora-horizontal-branco.png`;
 
     if (!this.emailEnabled) {
       this.logger.warn(
@@ -128,16 +134,7 @@ export class EmailService {
           <!-- Header with brand -->
           <tr>
             <td style="background:linear-gradient(135deg,#0d47a1 0%,#1B3FCC 55%,#2B5AED 100%);padding:32px 40px;text-align:center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
-                <tr>
-                  <td style="padding-right:12px;vertical-align:middle;">
-                    <img src="${this.logoUrl}" alt="Hispora" width="40" height="40" style="border-radius:10px;display:block;background-color:rgba(255,255,255,0.15);" />
-                  </td>
-                  <td style="vertical-align:middle;">
-                    <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">His</span><span style="font-size:26px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">pora</span>
-                  </td>
-                </tr>
-              </table>
+              <img src="${this.logoHorizontalUrl}" alt="Hispora" height="40" style="display:block;margin:0 auto;max-width:200px;height:40px;" />
               <p style="margin:12px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Seu histórico de saúde, sempre com você</p>
             </td>
           </tr>
@@ -238,16 +235,7 @@ export class EmailService {
           <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg,#0d47a1 0%,#1B3FCC 55%,#2B5AED 100%);padding:32px 40px;text-align:center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto;">
-                <tr>
-                  <td style="padding-right:12px;vertical-align:middle;">
-                    <img src="${this.logoUrl}" alt="Hispora" width="40" height="40" style="border-radius:10px;display:block;background-color:rgba(255,255,255,0.15);" />
-                  </td>
-                  <td style="vertical-align:middle;">
-                    <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">His</span><span style="font-size:26px;font-weight:800;color:#a8c4ff;letter-spacing:-0.5px;">pora</span>
-                  </td>
-                </tr>
-              </table>
+              <img src="${this.logoHorizontalUrl}" alt="Hispora" height="40" style="display:block;margin:0 auto;max-width:200px;height:40px;" />
               <p style="margin:12px 0 0;font-size:13px;color:rgba(255,255,255,0.8);">Seu histórico de saúde, sempre com você</p>
             </td>
           </tr>
