@@ -297,6 +297,37 @@ export class PatientsService {
         relations: ['responsibles'],
       });
       if (dependent) {
+        // Authorize access to the dependent. A patient may only access a
+        // dependent they are a responsible for; a doctor must have permission
+        // over the dependent (or one of its responsibles). This guards all the
+        // dependent's medical sub-resources (diseases/allergies/vaccines),
+        // which resolve the dependent through this method.
+        const responsibleIds = (dependent.responsibles || []).map((r) => r.id);
+
+        if (userType === 'patient') {
+          if (!userId || !responsibleIds.includes(userId)) {
+            throw new ForbiddenException(
+              'You do not have permission to access this dependent',
+            );
+          }
+        } else if (userType === 'doctor') {
+          let hasPermission = false;
+          for (const responsibleId of responsibleIds) {
+            const permission = await this.permissionRepository.findOne({
+              where: { doctorId: userId, patientId: responsibleId, isActive: true },
+            });
+            if (permission) {
+              hasPermission = true;
+              break;
+            }
+          }
+          if (!hasPermission) {
+            throw new ForbiddenException(
+              'You do not have permission to access this dependent',
+            );
+          }
+        }
+
         return {
           id: dependent.id,
           name: dependent.name,

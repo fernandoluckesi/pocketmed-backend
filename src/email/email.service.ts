@@ -28,7 +28,7 @@ export class EmailService {
       this.configService.get<string>('RESEND_API_KEY') || 're_placeholder_not_configured';
     this.resend = new Resend(apiKey);
     this.emailFrom =
-      this.configService.get<string>('EMAIL_FROM') || 'Hispora <noreply@pocketmed.com>';
+      this.configService.get<string>('EMAIL_FROM') || 'Hispora <noreply@hispora.com.br>';
 
     if (!this.emailEnabled) {
       this.logger.warn(
@@ -66,7 +66,17 @@ export class EmailService {
       message.includes('unauthorized') ||
       message.includes('forbidden') ||
       message.includes('rate limit') ||
-      message.includes('timeout')
+      message.includes('timeout') ||
+      // Resend rejects sends from an unverified/misconfigured sender domain.
+      // In non-production setups (EMAIL_MOCK_FALLBACK=true) we log the code
+      // instead of breaking the whole flow with a 503.
+      message.includes('domain') ||
+      message.includes('not verified') ||
+      message.includes('verify a domain') ||
+      message.includes('validation_error') ||
+      message.includes('validation error') ||
+      message.includes('invalid') ||
+      message.includes('from')
     );
   }
 

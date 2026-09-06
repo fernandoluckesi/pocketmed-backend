@@ -1,20 +1,68 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ExamCatalog } from '../entities/exam-catalog.entity';
+
+/** Max time we allow OCR to run before giving up (keeps us under the gateway
+ * timeout so a slow image returns a clean error instead of killing the app). */
+const OCR_TIMEOUT_MS = 25_000;
 
 /**
  * Extracts text from an uploaded medical order (image via OCR or PDF text
  * extraction) and matches the content against the exam catalog.
  */
 @Injectable()
-export class ExamOrderParserService {
+export class ExamOrderParserService implements OnModuleInit {
   private readonly logger = new Logger(ExamOrderParserService.name);
+
+  /**
+   * A single Tesseract worker is created lazily and reused across requests.
+   * Creating a worker downloads the WASM core and the language traineddata,
+   * which is expensive; doing it once (instead of per request, as the old
+   * top-level `recognize()` did) avoids repeated downloads that made image
+   * parsing time out on the hosting platform.
+   */
+  private ocrWorkerPromise: Promise<any> | null = null;
 
   constructor(
     @InjectRepository(ExamCatalog)
     private readonly examCatalogRepository: Repository<ExamCatalog>,
   ) {}
+
+  onModuleInit(): void {
+    // Warm the OCR worker in the background at startup so the first image
+    // request doesn't pay the (slow) worker-creation/traineddata-download cost.
+    // Failure here is non-fatal — it just means the first request warms it.
+    this.getOcrWorker().catch((err) => {
+      this.logger.warn(
+        `OCR worker warm-up failed (will retry on first use): ${
+          (err as Error).message
+        }`,
+      );
+    });
+  }
+
+  private async getOcrWorker(): Promise<any> {
+    if (!this.ocrWorkerPromise) {
+      this.ocrWorkerPromise = (async () => {
+        const { createWorker } = await import('tesseract.js');
+        // Portuguese only — medical orders here are in pt-BR. Loading a single
+        // language roughly halves the traineddata download and per-run cost
+        // versus 'por+eng'.
+        return createWorker('por');
+      })().catch((err) => {
+        // Reset so a later request can retry worker creation.
+        this.ocrWorkerPromise = null;
+        throw err;
+      });
+    }
+    return this.ocrWorkerPromise;
+  }
 
   async parseOrder(file: Express.Multer.File): Promise<{
     matchedExams: Pick<ExamCatalog, 'id' | 'name'>[];
@@ -69,10 +117,28 @@ export class ExamOrderParserService {
   }
 
   private async extractImageText(buffer: Buffer): Promise<string> {
-    const { recognize } = await import('tesseract.js');
-    // Portuguese + English language data for medical orders
-    const { data } = await recognize(buffer, 'por+eng');
-    return data.text ?? '';
+    const worker = await this.getOcrWorker();
+
+    // Guard the recognize call with a timeout. OCR on a large photo can run for
+    // tens of seconds; without this the request would hang until the hosting
+    // gateway kills the whole process ("Application failed to respond").
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('OCR timed out')),
+        OCR_TIMEOUT_MS,
+      );
+    });
+
+    try {
+      const result = (await Promise.race([
+        worker.recognize(buffer),
+        timeout,
+      ])) as { data?: { text?: string } };
+      return result?.data?.text ?? '';
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /** Lowercase, strip accents, collapse whitespace. */
