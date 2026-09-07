@@ -474,4 +474,112 @@ export class EmailService {
       this.rethrowEmailError(error, 'Error sending account deletion email');
     }
   }
+
+  /** Sends the confirmation code to the NEW email the user wants to switch to. */
+  async sendEmailChangeCode(email: string, code: string, userName: string) {
+    try {
+      if (!this.ensureEmailEnabledOrLogFallback(email, code, 'Email change')) {
+        return;
+      }
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: 'Confirme seu novo email - Hispora',
+        html: this.buildEmailHtml({
+          userName,
+          title: 'Código de confirmação',
+          message:
+            'Você solicitou a alteração do email da sua conta Hispora para este endereço. Use o código abaixo no aplicativo para confirmar a troca.',
+          code,
+          footer:
+            'Se você não solicitou esta alteração, ignore este email. Nenhuma mudança será feita sem a confirmação do código.',
+        }),
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Email change code sent to ${email}`);
+    } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        this.logger.warn(`Falling back to mock email change delivery for ${email}.`);
+        this.logMockCode(email, code, 'Email change');
+        return;
+      }
+      this.rethrowEmailError(error, 'Error sending email change code');
+    }
+  }
+
+  /**
+   * Notifies the OLD email that the account's email was changed, so the owner
+   * can react if they didn't request it (account-takeover defense).
+   */
+  async sendEmailChangedNotice(oldEmail: string, newEmail: string, userName: string) {
+    try {
+      // Reuse the enable/mock guard; there is no code, so log a notice on fallback.
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Email-changed notice for ${oldEmail} not sent because EMAIL_ENABLED=false.`,
+        );
+        return;
+      }
+
+      const maskedNew = this.maskEmail(newEmail);
+      const html = `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f7fa;padding:40px 20px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <tr><td style="background:linear-gradient(135deg,#0d47a1 0%,#1B3FCC 55%,#2B5AED 100%);padding:32px 40px;text-align:center;">
+          <img src="${this.logoHorizontalUrl}" alt="Hispora" height="40" style="display:block;margin:0 auto;max-width:200px;height:40px;" />
+        </td></tr>
+        <tr><td style="padding:36px 40px 24px;">
+          <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1a1a2e;">Olá, ${userName}!</h1>
+          <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6;">O email de acesso da sua conta Hispora foi alterado para <strong>${maskedNew}</strong>.</p>
+          <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6;">Se foi você, nenhuma ação é necessária.</p>
+          <p style="margin:0;font-size:14px;color:#b91c1c;line-height:1.6;font-weight:600;">Se você não reconhece esta alteração, entre em contato com o suporte imediatamente e altere sua senha, pois sua conta pode estar comprometida.</p>
+        </td></tr>
+        <tr><td style="padding:20px 40px 28px;border-top:1px solid #f1f5f9;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;">Este é um email automático. Não responda.<br>© ${new Date().getFullYear()} Hispora. Todos os direitos reservados.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: oldEmail,
+        subject: 'Seu email de acesso foi alterado - Hispora',
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Email-changed notice sent to ${oldEmail}`);
+    } catch (error) {
+      // Non-critical: never block the email change because the notice failed.
+      this.logger.warn(
+        `Could not send email-changed notice to ${oldEmail}: ${
+          (error as Error).message
+        }`,
+      );
+    }
+  }
+
+  /** Masks an email for display, e.g. "jo***@gmail.com". */
+  private maskEmail(email: string): string {
+    const [local, domain] = email.split('@');
+    if (!domain) return email;
+    const visible = local.slice(0, 2);
+    return `${visible}${'*'.repeat(Math.max(1, local.length - 2))}@${domain}`;
+  }
 }

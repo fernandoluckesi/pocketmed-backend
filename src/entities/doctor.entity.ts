@@ -59,6 +59,18 @@ export class Doctor {
   @Column({ type: 'timestamp', nullable: true })
   passwordResetCodeExpiry: Date;
 
+  // Secure email-change flow: the requested new email awaiting confirmation,
+  // plus the code sent to that new email and its expiry. Kept separate from
+  // verificationCode to avoid colliding with other verification flows.
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  pendingEmail: string | null;
+
+  @Column({ type: 'varchar', length: 6, nullable: true })
+  emailChangeCode: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  emailChangeCodeExpiry: Date | null;
+
   @Column({ type: 'boolean', default: false })
   emailVerified: boolean;
 

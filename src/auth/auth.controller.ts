@@ -24,6 +24,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { RequestEmailChangeDto } from './dto/request-email-change.dto';
+import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -220,6 +222,36 @@ export class AuthController {
       dto.oldPassword,
       dto.newPassword,
     );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('email-change/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary:
+      'Request an email change: validates the current password and sends a code to the new email',
+  })
+  @ApiResponse({ status: 200, description: 'Confirmation code sent to the new email' })
+  @ApiResponse({ status: 400, description: 'Wrong password, email in use or invalid' })
+  async requestEmailChange(@CurrentUser() user: any, @Body() dto: RequestEmailChangeDto) {
+    return this.authService.requestEmailChange(
+      user.userId,
+      user.type,
+      dto.newEmail,
+      dto.password,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('email-change/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Confirm the email change with the code sent to the new email' })
+  @ApiResponse({ status: 200, description: 'Email changed successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired code' })
+  async confirmEmailChange(@CurrentUser() user: any, @Body() dto: ConfirmEmailChangeDto) {
+    return this.authService.confirmEmailChange(user.userId, user.type, dto.code);
   }
 
   @UseGuards(JwtAuthGuard)

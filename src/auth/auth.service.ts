@@ -916,6 +916,142 @@ export class AuthService {
     };
   }
 
+  /**
+   * Step 1 of the secure email change: verifies the account password (server-side
+   * proof that the requester is the account owner, not just a stolen token),
+   * ensures the new email is free, stores a pending email + code, and sends the
+   * code to the NEW email so the user must prove control of it.
+   */
+  async requestEmailChange(
+    userId: string,
+    userType: string,
+    newEmail: string,
+    password: string,
+  ) {
+    const user = await this.findUserById(userId, userType);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!password) {
+      throw new BadRequestException('A senha é obrigatória para alterar o email');
+    }
+
+    // Server-side authorization: require the current password. A forged request
+    // outside the app (even with a valid/stolen token) cannot proceed without it.
+    const isPasswordValid = await bcrypt.compare(password, user.password || '');
+    if (!isPasswordValid) {
+      throw new BadRequestException('Senha incorreta');
+    }
+
+    const normalizedNew = newEmail.trim().toLowerCase();
+    if (!normalizedNew) {
+      throw new BadRequestException('Informe o novo email');
+    }
+    if (normalizedNew === (user.email || '').trim().toLowerCase()) {
+      throw new BadRequestException('O novo email é igual ao atual');
+    }
+
+    // The new email must not already belong to any account (patient or doctor).
+    const emailTaken = await this.isEmailInUse(normalizedNew, userId);
+    if (emailTaken) {
+      throw new BadRequestException('Este email já está em uso por outra conta');
+    }
+
+    const code = this.generateVerificationCode();
+    user.pendingEmail = normalizedNew;
+    user.emailChangeCode = code;
+    user.emailChangeCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+    await this.saveUser(user);
+
+    await this.emailService.sendEmailChangeCode(normalizedNew, code, user.name);
+
+    return { message: 'Código de confirmação enviado para o novo email' };
+  }
+
+  /**
+   * Step 2: confirms the code sent to the new email and commits the change.
+   * Also re-checks that the pending email is still free (avoids a race where
+   * someone else registered it in the meantime) and notifies the OLD email.
+   */
+  async confirmEmailChange(userId: string, userType: string, code: string) {
+    const user = await this.findUserById(userId, userType);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.pendingEmail || !user.emailChangeCode) {
+      throw new BadRequestException('Nenhuma alteração de email pendente');
+    }
+
+    if (user.emailChangeCode !== code) {
+      throw new BadRequestException('Código inválido');
+    }
+
+    if (!user.emailChangeCodeExpiry || new Date() > user.emailChangeCodeExpiry) {
+      throw new BadRequestException('Código expirado');
+    }
+
+    const newEmail = user.pendingEmail.trim().toLowerCase();
+
+    // Re-check availability at confirmation time.
+    const emailTaken = await this.isEmailInUse(newEmail, userId);
+    if (emailTaken) {
+      // Clear the stale pending change so the user can restart cleanly.
+      user.pendingEmail = null;
+      user.emailChangeCode = null;
+      user.emailChangeCodeExpiry = null;
+      await this.saveUser(user);
+      throw new BadRequestException('Este email já está em uso por outra conta');
+    }
+
+    const oldEmail = user.email;
+
+    user.email = newEmail;
+    user.emailVerified = true; // proven via the code sent to the new address
+    user.pendingEmail = null;
+    user.emailChangeCode = null;
+    user.emailChangeCodeExpiry = null;
+    await this.saveUser(user);
+
+    // Audit trail (REQ-AUD): record the email change on the user resource.
+    await this.auditService.recordSecurityEvent(AuditAction.UPDATE, {
+      resourceType: AuditResourceType.USER,
+      resourceId: user.id,
+      metadata: { field: 'email', changed: true },
+    });
+
+    // Notify the previous email so the owner can react to an unwanted change.
+    await this.emailService.sendEmailChangedNotice(oldEmail, newEmail, user.name);
+
+    const doctorContext =
+      user.type === 'doctor' ? await this.getDoctorAuthContext(user.id) : undefined;
+
+    return {
+      message: 'Email alterado com sucesso',
+      user: this.sanitizeUser(user, doctorContext),
+    };
+  }
+
+  /** True if the email already belongs to any account other than excludeUserId. */
+  private async isEmailInUse(email: string, excludeUserId: string): Promise<boolean> {
+    const normalized = email.trim().toLowerCase();
+
+    const doctor = await this.doctorRepository.findOne({ where: { email: normalized } });
+    if (doctor && doctor.id !== excludeUserId) {
+      return true;
+    }
+
+    const patient = await this.patientRepository.findOne({
+      where: { email: normalized, isShadow: false },
+    });
+    if (patient && patient.id !== excludeUserId) {
+      return true;
+    }
+
+    return false;
+  }
+
   private async generateToken(user: AuthUser) {
     const payload: Record<string, string | null> = {
       email: user.email,
