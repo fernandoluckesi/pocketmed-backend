@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, IsNotEmpty, MinLength, IsDateString, IsOptional, Matches } from 'class-validator';
+import { IsCpf } from '../../common/validators/is-cpf.validator';
 
 export class RegisterDoctorDto {
   @ApiProperty({ example: 'Dr. Fernando Luckesi' })
@@ -31,9 +32,9 @@ export class RegisterDoctorDto {
   @IsNotEmpty()
   specialty: string;
 
-  @ApiProperty({ example: '42275937862' })
-  @IsString()
+  @ApiProperty({ example: '390.533.447-05' })
   @IsNotEmpty()
+  @IsCpf()
   cpf: string;
 
   @ApiProperty({ example: '(11) 99248-6811' })

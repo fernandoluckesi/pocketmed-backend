@@ -37,6 +37,13 @@ export class Patient {
   @Column({ type: 'varchar', length: 20 })
   phone: string;
 
+  // Personal identifier (11 digits, no mask). Nullable so onboarding isn't
+  // blocked; the patient can fill it later in the profile. Uniqueness is
+  // enforced in application code (not a DB constraint) because of the shadow
+  // account / merge model.
+  @Column({ type: 'varchar', length: 11, nullable: true })
+  cpf: string | null;
+
   @Column({ type: 'date' })
   birthDate: Date;
 

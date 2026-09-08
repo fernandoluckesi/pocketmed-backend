@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, IsNotEmpty, MinLength, IsDateString, IsBoolean, IsOptional, Matches } from 'class-validator';
+import { IsCpf } from '../../common/validators/is-cpf.validator';
 
 export class RegisterPatientDto {
   @ApiProperty({ example: 'Fernando Luckesi' })
@@ -34,6 +35,13 @@ export class RegisterPatientDto {
   @ApiProperty({ example: '1950-09-25' })
   @IsDateString()
   birthDate: string;
+
+  // Optional at signup: patients can complete their CPF later in the profile.
+  // Accepts masked or unmasked; validated by check digits.
+  @ApiProperty({ example: '390.533.447-05', required: false })
+  @IsOptional()
+  @IsCpf()
+  cpf?: string;
 
   @ApiProperty({ type: 'string', format: 'binary', required: false })
   @IsOptional()

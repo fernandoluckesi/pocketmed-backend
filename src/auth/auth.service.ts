@@ -24,6 +24,7 @@ import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
 import { ProfessionalRole } from './professional-role.enum';
+import { normalizeCpf, isValidCpf } from '../common/validators/cpf.util';
 
 type AuthUser = Patient | Doctor;
 
@@ -63,6 +64,12 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
+    // CPF is optional at signup; when provided, normalize and ensure it's free.
+    const patientCpf = dto.cpf ? normalizeCpf(dto.cpf) : null;
+    if (patientCpf) {
+      await this.assertCpfAvailable(patientCpf);
+    }
+
     let profileImageUrl = null;
     if (file) {
       try {
@@ -87,6 +94,7 @@ export class AuthService {
         password: hashedPassword,
         gender: dto.gender,
         phone: dto.phone,
+        cpf: patientCpf,
         birthDate: new Date(dto.birthDate),
         profileImage: profileImageUrl,
         type: 'patient',
@@ -208,6 +216,9 @@ export class AuthService {
         email: dto.email,
         gender: dto.gender,
         phone: dto.phone,
+        // CPF optional for shadow accounts; stored normalized. Uniqueness is
+        // NOT enforced for shadows (they may duplicate and be merged later).
+        cpf: dto.cpf ? normalizeCpf(dto.cpf) : null,
         birthDate: new Date(dto.birthDate),
         profileImage: profileImageUrl,
         type: 'patient',
@@ -259,6 +270,20 @@ export class AuthService {
       conflicts.push('crm');
     }
 
+    // Normalize CPF to 11 digits and check for duplicates across doctors and
+    // active patients. Reported as a field conflict (like email/phone/crm) so
+    // the client can highlight it, without echoing the CPF value.
+    const doctorCpf = normalizeCpf(dto.cpf);
+    const existingDoctorCpf = await this.doctorRepository.findOne({
+      where: { cpf: doctorCpf },
+    });
+    const existingPatientCpf = await this.patientRepository.findOne({
+      where: { cpf: doctorCpf, isShadow: false },
+    });
+    if (existingDoctorCpf || existingPatientCpf) {
+      conflicts.push('cpf');
+    }
+
     if (conflicts.length > 0) {
       throw new ConflictException({
         message: 'Dados já cadastrados',
@@ -290,7 +315,7 @@ export class AuthService {
         password: hashedPassword,
         gender: dto.gender,
         specialty: dto.specialty,
-        cpf: dto.cpf,
+        cpf: doctorCpf,
         phone: dto.phone,
         birthDate: new Date(dto.birthDate),
         crm: dto.crm,
@@ -1052,6 +1077,28 @@ export class AuthService {
     return false;
   }
 
+  /**
+   * Ensures the given CPF (11 digits) isn't already used by another active
+   * account (patient or doctor). Shadow patients are ignored so the shadow /
+   * merge model keeps working. Throws a ConflictException WITHOUT echoing the
+   * CPF value, to avoid leaking it in error messages.
+   */
+  private async assertCpfAvailable(cpf: string, excludeUserId?: string): Promise<void> {
+    if (!cpf) return;
+
+    const doctor = await this.doctorRepository.findOne({ where: { cpf } });
+    if (doctor && doctor.id !== excludeUserId) {
+      throw new ConflictException('CPF já cadastrado');
+    }
+
+    const patient = await this.patientRepository.findOne({
+      where: { cpf, isShadow: false },
+    });
+    if (patient && patient.id !== excludeUserId) {
+      throw new ConflictException('CPF já cadastrado');
+    }
+  }
+
   private async generateToken(user: AuthUser) {
     const payload: Record<string, string | null> = {
       email: user.email,
@@ -1431,6 +1478,7 @@ export class AuthService {
       specialty?: string;
       crm?: string;
       rqe?: string;
+      cpf?: string;
       verificationCode?: string;
     },
     file?: Express.Multer.File,
@@ -1442,7 +1490,20 @@ export class AuthService {
       data.birthDate ||
       data.specialty ||
       data.crm ||
+      data.cpf !== undefined ||
       data.rqe !== undefined;
+
+    // Validate and normalize CPF once (applies to both doctor and patient).
+    // Enforced on the backend so an invalid CPF can never be persisted, even if
+    // the frontend validation is bypassed.
+    let normalizedCpf: string | null | undefined;
+    if (data.cpf !== undefined && data.cpf !== null && data.cpf !== '') {
+      if (!isValidCpf(data.cpf)) {
+        throw new BadRequestException('CPF inválido');
+      }
+      normalizedCpf = normalizeCpf(data.cpf);
+      await this.assertCpfAvailable(normalizedCpf, userId);
+    }
     // Require verification code for data changes (not for photo-only updates)
     if (hasDataChanges) {
       if (!data.verificationCode) {
@@ -1488,6 +1549,7 @@ export class AuthService {
       if (data.specialty) doctor.specialty = data.specialty;
       if (data.crm) doctor.crm = data.crm;
       if (data.rqe !== undefined) doctor.rqe = data.rqe || null;
+      if (normalizedCpf) doctor.cpf = normalizedCpf;
       if (profileImageUrl) doctor.profileImage = profileImageUrl;
 
       await this.doctorRepository.save(doctor);
@@ -1502,6 +1564,7 @@ export class AuthService {
       if (data.phone) patient.phone = data.phone;
       if (data.gender) patient.gender = data.gender;
       if (data.birthDate) patient.birthDate = new Date(data.birthDate);
+      if (normalizedCpf) patient.cpf = normalizedCpf;
       if (profileImageUrl) patient.profileImage = profileImageUrl;
 
       await this.patientRepository.save(patient);

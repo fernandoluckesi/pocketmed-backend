@@ -303,6 +303,7 @@ export class AuthController {
       specialty?: string;
       crm?: string;
       rqe?: string;
+      cpf?: string;
       verificationCode?: string;
     },
     @UploadedFile() file?: Express.Multer.File,

@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, IsNotEmpty, IsDateString, IsUUID, IsOptional } from 'class-validator';
+import { IsCpf } from '../../common/validators/is-cpf.validator';
 
 export class RegisterPatientShadowDto {
   @ApiProperty({ example: 'Fernando Luckesi Shadow' })
@@ -30,6 +31,11 @@ export class RegisterPatientShadowDto {
   @IsUUID()
   @IsNotEmpty()
   doctorCreatorId: string;
+
+  @ApiProperty({ example: '390.533.447-05', required: false })
+  @IsOptional()
+  @IsCpf()
+  cpf?: string;
 
   @ApiProperty({ type: 'string', format: 'binary', required: false })
   @IsOptional()
