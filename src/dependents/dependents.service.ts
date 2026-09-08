@@ -59,6 +59,92 @@ export class DependentsService {
     return await this.dependentRepository.save(dependent);
   }
 
+  /**
+   * Describes what would happen to the user's dependents if they deleted their
+   * account. Only considers dependents where the user is the ADMIN (creator).
+   * For each, reports the other responsibles (already-linked patients) so the
+   * client can offer transferring administration, or warns that the dependent
+   * would be deleted when there is no one else to take over.
+   *
+   * This is used by the account-deletion flow to resolve the dependents'
+   * destiny BEFORE the account is deleted — the deletion itself never waits on
+   * a third party.
+   */
+  async getDeletionImpact(userId: string) {
+    const dependents = await this.dependentRepository.find({
+      where: { adminResponsibleId: userId },
+      relations: ['responsibles'],
+    });
+
+    const adminDependents = dependents.map((dependent) => {
+      // Everyone linked as a responsible, except the current admin (the user
+      // who is leaving). These are candidates to receive administration.
+      const otherResponsibles = (dependent.responsibles || [])
+        .filter((r) => r.id !== userId)
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          profileImage: r.profileImage ?? null,
+        }));
+
+      return {
+        id: dependent.id,
+        name: dependent.name,
+        profileImage: dependent.profileImage ?? null,
+        hasOtherResponsibles: otherResponsibles.length > 0,
+        otherResponsibles,
+      };
+    });
+
+    return {
+      // When there are no admin dependents, deletion can proceed with no extra
+      // steps on the client.
+      hasAdminDependents: adminDependents.length > 0,
+      dependents: adminDependents,
+    };
+  }
+
+  /**
+   * Transfers administration of a dependent to another patient who is ALREADY
+   * a responsible for that dependent. This is a direct transfer (no invite /
+   * acceptance) because the target already consented to being a responsible.
+   * Used both from the dependent details screen and the account-deletion flow.
+   */
+  async transferAdmin(dependentId: string, newAdminId: string, requestUserId: string) {
+    const dependent = await this.dependentRepository.findOne({
+      where: { id: dependentId },
+      relations: ['responsibles'],
+    });
+
+    if (!dependent) {
+      throw new NotFoundException('Dependent not found');
+    }
+
+    if (dependent.adminResponsibleId !== requestUserId) {
+      throw new ForbiddenException('Only the admin responsible can transfer administration');
+    }
+
+    if (newAdminId === requestUserId) {
+      throw new BadRequestException('You are already the admin of this dependent');
+    }
+
+    const isResponsible = (dependent.responsibles || []).some((r) => r.id === newAdminId);
+    if (!isResponsible) {
+      throw new BadRequestException(
+        'The new admin must already be a responsible for this dependent',
+      );
+    }
+
+    dependent.adminResponsibleId = newAdminId;
+    await this.dependentRepository.save(dependent);
+
+    return {
+      message: 'Administration transferred successfully',
+      dependentId: dependent.id,
+      adminResponsibleId: newAdminId,
+    };
+  }
+
   async findAll(userId: string) {
     const dependents = await this.dependentRepository
       .createQueryBuilder('dependent')

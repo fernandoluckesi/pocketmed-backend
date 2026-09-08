@@ -28,6 +28,7 @@ import { CreateDependentDto } from './dto/create-dependent.dto';
 import { AddResponsibleDto } from './dto/add-responsible.dto';
 import { InviteResponsibleDto } from './dto/invite-responsible.dto';
 import { RespondResponsibleInviteDto } from './dto/respond-responsible-invite.dto';
+import { TransferAdminDto } from './dto/transfer-admin.dto';
 
 @ApiTags('Dependents')
 @Controller('dependents')
@@ -57,6 +58,16 @@ export class DependentsController {
   @ApiResponse({ status: 200, description: 'Return all dependents' })
   async findAll(@CurrentUser() user: any) {
     return this.dependentsService.findAll(user.userId);
+  }
+
+  @Get('deletion-impact')
+  @Roles('patient')
+  @ApiOperation({
+    summary: 'Describe how account deletion would affect the dependents the user administers',
+  })
+  @ApiResponse({ status: 200, description: 'Return deletion impact for admin dependents' })
+  async deletionImpact(@CurrentUser() user: any) {
+    return this.dependentsService.getDeletionImpact(user.userId);
   }
 
   @Post('responsible-invites/:id/respond')
@@ -123,6 +134,23 @@ export class DependentsController {
     @CurrentUser() user: any,
   ) {
     return this.dependentsService.addResponsible(id, dto.patientId, user.userId);
+  }
+
+  @Post(':id/transfer-admin')
+  @Roles('patient')
+  @ApiOperation({
+    summary: 'Transfer administration to another responsible already linked (admin only, no invite)',
+  })
+  @ApiResponse({ status: 201, description: 'Administration transferred successfully' })
+  @ApiResponse({ status: 400, description: 'New admin is not a responsible / is already admin' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admin can transfer administration' })
+  @ApiResponse({ status: 404, description: 'Dependent not found' })
+  async transferAdmin(
+    @Param('id') id: string,
+    @Body() dto: TransferAdminDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.dependentsService.transferAdmin(id, dto.newAdminId, user.userId);
   }
 
   @Delete(':id')

@@ -1394,25 +1394,78 @@ export class AuthService {
       throw new BadRequestException('Verification code expired');
     }
 
+    // Files stored outside the DB (MinIO/S3). Collected during the transaction
+    // and deleted AFTER a successful commit (file deletion is not
+    // transactional, so we never remove files for a rolled-back delete).
+    const filesToDelete: string[] = [];
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       if (userType === 'patient') {
-        await queryRunner.query('DELETE FROM `appointments` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `medications` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `exams` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `patient_diseases` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `patient_allergies` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `patient_vaccines` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `patientId` = ?', [
-          userId,
-        ]);
-        await queryRunner.query('DELETE FROM `doctor_permissions` WHERE `patientId` = ?', [userId]);
-        await queryRunner.query('DELETE FROM `patient_access_logs` WHERE `patientId` = ?', [
-          userId,
-        ]);
+        // 1) Dependents administered by this user. By the time we reach here,
+        //    the account-deletion flow has already transferred administration
+        //    for any dependent that had another responsible. Whatever is still
+        //    admin'd by this user is deleted along with the account (the user
+        //    explicitly chose this, or the dependent had no one else).
+        const adminDependents: { id: string }[] = await queryRunner.query(
+          'SELECT `id` FROM `dependents` WHERE `adminResponsibleId` = ?',
+          [userId],
+        );
+        const dependentIds = adminDependents.map((d) => d.id);
+
+        for (const depId of dependentIds) {
+          await this.collectAndDeletePatientScopedData(queryRunner, depId, filesToDelete, {
+            isDependent: true,
+          });
+          // Responsible links + pending invites for this dependent.
+          await queryRunner.query(
+            'DELETE FROM `dependent_responsible_invites` WHERE `dependentId` = ?',
+            [depId],
+          );
+          await queryRunner.query(
+            'DELETE FROM `dependent_responsibles` WHERE `dependentId` = ?',
+            [depId],
+          );
+          await queryRunner.query('DELETE FROM `dependents` WHERE `id` = ?', [depId]);
+        }
+
+        // 2) The user's own data (patient-scoped).
+        await this.collectAndDeletePatientScopedData(queryRunner, userId, filesToDelete, {
+          isDependent: false,
+        });
+
+        // 3) The user's links/invites as a responsible of OTHER people's
+        //    dependents (they are not admin of these, otherwise handled above).
+        await queryRunner.query(
+          'DELETE FROM `dependent_responsibles` WHERE `patientId` = ?',
+          [userId],
+        );
+        await queryRunner.query(
+          'DELETE FROM `dependent_responsible_invites` WHERE `inviterPatientId` = ? OR `inviteePatientId` = ?',
+          [userId, userId],
+        );
+
+        // 4) Notifications and push tokens (no FK; must be removed explicitly).
+        await queryRunner.query(
+          "DELETE FROM `notifications` WHERE `user_id` = ? AND `user_type` = 'patient'",
+          [userId],
+        );
+        await queryRunner.query(
+          "DELETE FROM `device_tokens` WHERE `userId` = ? AND `userType` = 'patient'",
+          [userId],
+        );
+
+        // 5) The user's own profile image, then the patient row itself.
+        const patientRow: { profileImage: string | null }[] = await queryRunner.query(
+          'SELECT `profileImage` FROM `patients` WHERE `id` = ?',
+          [userId],
+        );
+        if (patientRow[0]?.profileImage) {
+          filesToDelete.push(patientRow[0].profileImage);
+        }
         await queryRunner.query('DELETE FROM `patients` WHERE `id` = ?', [userId]);
       } else if (userType === 'doctor') {
         await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `doctorId` = ?', [
@@ -1429,6 +1482,14 @@ export class AuthService {
         await queryRunner.query('DELETE FROM `secretary_profiles` WHERE `professionalId` = ?', [
           userId,
         ]);
+        await queryRunner.query(
+          "DELETE FROM `notifications` WHERE `user_id` = ? AND `user_type` = 'doctor'",
+          [userId],
+        );
+        await queryRunner.query(
+          "DELETE FROM `device_tokens` WHERE `userId` = ? AND `userType` = 'doctor'",
+          [userId],
+        );
         await queryRunner.query('DELETE FROM `doctors` WHERE `id` = ?', [userId]);
       }
 
@@ -1440,12 +1501,109 @@ export class AuthService {
       });
 
       await queryRunner.commitTransaction();
-      return { message: 'Account deleted successfully' };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
+    }
+
+    // Best-effort cleanup of stored files. Runs only after a successful commit;
+    // a failure here must not fail the account deletion (DB is already clean).
+    await this.deleteStoredFiles(filesToDelete);
+
+    return { message: 'Account deleted successfully' };
+  }
+
+  /**
+   * Deletes every record scoped to a given patient/dependent id inside the
+   * provided transaction and pushes any stored file URLs (exam results) into
+   * `filesToDelete` for post-commit cleanup.
+   *
+   * Appointments/medications/exams for a dependent are keyed by `dependentId`;
+   * for a patient they are keyed by `patientId`. All other sub-resources
+   * (diseases/allergies/vaccines/surgeries/exam_schedules/access logs) are keyed
+   * by `patientId`, which — for a dependent — holds the dependent's own id.
+   */
+  private async collectAndDeletePatientScopedData(
+    queryRunner: import('typeorm').QueryRunner,
+    id: string,
+    filesToDelete: string[],
+    opts: { isDependent: boolean },
+  ) {
+    const ownerColumn = opts.isDependent ? 'dependentId' : 'patientId';
+
+    // Collect exam result files before deleting the exam rows.
+    const examRows: { resultFile: string | null; resultFiles: string | string[] | null }[] =
+      await queryRunner.query(
+        `SELECT \`resultFile\`, \`resultFiles\` FROM \`exams\` WHERE \`${ownerColumn}\` = ?`,
+        [id],
+      );
+    for (const exam of examRows) {
+      if (exam.resultFile) filesToDelete.push(exam.resultFile);
+      if (exam.resultFiles) {
+        const arr = Array.isArray(exam.resultFiles)
+          ? exam.resultFiles
+          : this.safeParseJsonArray(exam.resultFiles);
+        for (const url of arr) if (url) filesToDelete.push(url);
+      }
+    }
+
+    // Appointments / medications / exams (dependent- or patient-keyed).
+    await queryRunner.query(`DELETE FROM \`appointments\` WHERE \`${ownerColumn}\` = ?`, [id]);
+    await queryRunner.query(`DELETE FROM \`medications\` WHERE \`${ownerColumn}\` = ?`, [id]);
+    await queryRunner.query(`DELETE FROM \`exams\` WHERE \`${ownerColumn}\` = ?`, [id]);
+
+    // Exam schedules (+ items via cascade) are keyed by patientId, which holds
+    // the dependent id for dependents.
+    await queryRunner.query(
+      'DELETE FROM `exam_schedule_items` WHERE `examScheduleId` IN (SELECT `id` FROM `exam_schedules` WHERE `patientId` = ?)',
+      [id],
+    );
+    await queryRunner.query('DELETE FROM `exam_schedules` WHERE `patientId` = ?', [id]);
+
+    // Patient sub-resources (all keyed by patientId = this id).
+    await queryRunner.query('DELETE FROM `patient_surgeries` WHERE `patientId` = ?', [id]);
+    await queryRunner.query('DELETE FROM `patient_diseases` WHERE `patientId` = ?', [id]);
+    await queryRunner.query('DELETE FROM `patient_allergies` WHERE `patientId` = ?', [id]);
+    await queryRunner.query('DELETE FROM `patient_vaccines` WHERE `patientId` = ?', [id]);
+    await queryRunner.query('DELETE FROM `patient_access_logs` WHERE `patientId` = ?', [id]);
+
+    // Doctor access requests / permissions reference either patients or
+    // dependents depending on context; clear both keys.
+    await queryRunner.query(
+      `DELETE FROM \`doctor_access_requests\` WHERE \`${ownerColumn}\` = ?`,
+      [id],
+    );
+    await queryRunner.query(`DELETE FROM \`doctor_permissions\` WHERE \`${ownerColumn}\` = ?`, [
+      id,
+    ]);
+
+    if (opts.isDependent) {
+      // A dependent may also have its profile image stored.
+      const depRow: { profileImage: string | null }[] = await queryRunner.query(
+        'SELECT `profileImage` FROM `dependents` WHERE `id` = ?',
+        [id],
+      );
+      if (depRow[0]?.profileImage) filesToDelete.push(depRow[0].profileImage);
+    }
+  }
+
+  private safeParseJsonArray(value: string): string[] {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async deleteStoredFiles(urls: string[]) {
+    const unique = Array.from(new Set(urls.filter(Boolean)));
+    for (const url of unique) {
+      await this.uploadService.deleteFile(url).catch(() => {
+        // Non-fatal: the account is already deleted; a stale file is acceptable.
+      });
     }
   }
 
