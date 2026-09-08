@@ -32,6 +32,7 @@ import { PatientAccessLog } from '../entities/patient-access-log.entity';
 import { PatientDisease } from '../entities/patient-disease.entity';
 import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
+import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { ClinicDoctorInvite } from '../clinic-doctor-association/entities/clinic-doctor-invite.entity';
 
 const AppDataSource = new DataSource({
@@ -82,6 +83,7 @@ const AppDataSource = new DataSource({
     PatientDisease,
     PatientAllergy,
     PatientVaccine,
+    PatientSurgery,
     ClinicDoctorInvite,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],

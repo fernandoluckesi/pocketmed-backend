@@ -13,6 +13,7 @@ import { PatientAccessLog } from '../entities/patient-access-log.entity';
 import { PatientDisease } from '../entities/patient-disease.entity';
 import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
+import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       PatientDisease,
       PatientAllergy,
       PatientVaccine,
+      PatientSurgery,
     ]),
     NotificationsModule,
   ],

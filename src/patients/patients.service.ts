@@ -17,8 +17,41 @@ import { PatientAccessLog } from '../entities/patient-access-log.entity';
 import { PatientDisease } from '../entities/patient-disease.entity';
 import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
+import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
+
+/** Shape accepted by create/update surgery (all optional except handled in code). */
+export interface SurgeryData {
+  name?: string;
+  status?: string;
+  date?: string | null;
+  indication?: string | null;
+  diagnosisId?: string | null;
+  bodyRegion?: string | null;
+  laterality?: string | null;
+  hospitalOrClinic?: string | null;
+  surgeonName?: string | null;
+  surgeonSpecialty?: string | null;
+  city?: string | null;
+  state?: string | null;
+  surgeryType?: string | null;
+  technique?: string | null;
+  anesthesia?: string | null;
+  outcome?: string | null;
+  hadComplications?: boolean;
+  complications?: string | null;
+  hospitalAdmission?: boolean;
+  dischargeDate?: string | null;
+  postoperativeNotes?: string | null;
+  hasPermanentImplant?: boolean;
+  implantType?: string | null;
+  implantDescription?: string | null;
+  implantManufacturer?: string | null;
+  implantModel?: string | null;
+  implantSerial?: string | null;
+  implantLocation?: string | null;
+}
 
 @Injectable()
 export class PatientsService {
@@ -58,6 +91,8 @@ export class PatientsService {
     private allergyRepository: Repository<PatientAllergy>,
     @InjectRepository(PatientVaccine)
     private vaccineRepository: Repository<PatientVaccine>,
+    @InjectRepository(PatientSurgery)
+    private surgeryRepository: Repository<PatientSurgery>,
     @InjectRepository(Dependent)
     private dependentRepository: Repository<Dependent>,
     private notificationsService: NotificationsService,
@@ -1225,6 +1260,296 @@ export class PatientsService {
     return { message: 'Vaccine deleted' };
   }
 
+  // ─── Surgery Management ─────────────────────────────────────────────────────
+
+  private readonly SURGERY_STATUSES = ['PLANNED', 'PERFORMED', 'CANCELLED'];
+  private readonly SURGERY_LATERALITIES = [
+    'RIGHT',
+    'LEFT',
+    'BILATERAL',
+    'NOT_APPLICABLE',
+  ];
+  private readonly SURGERY_TYPES = ['ELECTIVE', 'URGENT', 'EMERGENCY'];
+  private readonly SURGERY_TECHNIQUES = ['OPEN', 'LAPAROSCOPIC', 'ROBOTIC', 'OTHER'];
+  private readonly SURGERY_ANESTHESIAS = [
+    'GENERAL',
+    'LOCAL',
+    'REGIONAL',
+    'SEDATION',
+    'OTHER',
+  ];
+
+  /** Validates a date-only string; returns a Date or throws. */
+  private parseSurgeryDate(value: string, field: string): Date {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) {
+      throw new BadRequestException(`${field} inválida`);
+    }
+    return d;
+  }
+
+  private assertEnum(
+    value: string | undefined | null,
+    allowed: string[],
+    field: string,
+  ) {
+    if (value !== undefined && value !== null && value !== '') {
+      if (!allowed.includes(value)) {
+        throw new BadRequestException(`Valor inválido para ${field}`);
+      }
+    }
+  }
+
+  /**
+   * Validates surgery input (create/update) and returns normalized values.
+   * `existing` carries the current record's status/date when updating so that
+   * cross-field rules (discharge >= surgery date) work on partial updates.
+   */
+  private validateSurgeryData(
+    patientId: string,
+    data: SurgeryData,
+    existing?: { status: string; date: Date | null },
+  ): { diagnosisChecked: boolean } {
+    // Enums
+    this.assertEnum(data.status, this.SURGERY_STATUSES, 'status');
+    this.assertEnum(data.laterality, this.SURGERY_LATERALITIES, 'lateralidade');
+    this.assertEnum(data.surgeryType, this.SURGERY_TYPES, 'tipo de cirurgia');
+    this.assertEnum(data.technique, this.SURGERY_TECHNIQUES, 'técnica');
+    this.assertEnum(data.anesthesia, this.SURGERY_ANESTHESIAS, 'anestesia');
+
+    const effectiveStatus = data.status ?? existing?.status ?? 'PLANNED';
+
+    // Dates: validate format and discharge >= surgery date.
+    const surgeryDate =
+      data.date !== undefined && data.date !== null && data.date !== ''
+        ? this.parseSurgeryDate(data.date, 'Data da cirurgia')
+        : existing?.date ?? null;
+
+    if (
+      data.dischargeDate !== undefined &&
+      data.dischargeDate !== null &&
+      data.dischargeDate !== ''
+    ) {
+      const discharge = this.parseSurgeryDate(data.dischargeDate, 'Data de alta');
+      if (surgeryDate && discharge < surgeryDate) {
+        throw new BadRequestException(
+          'A data de alta não pode ser anterior à data da cirurgia',
+        );
+      }
+    }
+
+    // Post-operative fields only make sense for a performed surgery.
+    const hasPostOp =
+      data.outcome ||
+      data.complications ||
+      data.hadComplications ||
+      data.hospitalAdmission ||
+      data.dischargeDate ||
+      data.postoperativeNotes;
+    if (hasPostOp && effectiveStatus !== 'PERFORMED') {
+      throw new BadRequestException(
+        'Informações pós-operatórias só se aplicam a cirurgias realizadas',
+      );
+    }
+
+    // Implant details only when there is a permanent implant.
+    const hasImplantDetails =
+      data.implantType ||
+      data.implantDescription ||
+      data.implantManufacturer ||
+      data.implantModel ||
+      data.implantSerial ||
+      data.implantLocation;
+    if (hasImplantDetails && !data.hasPermanentImplant) {
+      throw new BadRequestException(
+        'Dados do implante só se aplicam quando há implante permanente',
+      );
+    }
+
+    return { diagnosisChecked: false };
+  }
+
+  /** Ensures the diagnosisId (if provided) is a disease of the SAME patient. */
+  private async assertDiagnosisBelongsToPatient(
+    diagnosisId: string | undefined | null,
+    patientId: string,
+  ) {
+    if (!diagnosisId) return;
+    const disease = await this.diseaseRepository.findOne({
+      where: { id: diagnosisId, patientId },
+    });
+    if (!disease) {
+      throw new BadRequestException(
+        'Diagnóstico relacionado inválido ou não pertence a este paciente',
+      );
+    }
+  }
+
+  async getSurgeries(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    return this.surgeryRepository.find({
+      where: { patientId },
+      order: { date: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  async createSurgery(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: SurgeryData,
+  ) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+
+    if (!data.name || !data.name.trim()) {
+      throw new BadRequestException('O nome da cirurgia é obrigatório');
+    }
+
+    this.validateSurgeryData(patientId, data);
+    await this.assertDiagnosisBelongsToPatient(data.diagnosisId, patientId);
+
+    await this.logAccess(patientId, userId, 'CREATE_SURGERY');
+
+    const surgery = this.surgeryRepository.create({
+      patientId,
+      doctorId: userType === 'doctor' ? userId : null,
+      name: data.name.trim(),
+      status: data.status || 'PLANNED',
+      date: data.date ? new Date(data.date) : null,
+      indication: data.indication || null,
+      diagnosisId: data.diagnosisId || null,
+      bodyRegion: data.bodyRegion || null,
+      laterality: data.laterality || null,
+      hospitalOrClinic: data.hospitalOrClinic || null,
+      surgeonName: data.surgeonName || null,
+      surgeonSpecialty: data.surgeonSpecialty || null,
+      city: data.city || null,
+      state: data.state || null,
+      surgeryType: data.surgeryType || null,
+      technique: data.technique || null,
+      anesthesia: data.anesthesia || null,
+      outcome: data.outcome || null,
+      hadComplications: data.hadComplications ?? false,
+      complications: data.complications || null,
+      hospitalAdmission: data.hospitalAdmission ?? false,
+      dischargeDate: data.dischargeDate ? new Date(data.dischargeDate) : null,
+      postoperativeNotes: data.postoperativeNotes || null,
+      hasPermanentImplant: data.hasPermanentImplant ?? false,
+      implantType: data.implantType || null,
+      implantDescription: data.implantDescription || null,
+      implantManufacturer: data.implantManufacturer || null,
+      implantModel: data.implantModel || null,
+      implantSerial: data.implantSerial || null,
+      implantLocation: data.implantLocation || null,
+    });
+
+    return this.surgeryRepository.save(surgery);
+  }
+
+  async updateSurgery(
+    patientId: string,
+    surgeryId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    data: SurgeryData,
+  ) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+
+    const surgery = await this.surgeryRepository.findOne({
+      where: { id: surgeryId, patientId },
+    });
+    if (!surgery) throw new NotFoundException('Surgery not found');
+
+    if (data.name !== undefined && !data.name.trim()) {
+      throw new BadRequestException('O nome da cirurgia é obrigatório');
+    }
+
+    this.validateSurgeryData(patientId, data, {
+      status: surgery.status,
+      date: surgery.date,
+    });
+    if (data.diagnosisId !== undefined) {
+      await this.assertDiagnosisBelongsToPatient(data.diagnosisId, patientId);
+    }
+
+    // Apply only provided fields.
+    if (data.name !== undefined) surgery.name = data.name.trim();
+    if (data.status !== undefined) surgery.status = data.status;
+    if (data.date !== undefined)
+      surgery.date = data.date ? new Date(data.date) : null;
+    if (data.indication !== undefined) surgery.indication = data.indication || null;
+    if (data.diagnosisId !== undefined)
+      surgery.diagnosisId = data.diagnosisId || null;
+    if (data.bodyRegion !== undefined) surgery.bodyRegion = data.bodyRegion || null;
+    if (data.laterality !== undefined) surgery.laterality = data.laterality || null;
+    if (data.hospitalOrClinic !== undefined)
+      surgery.hospitalOrClinic = data.hospitalOrClinic || null;
+    if (data.surgeonName !== undefined)
+      surgery.surgeonName = data.surgeonName || null;
+    if (data.surgeonSpecialty !== undefined)
+      surgery.surgeonSpecialty = data.surgeonSpecialty || null;
+    if (data.city !== undefined) surgery.city = data.city || null;
+    if (data.state !== undefined) surgery.state = data.state || null;
+    if (data.surgeryType !== undefined)
+      surgery.surgeryType = data.surgeryType || null;
+    if (data.technique !== undefined) surgery.technique = data.technique || null;
+    if (data.anesthesia !== undefined) surgery.anesthesia = data.anesthesia || null;
+    if (data.outcome !== undefined) surgery.outcome = data.outcome || null;
+    if (data.hadComplications !== undefined)
+      surgery.hadComplications = data.hadComplications;
+    if (data.complications !== undefined)
+      surgery.complications = data.complications || null;
+    if (data.hospitalAdmission !== undefined)
+      surgery.hospitalAdmission = data.hospitalAdmission;
+    if (data.dischargeDate !== undefined)
+      surgery.dischargeDate = data.dischargeDate ? new Date(data.dischargeDate) : null;
+    if (data.postoperativeNotes !== undefined)
+      surgery.postoperativeNotes = data.postoperativeNotes || null;
+    if (data.hasPermanentImplant !== undefined)
+      surgery.hasPermanentImplant = data.hasPermanentImplant;
+    if (data.implantType !== undefined)
+      surgery.implantType = data.implantType || null;
+    if (data.implantDescription !== undefined)
+      surgery.implantDescription = data.implantDescription || null;
+    if (data.implantManufacturer !== undefined)
+      surgery.implantManufacturer = data.implantManufacturer || null;
+    if (data.implantModel !== undefined)
+      surgery.implantModel = data.implantModel || null;
+    if (data.implantSerial !== undefined)
+      surgery.implantSerial = data.implantSerial || null;
+    if (data.implantLocation !== undefined)
+      surgery.implantLocation = data.implantLocation || null;
+
+    return this.surgeryRepository.save(surgery);
+  }
+
+  async deleteSurgery(
+    patientId: string,
+    surgeryId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
+    await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const surgery = await this.surgeryRepository.findOne({
+      where: { id: surgeryId, patientId },
+    });
+    if (!surgery) throw new NotFoundException('Surgery not found');
+    await this.surgeryRepository.remove(surgery);
+    return { message: 'Surgery deleted' };
+  }
+
   // ─── Dependents ─────────────────────────────────────────────────────────────
 
   async getDependents(
@@ -1271,7 +1596,7 @@ export class PatientsService {
     await this.findOne(patientId, doctorId, userType, role, activeClinicId);
 
     // Fetch all events
-    const [appointments, medications, exams] = await Promise.all([
+    const [appointments, medications, exams, surgeries] = await Promise.all([
       this.appointmentRepository.find({
         where: { patientId },
         order: { dateTime: 'DESC' },
@@ -1283,6 +1608,11 @@ export class PatientsService {
         take: limit,
       }),
       this.examRepository.find({ where: { patientId }, order: { createdAt: 'DESC' }, take: limit }),
+      this.surgeryRepository.find({
+        where: { patientId },
+        order: { date: 'DESC', createdAt: 'DESC' },
+        take: limit,
+      }),
     ]);
 
     // Build unified timeline
@@ -1321,6 +1651,17 @@ export class PatientsService {
         title: exam.name || 'Exame',
         description: exam.results || 'Resultado pendente',
         data: exam,
+      });
+    }
+
+    for (const surgery of surgeries) {
+      timeline.push({
+        type: 'CIRURGIA',
+        date:
+          surgery.date?.toISOString() || surgery.createdAt?.toISOString(),
+        title: surgery.name || 'Cirurgia',
+        description: surgery.indication || surgery.hospitalOrClinic || '',
+        data: surgery,
       });
     }
 

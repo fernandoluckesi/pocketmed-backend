@@ -1,6 +1,6 @@
 import { Controller, Get, Put, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import { PatientsService } from './patients.service';
+import { PatientsService, SurgeryData } from './patients.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -327,6 +327,49 @@ export class PatientsController {
   @ApiOperation({ summary: 'Delete patient vaccine' })
   async deleteVaccine(@Param('id') id: string, @Param('vaccineId') vaccineId: string, @CurrentUser() user: any) {
     return this.patientsService.deleteVaccine(id, vaccineId, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  // ─── Surgeries ────────────────────────────────────────────────────────────
+
+  @Get(':id/surgeries')
+  @ApiOperation({ summary: 'Get patient surgical history' })
+  @ApiResponse({ status: 200, description: 'Surgeries list' })
+  async getSurgeries(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getSurgeries(id, user.userId, user.type, user.role, user.activeClinicId);
+  }
+
+  @Post(':id/surgeries')
+  @ApiOperation({ summary: 'Add a surgery to patient' })
+  @ApiResponse({ status: 201, description: 'Surgery created' })
+  async createSurgery(
+    @Param('id') id: string,
+    @Body() body: SurgeryData,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.createSurgery(id, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Put(':id/surgeries/:surgeryId')
+  @ApiOperation({ summary: 'Update a patient surgery' })
+  @ApiResponse({ status: 200, description: 'Surgery updated' })
+  async updateSurgery(
+    @Param('id') id: string,
+    @Param('surgeryId') surgeryId: string,
+    @Body() body: SurgeryData,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.updateSurgery(id, surgeryId, user.userId, user.type, user.role, user.activeClinicId, body);
+  }
+
+  @Delete(':id/surgeries/:surgeryId')
+  @ApiOperation({ summary: 'Delete a patient surgery' })
+  @ApiResponse({ status: 200, description: 'Surgery deleted' })
+  async deleteSurgery(
+    @Param('id') id: string,
+    @Param('surgeryId') surgeryId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.deleteSurgery(id, surgeryId, user.userId, user.type, user.role, user.activeClinicId);
   }
 
   // ─── Dependents ─────────────────────────────────────────────────────────────

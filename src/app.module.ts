@@ -50,6 +50,7 @@ import { PatientAccessLog } from './entities/patient-access-log.entity';
 import { PatientDisease } from './entities/patient-disease.entity';
 import { PatientAllergy } from './entities/patient-allergy.entity';
 import { PatientVaccine } from './entities/patient-vaccine.entity';
+import { PatientSurgery } from './entities/patient-surgery.entity';
 import { Secretary } from './entities/secretary.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
@@ -138,6 +139,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           PatientDisease,
           PatientAllergy,
           PatientVaccine,
+          PatientSurgery,
           Secretary,
           AuditEvent,
           ClinicDoctorInvite,
