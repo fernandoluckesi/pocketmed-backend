@@ -61,10 +61,12 @@ export class Medication {
   @Column({ type: 'boolean', default: false })
   isFinished: boolean;
 
-  @Column({ type: 'uuid' })
-  doctorId: string;
+  // Nullable: a patient can log a medication tied to a consultation with an
+  // external (non-registered) doctor, in which case there is no doctorId.
+  @Column({ type: 'uuid', nullable: true })
+  doctorId: string | null;
 
-  @ManyToOne(() => Doctor, (doctor) => doctor.medications)
+  @ManyToOne(() => Doctor, (doctor) => doctor.medications, { nullable: true })
   @JoinColumn({ name: 'doctorId' })
   doctor: Doctor;
 
