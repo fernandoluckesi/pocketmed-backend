@@ -1641,8 +1641,11 @@ export class AuthService {
     },
     file?: Express.Multer.File,
   ) {
-    const hasDataChanges =
-      data.name ||
+    // Name and profile photo are considered low-risk and DO NOT require a
+    // verification code, whether changed alone or together. Every other field
+    // (phone, gender, birthDate, specialty, crm, rqe and especially CPF) is
+    // sensitive and requires the emailed code.
+    const hasSensitiveChanges =
       data.phone ||
       data.gender ||
       data.birthDate ||
@@ -1662,8 +1665,9 @@ export class AuthService {
       normalizedCpf = normalizeCpf(data.cpf);
       await this.assertCpfAvailable(normalizedCpf, userId);
     }
-    // Require verification code for data changes (not for photo-only updates)
-    if (hasDataChanges) {
+    // Require verification code only for sensitive data changes (name/photo are
+    // exempt).
+    if (hasSensitiveChanges) {
       if (!data.verificationCode) {
         throw new BadRequestException('Verification code is required to update profile data');
       }
