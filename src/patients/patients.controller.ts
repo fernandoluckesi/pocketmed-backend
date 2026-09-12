@@ -248,7 +248,7 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Disease created' })
   async createDisease(
     @Param('id') id: string,
-    @Body() body: { name: string; description?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    @Body() body: { name: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.createDisease(id, user.userId, user.type, user.role, user.activeClinicId, body);
@@ -260,7 +260,7 @@ export class PatientsController {
   async updateDisease(
     @Param('id') id: string,
     @Param('diseaseId') diseaseId: string,
-    @Body() body: { name?: string; description?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    @Body() body: { name?: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updateDisease(id, diseaseId, user.userId, user.type, user.role, user.activeClinicId, body);
