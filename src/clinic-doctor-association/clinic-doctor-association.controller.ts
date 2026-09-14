@@ -139,8 +139,12 @@ export class ClinicDoctorAssociationController {
   @ApiResponse({ status: 200, description: 'Doctor found' })
   @ApiResponse({ status: 404, description: 'No doctor found with the given CRM' })
   @ApiResponse({ status: 400, description: 'CRM and state are required' })
-  async searchDoctor(@Query() dto: SearchDoctorDto) {
-    return this.clinicDoctorAssociationService.searchDoctorByCrm(dto.crm, dto.state);
+  async searchDoctor(@Query() dto: SearchDoctorDto, @CurrentUser() user: any) {
+    return this.clinicDoctorAssociationService.searchDoctorByCrm(
+      dto.crm,
+      dto.state,
+      user.activeClinicId,
+    );
   }
 
   // === Dashboard ===

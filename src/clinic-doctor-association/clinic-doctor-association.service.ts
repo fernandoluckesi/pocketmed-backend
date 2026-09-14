@@ -26,6 +26,8 @@ export interface DoctorSearchResult {
   specialty: string;
   crm: string;
   profileImage: string | null;
+  /** True when the doctor already has an active membership in the requesting clinic. */
+  isClinicMember: boolean;
 }
 
 export interface DashboardDoctorItem {
@@ -283,7 +285,11 @@ export class ClinicDoctorAssociationService {
     );
   }
 
-  async searchDoctorByCrm(crm: string, state: string): Promise<DoctorSearchResult> {
+  async searchDoctorByCrm(
+    crm: string,
+    state: string,
+    clinicId: string | null,
+  ): Promise<DoctorSearchResult> {
     if (!crm || !state) {
       throw new BadRequestException('CRM e Estado são obrigatórios');
     }
@@ -302,12 +308,27 @@ export class ClinicDoctorAssociationService {
       throw new NotFoundException('Nenhum médico encontrado com o CRM informado');
     }
 
+    // Flag whether the doctor is already an active member of the requesting clinic
+    // so the UI can show "Ver Perfil" instead of "Enviar Convite".
+    let isClinicMember = false;
+    if (clinicId) {
+      const existingMembership = await this.membershipRepository.findOne({
+        where: {
+          clinicId,
+          professionalId: doctor.id,
+          isActive: true,
+        },
+      });
+      isClinicMember = !!existingMembership;
+    }
+
     return {
       id: doctor.id,
       name: doctor.name,
       specialty: doctor.specialty,
       crm: doctor.crm,
       profileImage: doctor.profileImage,
+      isClinicMember,
     };
   }
 
