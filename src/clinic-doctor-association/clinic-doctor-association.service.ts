@@ -14,6 +14,7 @@ import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Clinic } from '../entities/clinic.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
+import { Appointment } from '../entities/appointment.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateInviteDto } from './dto/create-invite.dto';
@@ -43,6 +44,28 @@ export interface PatientListItem {
   name: string;
 }
 
+export interface DoctorProfileAppointment {
+  id: string;
+  patientName: string;
+  dateTime: Date;
+  status: string;
+  reason: string;
+}
+
+export interface DoctorProfileResponse {
+  id: string;
+  name: string;
+  email: string;
+  specialty: string;
+  crm: string;
+  rqe: string | null;
+  phone: string;
+  gender: string;
+  profileImage: string | null;
+  appointments: DoctorProfileAppointment[];
+  patients: PatientListItem[];
+}
+
 @Injectable()
 export class ClinicDoctorAssociationService {
   constructor(
@@ -56,6 +79,8 @@ export class ClinicDoctorAssociationService {
     private readonly clinicRepository: Repository<Clinic>,
     @InjectRepository(DoctorPermission)
     private readonly doctorPermissionRepository: Repository<DoctorPermission>,
+    @InjectRepository(Appointment)
+    private readonly appointmentRepository: Repository<Appointment>,
     private readonly notificationsService: NotificationsService,
     private readonly dataSource: DataSource,
   ) {}
@@ -573,5 +598,104 @@ export class ClinicDoctorAssociationService {
     patients.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 
     return patients;
+  }
+
+  /**
+   * Returns a doctor's profile (basic professional data) plus their scheduled
+   * appointments and linked patients — but ONLY when:
+   *   - the requester is an ADMIN with an active membership in a clinic, AND
+   *   - the target doctor also has an active membership in that SAME clinic.
+   *
+   * This prevents any authenticated user from pulling an arbitrary doctor's
+   * profile/appointments/patients by hitting the endpoint directly. A doctor
+   * who does not administer a clinic (no admin membership) is rejected.
+   */
+  async getDoctorProfile(
+    user: { userId: string; role: string; activeClinicId: string | null },
+    doctorId: string,
+  ): Promise<DoctorProfileResponse> {
+    // Only clinic admins may view another doctor's profile.
+    if (user.role !== ProfessionalRole.ADMIN) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
+    const clinicId = user.activeClinicId;
+    if (!clinicId) {
+      throw new ForbiddenException('Nenhuma clínica ativa encontrada para o usuário');
+    }
+
+    // Confirm the requester is an ACTIVE admin of this clinic.
+    const adminMembership = await this.membershipRepository.findOne({
+      where: {
+        clinicId,
+        professionalId: user.userId,
+        role: ProfessionalRole.ADMIN,
+        isActive: true,
+      },
+    });
+    if (!adminMembership) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
+    // Confirm the target doctor belongs to the SAME clinic (active membership).
+    const doctorMembership = await this.membershipRepository.findOne({
+      where: {
+        clinicId,
+        professionalId: doctorId,
+        role: ProfessionalRole.DOCTOR,
+        isActive: true,
+      },
+    });
+    if (!doctorMembership) {
+      throw new NotFoundException('Médico não encontrado nesta clínica');
+    }
+
+    const doctor = await this.doctorRepository.findOne({
+      where: { id: doctorId },
+      select: ['id', 'name', 'email', 'specialty', 'crm', 'rqe', 'phone', 'gender', 'profileImage'],
+    });
+    if (!doctor) {
+      throw new NotFoundException('Médico não encontrado');
+    }
+
+    // Scheduled appointments for this doctor.
+    const appointmentRows = await this.appointmentRepository.find({
+      where: { doctorId },
+      relations: ['patient'],
+      order: { dateTime: 'DESC' },
+    });
+
+    const appointments: DoctorProfileAppointment[] = appointmentRows.map((apt) => ({
+      id: apt.id,
+      patientName: apt.patient?.name || 'Paciente',
+      dateTime: apt.dateTime,
+      status: apt.status,
+      reason: apt.reason,
+    }));
+
+    // Linked patients (active DoctorPermission with a patient).
+    const permissions = await this.doctorPermissionRepository.find({
+      where: { doctorId, isActive: true },
+      relations: ['patient'],
+    });
+
+    const patients: PatientListItem[] = permissions
+      .filter((p) => p.patientId != null && p.patient != null)
+      .map((p) => ({ id: p.patient.id, name: p.patient.name }));
+    patients.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
+    return {
+      id: doctor.id,
+      name: doctor.name,
+      email: doctor.email,
+      specialty: doctor.specialty,
+      crm: doctor.crm,
+      rqe: doctor.rqe || null,
+      phone: doctor.phone,
+      gender: doctor.gender,
+      profileImage: doctor.profileImage || null,
+      appointments,
+      patients,
+    };
   }
 }

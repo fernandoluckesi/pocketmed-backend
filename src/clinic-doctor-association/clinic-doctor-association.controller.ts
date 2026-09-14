@@ -171,4 +171,20 @@ export class ClinicDoctorAssociationController {
       user.userId,
     );
   }
+
+  // === Perfil do médico (Admin) ===
+
+  @Get('doctors/:doctorId/profile')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: "View a clinic doctor's profile with appointments and linked patients",
+  })
+  @ApiResponse({ status: 200, description: 'Doctor profile returned successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied - admin of the clinic required' })
+  @ApiResponse({ status: 404, description: 'Doctor not found in the active clinic' })
+  async getDoctorProfile(@Param('doctorId') doctorId: string, @CurrentUser() user: any) {
+    return this.clinicDoctorAssociationService.getDoctorProfile(user, doctorId);
+  }
 }

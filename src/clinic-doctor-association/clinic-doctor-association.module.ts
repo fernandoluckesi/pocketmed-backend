@@ -8,6 +8,7 @@ import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Clinic } from '../entities/clinic.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
+import { Appointment } from '../entities/appointment.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       Doctor,
       Clinic,
       DoctorPermission,
+      Appointment,
     ]),
     NotificationsModule,
   ],
