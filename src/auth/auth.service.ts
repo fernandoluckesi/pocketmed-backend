@@ -23,6 +23,7 @@ import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
+import { DoctorPermission } from '../entities/doctor-permission.entity';
 import { ProfessionalRole } from './professional-role.enum';
 import { normalizeCpf, isValidCpf } from '../common/validators/cpf.util';
 
@@ -48,6 +49,8 @@ export class AuthService {
     private clinicAdminProfileRepository: Repository<ClinicAdminProfile>,
     @InjectRepository(Secretary)
     private secretaryRepository: Repository<Secretary>,
+    @InjectRepository(DoctorPermission)
+    private doctorPermissionRepository: Repository<DoctorPermission>,
     private jwtService: JwtService,
     private uploadService: UploadService,
     private emailService: EmailService,
@@ -227,6 +230,36 @@ export class AuthService {
       });
 
       const savedPatient = await queryRunner.manager.save(patient);
+
+      // When created by clinic staff (admin/secretary), make the shadow patient
+      // available to the WHOLE clinic automatically by granting an active
+      // DoctorPermission to every active doctor of the clinic. Without this,
+      // only the doctorCreatorId would have access (see getAccessiblePatientIdsForDoctor).
+      if (
+        (requester.role === ProfessionalRole.ADMIN ||
+          requester.role === ProfessionalRole.SECRETARY) &&
+        requester.activeClinicId
+      ) {
+        const clinicDoctors = await queryRunner.manager.find(ClinicMembership, {
+          where: {
+            clinicId: requester.activeClinicId,
+            role: ProfessionalRole.DOCTOR,
+            isActive: true,
+          },
+          select: ['professionalId'],
+        });
+
+        const doctorIds = Array.from(new Set(clinicDoctors.map((m) => m.professionalId)));
+
+        for (const clinicDoctorId of doctorIds) {
+          const permission = queryRunner.manager.create(DoctorPermission, {
+            doctorId: clinicDoctorId,
+            patientId: savedPatient.id,
+            isActive: true,
+          });
+          await queryRunner.manager.save(permission);
+        }
+      }
 
       await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name);
 
@@ -947,12 +980,7 @@ export class AuthService {
    * ensures the new email is free, stores a pending email + code, and sends the
    * code to the NEW email so the user must prove control of it.
    */
-  async requestEmailChange(
-    userId: string,
-    userType: string,
-    newEmail: string,
-    password: string,
-  ) {
+  async requestEmailChange(userId: string, userType: string, newEmail: string, password: string) {
     const user = await this.findUserById(userId, userType);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -1425,10 +1453,9 @@ export class AuthService {
             'DELETE FROM `dependent_responsible_invites` WHERE `dependentId` = ?',
             [depId],
           );
-          await queryRunner.query(
-            'DELETE FROM `dependent_responsibles` WHERE `dependentId` = ?',
-            [depId],
-          );
+          await queryRunner.query('DELETE FROM `dependent_responsibles` WHERE `dependentId` = ?', [
+            depId,
+          ]);
           await queryRunner.query('DELETE FROM `dependents` WHERE `id` = ?', [depId]);
         }
 
@@ -1439,10 +1466,9 @@ export class AuthService {
 
         // 3) The user's links/invites as a responsible of OTHER people's
         //    dependents (they are not admin of these, otherwise handled above).
-        await queryRunner.query(
-          'DELETE FROM `dependent_responsibles` WHERE `patientId` = ?',
-          [userId],
-        );
+        await queryRunner.query('DELETE FROM `dependent_responsibles` WHERE `patientId` = ?', [
+          userId,
+        ]);
         await queryRunner.query(
           'DELETE FROM `dependent_responsible_invites` WHERE `inviterPatientId` = ? OR `inviteePatientId` = ?',
           [userId, userId],
@@ -1571,10 +1597,9 @@ export class AuthService {
 
     // Doctor access requests / permissions reference either patients or
     // dependents depending on context; clear both keys.
-    await queryRunner.query(
-      `DELETE FROM \`doctor_access_requests\` WHERE \`${ownerColumn}\` = ?`,
-      [id],
-    );
+    await queryRunner.query(`DELETE FROM \`doctor_access_requests\` WHERE \`${ownerColumn}\` = ?`, [
+      id,
+    ]);
     await queryRunner.query(`DELETE FROM \`doctor_permissions\` WHERE \`${ownerColumn}\` = ?`, [
       id,
     ]);
