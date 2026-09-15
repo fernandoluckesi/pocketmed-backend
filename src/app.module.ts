@@ -62,6 +62,8 @@ import { ClinicsModule } from './clinics/clinics.module';
 import { AuditModule } from './audit/audit.module';
 import { SecretariesModule } from './secretaries/secretaries.module';
 import { CepModule } from './cep/cep.module';
+import { BackofficeModule } from './backoffice/backoffice.module';
+import { BackofficeUser } from './entities/backoffice-user.entity';
 import { AuditEvent } from './audit/entities/audit-event.entity';
 import { ClinicDoctorInvite } from './clinic-doctor-association/entities/clinic-doctor-invite.entity';
 import { ClinicDoctorAssociationModule } from './clinic-doctor-association/clinic-doctor-association.module';
@@ -141,6 +143,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           PatientVaccine,
           PatientSurgery,
           Secretary,
+          BackofficeUser,
           AuditEvent,
           ClinicDoctorInvite,
         ],
@@ -170,6 +173,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     AuditModule,
     SecretariesModule,
     CepModule,
+    BackofficeModule,
     ClinicDoctorAssociationModule,
   ],
   controllers: [AppController],

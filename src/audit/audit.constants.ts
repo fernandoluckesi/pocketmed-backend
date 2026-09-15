@@ -25,6 +25,10 @@ export enum AuditAction {
   PASSWORD_RESET = 'PASSWORD_RESET',
   MFA_ENABLED = 'MFA_ENABLED',
   MFA_DISABLED = 'MFA_DISABLED',
+  /** Back office approved a submitted resource (e.g. doctor credentials). */
+  APPROVE = 'APPROVE',
+  /** Back office rejected a submitted resource. */
+  REJECT = 'REJECT',
 }
 
 export enum AuditResourceType {
@@ -47,6 +51,8 @@ export enum AuditResourceType {
   CLINIC = 'CLINIC',
   DEPENDENT = 'DEPENDENT',
   AUDIT_EVENT = 'AUDIT_EVENT',
+  /** Credential document submitted by a doctor for verification. */
+  DOCTOR_DOCUMENT = 'DOCTOR_DOCUMENT',
 }
 
 export enum AuditFailureReason {

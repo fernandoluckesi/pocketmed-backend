@@ -39,6 +39,10 @@ export class DoctorDocument {
   @Column({ type: 'timestamp', nullable: true })
   reviewedAt: Date;
 
+  /** Backoffice user id who last reviewed this document. */
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  reviewedBy: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

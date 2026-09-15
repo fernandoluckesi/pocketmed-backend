@@ -8,6 +8,7 @@ import { Patient } from '../../entities/patient.entity';
 import { Doctor } from '../../entities/doctor.entity';
 import { Secretary } from '../../entities/secretary.entity';
 import { ClinicMembership } from '../../entities/clinic-membership.entity';
+import { BackofficeUser } from '../../entities/backoffice-user.entity';
 import { ProfessionalRole } from '../professional-role.enum';
 
 @Injectable()
@@ -22,6 +23,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private secretaryRepository: Repository<Secretary>,
     @InjectRepository(ClinicMembership)
     private clinicMembershipRepository: Repository<ClinicMembership>,
+    @InjectRepository(BackofficeUser)
+    private backofficeUserRepository: Repository<BackofficeUser>,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -31,6 +34,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    // Internal Hispora staff (platform back office) — no clinic context.
+    if (payload.type === 'backoffice') {
+      const staff = await this.backofficeUserRepository.findOne({
+        where: { id: payload.sub },
+      });
+      if (!staff || !staff.isActive) {
+        throw new UnauthorizedException('Invalid token');
+      }
+      return {
+        userId: staff.id,
+        email: staff.email,
+        type: 'backoffice',
+        role: staff.backofficeRole,
+        activeClinicId: null,
+      };
+    }
+
     // Secretary login (role=secretary in JWT)
     if (payload.role === 'secretary') {
       const secretary = await this.secretaryRepository.findOne({ where: { id: payload.sub } });

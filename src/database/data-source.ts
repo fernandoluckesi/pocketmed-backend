@@ -34,6 +34,7 @@ import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { ClinicDoctorInvite } from '../clinic-doctor-association/entities/clinic-doctor-invite.entity';
+import { BackofficeUser } from '../entities/backoffice-user.entity';
 
 const AppDataSource = new DataSource({
   type: 'mysql',
@@ -85,6 +86,7 @@ const AppDataSource = new DataSource({
     PatientVaccine,
     PatientSurgery,
     ClinicDoctorInvite,
+    BackofficeUser,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
