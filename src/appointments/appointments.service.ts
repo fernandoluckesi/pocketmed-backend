@@ -54,6 +54,26 @@ export class AppointmentsService {
     return [...new Set(memberships.map((membership) => membership.professionalId))];
   }
 
+  /**
+   * Clinic staff (admin/secretary) manage the agenda of the whole clinic, so they
+   * can act on appointments that belong to any professional of their active clinic.
+   */
+  private async isClinicStaffForAppointment(
+    userType: string,
+    userRole: string | null,
+    activeClinicId: string | null,
+    appointmentDoctorId: string,
+  ): Promise<boolean> {
+    if (userType !== 'doctor') return false;
+    if (userRole !== ProfessionalRole.ADMIN && userRole !== ProfessionalRole.SECRETARY) {
+      return false;
+    }
+    if (!activeClinicId) return false;
+
+    const doctorIds = await this.getClinicDoctorIds(activeClinicId);
+    return doctorIds.includes(appointmentDoctorId);
+  }
+
   private sanitizeForSecretary(appointment: Appointment) {
     return {
       id: appointment.id,
@@ -451,6 +471,7 @@ export class AppointmentsService {
     userType: string,
     userRole: string | null,
     dto: UpdateAppointmentDto,
+    activeClinicId: string | null = null,
   ) {
     const appointment = await this.appointmentRepository.findOne({
       where: { id },
@@ -471,7 +492,39 @@ export class AppointmentsService {
       (appointment.createdByPatientId === userId ||
         (!appointment.createdByPatientId && appointment.patientId === userId));
 
-    if (!isOwnerDoctor && !isOwnerPatient) {
+    const isClinicStaff = await this.isClinicStaffForAppointment(
+      userType,
+      userRole,
+      activeClinicId,
+      appointment.doctorId,
+    );
+
+    if (isClinicStaff) {
+      // Staff reschedule the agenda but must never write clinical content.
+      const hasClinicalData =
+        dto.isCompleted !== undefined ||
+        Boolean(dto.doctorFeedback?.trim()) ||
+        Boolean(dto.doctorInstructions?.trim());
+
+      if (hasClinicalData) {
+        throw new ForbiddenException('Clinic staff cannot update clinical data');
+      }
+    }
+
+    // Reassigning the appointment to another professional is a clinic-staff action
+    // and the target must belong to the same clinic.
+    if (dto.doctorId && dto.doctorId !== appointment.doctorId) {
+      if (!isClinicStaff) {
+        throw new ForbiddenException('Only clinic staff can reassign an appointment');
+      }
+
+      const clinicDoctorIds = await this.getClinicDoctorIds(activeClinicId as string);
+      if (!clinicDoctorIds.includes(dto.doctorId)) {
+        throw new ForbiddenException('Selected doctor is not an active member of your clinic');
+      }
+    }
+
+    if (!isOwnerDoctor && !isOwnerPatient && !isClinicStaff) {
       // REQ-AUD-026 — Audit ACCESS_DENIED on update attempt
       await this.auditService.recordAccessDenied(AuditResourceType.APPOINTMENT, {
         resourceId: id,
@@ -582,7 +635,13 @@ export class AppointmentsService {
     };
   }
 
-  async delete(id: string, userId: string, userType: string, userRole: string | null) {
+  async delete(
+    id: string,
+    userId: string,
+    userType: string,
+    userRole: string | null,
+    activeClinicId: string | null = null,
+  ) {
     const appointment = await this.appointmentRepository.findOne({
       where: { id },
     });
@@ -601,7 +660,14 @@ export class AppointmentsService {
       (appointment.createdByPatientId === userId ||
         (!appointment.createdByPatientId && appointment.patientId === userId));
 
-    if (!isOwnerDoctor && !isOwnerPatient) {
+    const isClinicStaff = await this.isClinicStaffForAppointment(
+      userType,
+      userRole,
+      activeClinicId,
+      appointment.doctorId,
+    );
+
+    if (!isOwnerDoctor && !isOwnerPatient && !isClinicStaff) {
       // REQ-AUD-026
       await this.auditService.recordAccessDenied(AuditResourceType.APPOINTMENT, {
         resourceId: id,

@@ -63,7 +63,14 @@ export class AppointmentsController {
     @CurrentUser() user: any,
     @Body() dto: UpdateAppointmentDto,
   ) {
-    return this.appointmentsService.update(id, user.userId, user.type, user.role, dto);
+    return this.appointmentsService.update(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      dto,
+      user.activeClinicId,
+    );
   }
 
   @Post(':id/respond')
@@ -81,12 +88,20 @@ export class AppointmentsController {
   }
 
   @Delete(':id')
-  @Roles('doctor', 'patient')
-  @ApiOperation({ summary: 'Delete appointment (doctor creator or patient owner)' })
+  @Roles('doctor', 'admin', 'secretary', 'patient')
+  @ApiOperation({
+    summary: 'Delete appointment (doctor creator, clinic staff or patient owner)',
+  })
   @ApiResponse({ status: 200, description: 'Appointment deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Appointment not found' })
   async delete(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.appointmentsService.delete(id, user.userId, user.type, user.role);
+    return this.appointmentsService.delete(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 }
