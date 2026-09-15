@@ -797,16 +797,18 @@ export class ClinicAdminService {
       ProfessionalRole.SECRETARY,
     ]);
 
+    // Admins are also physicians who see patients, so they must appear in the
+    // schedulable doctors list alongside members with the plain "doctor" role.
     const memberships = await this.clinicMembershipRepository.find({
       where: {
         clinicId,
         isActive: true,
-        role: ProfessionalRole.DOCTOR,
+        role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
       },
       select: ['professionalId'],
     });
 
-    const doctorIds = memberships.map((membership) => membership.professionalId);
+    const doctorIds = [...new Set(memberships.map((membership) => membership.professionalId))];
     if (doctorIds.length === 0) {
       return [];
     }
