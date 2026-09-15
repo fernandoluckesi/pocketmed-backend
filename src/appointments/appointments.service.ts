@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Appointment, AppointmentStatus } from '../entities/appointment.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Patient } from '../entities/patient.entity';
@@ -117,11 +117,13 @@ export class AppointmentsService {
       throw new ForbiddenException('Clinic staff cannot include clinical notes in scheduling');
     }
 
+    // Admins are also physicians, so scheduling on their behalf must be allowed
+    // just like plain "doctor" members.
     const membership = await this.clinicMembershipRepository.findOne({
       where: {
         clinicId: activeClinicId,
         professionalId: dto.doctorId,
-        role: ProfessionalRole.DOCTOR,
+        role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
         isActive: true,
       },
     });

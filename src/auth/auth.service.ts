@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Patient } from '../entities/patient.entity';
@@ -169,11 +169,13 @@ export class AuthService {
         throw new UnauthorizedException('Active clinic context is required for this operation');
       }
 
+      // Admins are also physicians, so a shadow patient can be tied to an
+      // admin member just like a plain "doctor" member.
       const clinicDoctorMembership = await this.clinicMembershipRepository.findOne({
         where: {
           clinicId: requester.activeClinicId,
           professionalId: dto.doctorCreatorId,
-          role: ProfessionalRole.DOCTOR,
+          role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
           isActive: true,
         },
       });
