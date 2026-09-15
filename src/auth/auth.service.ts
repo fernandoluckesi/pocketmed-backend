@@ -245,7 +245,7 @@ export class AuthService {
         const clinicDoctors = await queryRunner.manager.find(ClinicMembership, {
           where: {
             clinicId: requester.activeClinicId,
-            role: ProfessionalRole.DOCTOR,
+            role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
             isActive: true,
           },
           select: ['professionalId'],

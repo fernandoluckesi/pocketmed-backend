@@ -40,16 +40,18 @@ export class AppointmentsService {
   ) {}
 
   private async getClinicDoctorIds(clinicId: string): Promise<string[]> {
+    // Admins are also physicians who see patients, so their appointments must be
+    // part of the clinic agenda alongside plain "doctor" members.
     const memberships = await this.clinicMembershipRepository.find({
       where: {
         clinicId,
         isActive: true,
-        role: ProfessionalRole.DOCTOR,
+        role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
       },
       select: ['professionalId'],
     });
 
-    return memberships.map((membership) => membership.professionalId);
+    return [...new Set(memberships.map((membership) => membership.professionalId))];
   }
 
   private sanitizeForSecretary(appointment: Appointment) {

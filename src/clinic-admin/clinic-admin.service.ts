@@ -687,16 +687,18 @@ export class ClinicAdminService {
       ProfessionalRole.SECRETARY,
     ]);
 
+    // Admins are also physicians who see patients, so their patients are part of
+    // the clinic scope alongside plain "doctor" members.
     const doctorMemberships = await this.clinicMembershipRepository.find({
       where: {
         clinicId,
         isActive: true,
-        role: ProfessionalRole.DOCTOR,
+        role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
       },
       select: ['professionalId'],
     });
 
-    const doctorIds = doctorMemberships.map((m) => m.professionalId);
+    const doctorIds = [...new Set(doctorMemberships.map((m) => m.professionalId))];
 
     if (doctorIds.length === 0) {
       return [];

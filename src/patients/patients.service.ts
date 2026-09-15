@@ -126,16 +126,18 @@ export class PatientsService {
   }
 
   private async getClinicDoctorIds(clinicId: string): Promise<string[]> {
+    // Admins are also physicians who see patients, so their patients belong to
+    // the clinic scope alongside plain "doctor" members.
     const memberships = await this.clinicMembershipRepository.find({
       where: {
         clinicId,
         isActive: true,
-        role: ProfessionalRole.DOCTOR,
+        role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
       },
       select: ['professionalId'],
     });
 
-    return memberships.map((membership) => membership.professionalId);
+    return [...new Set(memberships.map((membership) => membership.professionalId))];
   }
 
   private async getClinicPatientIds(clinicId: string): Promise<string[]> {
@@ -341,9 +343,7 @@ export class PatientsService {
 
         if (userType === 'patient') {
           if (!userId || !responsibleIds.includes(userId)) {
-            throw new ForbiddenException(
-              'You do not have permission to access this dependent',
-            );
+            throw new ForbiddenException('You do not have permission to access this dependent');
           }
         } else if (userType === 'doctor') {
           let hasPermission = false;
@@ -357,9 +357,7 @@ export class PatientsService {
             }
           }
           if (!hasPermission) {
-            throw new ForbiddenException(
-              'You do not have permission to access this dependent',
-            );
+            throw new ForbiddenException('You do not have permission to access this dependent');
           }
         }
 
@@ -1263,21 +1261,10 @@ export class PatientsService {
   // ─── Surgery Management ─────────────────────────────────────────────────────
 
   private readonly SURGERY_STATUSES = ['PLANNED', 'PERFORMED', 'CANCELLED'];
-  private readonly SURGERY_LATERALITIES = [
-    'RIGHT',
-    'LEFT',
-    'BILATERAL',
-    'NOT_APPLICABLE',
-  ];
+  private readonly SURGERY_LATERALITIES = ['RIGHT', 'LEFT', 'BILATERAL', 'NOT_APPLICABLE'];
   private readonly SURGERY_TYPES = ['ELECTIVE', 'URGENT', 'EMERGENCY'];
   private readonly SURGERY_TECHNIQUES = ['OPEN', 'LAPAROSCOPIC', 'ROBOTIC', 'OTHER'];
-  private readonly SURGERY_ANESTHESIAS = [
-    'GENERAL',
-    'LOCAL',
-    'REGIONAL',
-    'SEDATION',
-    'OTHER',
-  ];
+  private readonly SURGERY_ANESTHESIAS = ['GENERAL', 'LOCAL', 'REGIONAL', 'SEDATION', 'OTHER'];
 
   /** Validates a date-only string; returns a Date or throws. */
   private parseSurgeryDate(value: string, field: string): Date {
@@ -1288,11 +1275,7 @@ export class PatientsService {
     return d;
   }
 
-  private assertEnum(
-    value: string | undefined | null,
-    allowed: string[],
-    field: string,
-  ) {
+  private assertEnum(value: string | undefined | null, allowed: string[], field: string) {
     if (value !== undefined && value !== null && value !== '') {
       if (!allowed.includes(value)) {
         throw new BadRequestException(`Valor inválido para ${field}`);
@@ -1323,7 +1306,7 @@ export class PatientsService {
     const surgeryDate =
       data.date !== undefined && data.date !== null && data.date !== ''
         ? this.parseSurgeryDate(data.date, 'Data da cirurgia')
-        : existing?.date ?? null;
+        : (existing?.date ?? null);
 
     if (
       data.dischargeDate !== undefined &&
@@ -1332,9 +1315,7 @@ export class PatientsService {
     ) {
       const discharge = this.parseSurgeryDate(data.dischargeDate, 'Data de alta');
       if (surgeryDate && discharge < surgeryDate) {
-        throw new BadRequestException(
-          'A data de alta não pode ser anterior à data da cirurgia',
-        );
+        throw new BadRequestException('A data de alta não pode ser anterior à data da cirurgia');
       }
     }
 
@@ -1485,50 +1466,39 @@ export class PatientsService {
     // Apply only provided fields.
     if (data.name !== undefined) surgery.name = data.name.trim();
     if (data.status !== undefined) surgery.status = data.status;
-    if (data.date !== undefined)
-      surgery.date = data.date ? new Date(data.date) : null;
+    if (data.date !== undefined) surgery.date = data.date ? new Date(data.date) : null;
     if (data.indication !== undefined) surgery.indication = data.indication || null;
-    if (data.diagnosisId !== undefined)
-      surgery.diagnosisId = data.diagnosisId || null;
+    if (data.diagnosisId !== undefined) surgery.diagnosisId = data.diagnosisId || null;
     if (data.bodyRegion !== undefined) surgery.bodyRegion = data.bodyRegion || null;
     if (data.laterality !== undefined) surgery.laterality = data.laterality || null;
     if (data.hospitalOrClinic !== undefined)
       surgery.hospitalOrClinic = data.hospitalOrClinic || null;
-    if (data.surgeonName !== undefined)
-      surgery.surgeonName = data.surgeonName || null;
+    if (data.surgeonName !== undefined) surgery.surgeonName = data.surgeonName || null;
     if (data.surgeonSpecialty !== undefined)
       surgery.surgeonSpecialty = data.surgeonSpecialty || null;
     if (data.city !== undefined) surgery.city = data.city || null;
     if (data.state !== undefined) surgery.state = data.state || null;
-    if (data.surgeryType !== undefined)
-      surgery.surgeryType = data.surgeryType || null;
+    if (data.surgeryType !== undefined) surgery.surgeryType = data.surgeryType || null;
     if (data.technique !== undefined) surgery.technique = data.technique || null;
     if (data.anesthesia !== undefined) surgery.anesthesia = data.anesthesia || null;
     if (data.outcome !== undefined) surgery.outcome = data.outcome || null;
-    if (data.hadComplications !== undefined)
-      surgery.hadComplications = data.hadComplications;
-    if (data.complications !== undefined)
-      surgery.complications = data.complications || null;
-    if (data.hospitalAdmission !== undefined)
-      surgery.hospitalAdmission = data.hospitalAdmission;
+    if (data.hadComplications !== undefined) surgery.hadComplications = data.hadComplications;
+    if (data.complications !== undefined) surgery.complications = data.complications || null;
+    if (data.hospitalAdmission !== undefined) surgery.hospitalAdmission = data.hospitalAdmission;
     if (data.dischargeDate !== undefined)
       surgery.dischargeDate = data.dischargeDate ? new Date(data.dischargeDate) : null;
     if (data.postoperativeNotes !== undefined)
       surgery.postoperativeNotes = data.postoperativeNotes || null;
     if (data.hasPermanentImplant !== undefined)
       surgery.hasPermanentImplant = data.hasPermanentImplant;
-    if (data.implantType !== undefined)
-      surgery.implantType = data.implantType || null;
+    if (data.implantType !== undefined) surgery.implantType = data.implantType || null;
     if (data.implantDescription !== undefined)
       surgery.implantDescription = data.implantDescription || null;
     if (data.implantManufacturer !== undefined)
       surgery.implantManufacturer = data.implantManufacturer || null;
-    if (data.implantModel !== undefined)
-      surgery.implantModel = data.implantModel || null;
-    if (data.implantSerial !== undefined)
-      surgery.implantSerial = data.implantSerial || null;
-    if (data.implantLocation !== undefined)
-      surgery.implantLocation = data.implantLocation || null;
+    if (data.implantModel !== undefined) surgery.implantModel = data.implantModel || null;
+    if (data.implantSerial !== undefined) surgery.implantSerial = data.implantSerial || null;
+    if (data.implantLocation !== undefined) surgery.implantLocation = data.implantLocation || null;
 
     return this.surgeryRepository.save(surgery);
   }
@@ -1657,8 +1627,7 @@ export class PatientsService {
     for (const surgery of surgeries) {
       timeline.push({
         type: 'CIRURGIA',
-        date:
-          surgery.date?.toISOString() || surgery.createdAt?.toISOString(),
+        date: surgery.date?.toISOString() || surgery.createdAt?.toISOString(),
         title: surgery.name || 'Cirurgia',
         description: surgery.indication || surgery.hospitalOrClinic || '',
         data: surgery,
