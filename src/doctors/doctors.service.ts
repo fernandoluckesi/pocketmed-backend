@@ -136,8 +136,9 @@ export class DoctorsService {
       }
     }
 
+    let dependent: Dependent | null = null;
     if (dto.dependentId) {
-      const dependent = await this.dependentRepository.findOne({
+      dependent = await this.dependentRepository.findOne({
         where: { id: dto.dependentId },
         relations: ['responsibles'],
       });
@@ -170,24 +171,46 @@ export class DoctorsService {
 
     const savedRequest = await this.accessRequestRepository.save(accessRequest);
 
-    // Notify patient about the new access request
+    // Notify about the new access request.
     const doctorInfo = await this.doctorRepository.findOne({ where: { id: doctorId } });
-    const targetId = dto.patientId || dto.dependentId;
-    const targetType = dto.dependentId ? 'dependent' : 'patient';
-    if (targetId) {
+
+    const notifyData = {
+      doctorId,
+      doctorName: doctorInfo?.name ?? '',
+      patientId: dto.patientId ?? null,
+      dependentId: dto.dependentId ?? null,
+    };
+
+    if (dto.dependentId) {
+      // A dependent may not have its own account/device token, so the push must
+      // reach the people responsible for them, not the dependent id itself.
+      const body = `Dr(a). ${doctorInfo?.name ?? 'Médico'} está solicitando acesso ao prontuário de ${dependent?.name ?? 'seu dependente'}.`;
+      const responsibles = dependent?.responsibles ?? [];
+
+      for (const responsible of responsibles) {
+        this.notificationsService
+          .createNotification(
+            responsible.id,
+            'patient',
+            'Novo pedido de acesso',
+            body,
+            'ACCESS_REQUEST_CREATED',
+            notifyData,
+            savedRequest.id,
+          )
+          .catch(() => {
+            /* notification is best-effort */
+          });
+      }
+    } else if (dto.patientId) {
       this.notificationsService
         .createNotification(
-          targetId,
-          targetType,
+          dto.patientId,
+          'patient',
           'Novo pedido de acesso',
           `Dr(a). ${doctorInfo?.name ?? 'Médico'} está solicitando acesso ao seu prontuário.`,
           'ACCESS_REQUEST_CREATED',
-          {
-            doctorId,
-            doctorName: doctorInfo?.name ?? '',
-            patientId: dto.patientId ?? null,
-            dependentId: dto.dependentId ?? null,
-          },
+          notifyData,
           savedRequest.id,
         )
         .catch(() => {
