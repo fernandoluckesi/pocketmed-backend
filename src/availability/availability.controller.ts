@@ -12,7 +12,7 @@ import { CreateAvailabilityExceptionDto } from './dto/create-availability-except
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
-@Roles('doctor')
+@Roles('doctor', 'admin')
 export class AvailabilityController {
   constructor(private readonly availabilityService: AvailabilityService) {}
 
