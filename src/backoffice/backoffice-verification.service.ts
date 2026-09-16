@@ -5,9 +5,18 @@ import { DoctorDocument } from '../entities/doctor-document.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
+import { EmailService } from '../email/email.service';
 import { ListSubmissionsQueryDto } from './dto/list-submissions.query.dto';
 
 const REQUIRED_DOCUMENT_TYPES = ['CIM', 'DIPLOMA', 'REGULARIDADE', 'RQE'];
+
+/** Human-readable names used in the emails sent to doctors. */
+const DOCUMENT_LABELS: Record<string, string> = {
+  CIM: 'Carteira de Identidade Médica (CIM)',
+  DIPLOMA: 'Diploma de Graduação em Medicina',
+  REGULARIDADE: 'Certificado de Regularidade de Inscrição',
+  RQE: 'Comprovante de RQE',
+};
 
 type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
@@ -19,6 +28,7 @@ export class BackofficeVerificationService {
     @InjectRepository(Doctor)
     private doctorRepository: Repository<Doctor>,
     private readonly auditService: AuditService,
+    private readonly emailService: EmailService,
   ) {}
 
   /** Sensitive doctor fields are never exposed to the back office listing. */
@@ -177,6 +187,14 @@ export class BackofficeVerificationService {
     const saved = await this.documentRepository.save(document);
     const verificationStatus = await this.recomputeDoctorVerificationStatus(document.doctorId);
 
+    await this.notifyDoctorOfDecision(
+      document.doctorId,
+      document.type,
+      status,
+      verificationStatus,
+      rejectionReason,
+    );
+
     // REQ: approvals/rejections must be traceable (who, when, what changed).
     await this.auditService.record({
       action: status === 'APPROVED' ? AuditAction.APPROVE : AuditAction.REJECT,
@@ -195,6 +213,41 @@ export class BackofficeVerificationService {
     });
 
     return { ...saved, doctorVerificationStatus: verificationStatus };
+  }
+
+  /**
+   * Emails the doctor about the decision. Failures are swallowed by EmailService,
+   * so a mail outage never rolls back an already persisted (and audited) review.
+   */
+  private async notifyDoctorOfDecision(
+    doctorId: string,
+    documentType: string,
+    status: 'APPROVED' | 'REJECTED',
+    verificationStatus: string,
+    rejectionReason?: string,
+  ) {
+    const doctor = await this.doctorRepository.findOne({ where: { id: doctorId } });
+    if (!doctor?.email) return;
+
+    const label = DOCUMENT_LABELS[documentType] || documentType;
+
+    if (status === 'REJECTED') {
+      await this.emailService.sendDocumentRejectedNotice(
+        doctor.email,
+        doctor.name,
+        label,
+        rejectionReason || 'Documento não aprovado pela análise.',
+      );
+      return;
+    }
+
+    // Fully verified → send the completion email instead of a per-document one.
+    if (verificationStatus === 'APPROVED') {
+      await this.emailService.sendVerificationApprovedNotice(doctor.email, doctor.name);
+      return;
+    }
+
+    await this.emailService.sendDocumentApprovedNotice(doctor.email, doctor.name, label);
   }
 
   /**

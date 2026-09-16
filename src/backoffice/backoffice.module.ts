@@ -10,9 +10,11 @@ import { BackofficeVerificationController } from './backoffice-verification.cont
 import { BackofficeAuthService } from './backoffice-auth.service';
 import { BackofficeAuthController } from './backoffice-auth.controller';
 import { BackofficeAuditController } from './backoffice-audit.controller';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
+    EmailModule,
     TypeOrmModule.forFeature([DoctorDocument, Doctor, BackofficeUser]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

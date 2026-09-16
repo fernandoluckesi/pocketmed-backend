@@ -568,11 +568,195 @@ export class EmailService {
     } catch (error) {
       // Non-critical: never block the email change because the notice failed.
       this.logger.warn(
-        `Could not send email-changed notice to ${oldEmail}: ${
-          (error as Error).message
-        }`,
+        `Could not send email-changed notice to ${oldEmail}: ${(error as Error).message}`,
       );
     }
+  }
+
+  /**
+   * Notifies the doctor that a submitted credential document was rejected and
+   * needs to be resubmitted.
+   *
+   * Non-critical: a failure here must never block the review decision, which is
+   * already persisted and audited.
+   */
+  async sendDocumentRejectedNotice(
+    email: string,
+    doctorName: string,
+    documentLabel: string,
+    rejectionReason: string,
+  ) {
+    try {
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Document-rejected notice for ${email} not sent because EMAIL_ENABLED=false.`,
+        );
+        return;
+      }
+
+      const html = this.buildNoticeHtml({
+        userName: doctorName,
+        heading: 'Documento não aprovado',
+        accentColor: '#b91c1c',
+        paragraphs: [
+          `Revisamos o documento <strong>${documentLabel}</strong> enviado para a verificação do seu cadastro e ele <strong>não pôde ser aprovado</strong>.`,
+          `<strong>Motivo:</strong> ${rejectionReason}`,
+          'Envie um novo arquivo pela plataforma para que possamos concluir a sua verificação.',
+        ],
+        actionUrl: `${this.webUrl}/verification`,
+        actionLabel: 'Reenviar documento',
+      });
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: 'Documento não aprovado - Hispora',
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Document-rejected notice sent to ${email}`);
+    } catch (error) {
+      this.logger.warn(
+        `Could not send document-rejected notice to ${email}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /** Notifies the doctor that a single document was approved. */
+  async sendDocumentApprovedNotice(email: string, doctorName: string, documentLabel: string) {
+    try {
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Document-approved notice for ${email} not sent because EMAIL_ENABLED=false.`,
+        );
+        return;
+      }
+
+      const html = this.buildNoticeHtml({
+        userName: doctorName,
+        heading: 'Documento aprovado',
+        accentColor: '#047857',
+        paragraphs: [
+          `O documento <strong>${documentLabel}</strong> foi aprovado pela nossa equipe.`,
+          'Assim que todos os documentos forem aprovados, sua verificação será concluída automaticamente.',
+        ],
+      });
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: 'Documento aprovado - Hispora',
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Document-approved notice sent to ${email}`);
+    } catch (error) {
+      this.logger.warn(
+        `Could not send document-approved notice to ${email}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /** Notifies the doctor that the whole verification was approved. */
+  async sendVerificationApprovedNotice(email: string, doctorName: string) {
+    try {
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Verification-approved notice for ${email} not sent because EMAIL_ENABLED=false.`,
+        );
+        return;
+      }
+
+      const html = this.buildNoticeHtml({
+        userName: doctorName,
+        heading: 'Verificação concluída',
+        accentColor: '#047857',
+        paragraphs: [
+          'Todos os seus documentos profissionais foram aprovados e o seu cadastro está <strong>verificado</strong>.',
+          'Todas as funcionalidades da plataforma já estão liberadas para você.',
+        ],
+        actionUrl: `${this.webUrl}/dashboard`,
+        actionLabel: 'Acessar a plataforma',
+      });
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: 'Sua verificação foi concluída - Hispora',
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Verification-approved notice sent to ${email}`);
+    } catch (error) {
+      this.logger.warn(
+        `Could not send verification-approved notice to ${email}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /** Shared shell for code-less notification emails. */
+  private buildNoticeHtml(options: {
+    userName: string;
+    heading: string;
+    paragraphs: string[];
+    accentColor?: string;
+    actionUrl?: string;
+    actionLabel?: string;
+  }): string {
+    const accent = options.accentColor || '#1B3FCC';
+    const body = options.paragraphs
+      .map(
+        (text) =>
+          `<p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6;">${text}</p>`,
+      )
+      .join('');
+
+    return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f4f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f7fa;padding:40px 20px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+        <tr><td style="background:linear-gradient(135deg,#0d47a1 0%,#1B3FCC 55%,#2B5AED 100%);padding:32px 40px;text-align:center;">
+          <img src="${this.logoHorizontalUrl}" alt="Hispora" height="40" style="display:block;margin:0 auto;max-width:200px;height:40px;" />
+        </td></tr>
+        <tr><td style="padding:36px 40px 24px;">
+          <h1 style="margin:0 0 4px;font-size:20px;font-weight:700;color:#1a1a2e;">Olá, ${options.userName}!</h1>
+          <p style="margin:0 0 20px;font-size:13px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:1px;">${options.heading}</p>
+          ${body}
+          ${
+            options.actionUrl
+              ? `
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:8px 0 0;">
+            <tr><td align="center">
+              <a href="${options.actionUrl}" style="display:inline-block;background-color:#1B3FCC;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:12px;">${options.actionLabel || 'Acessar'}</a>
+            </td></tr>
+          </table>`
+              : ''
+          }
+        </td></tr>
+        <tr><td style="padding:20px 40px 28px;border-top:1px solid #f1f5f9;">
+          <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;">Este é um email automático. Não responda.<br>© ${new Date().getFullYear()} Hispora. Todos os direitos reservados.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
   }
 
   /** Masks an email for display, e.g. "jo***@gmail.com". */
