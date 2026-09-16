@@ -42,6 +42,11 @@ async function run() {
   }
 
   await AppDataSource.initialize();
+
+  // Print the target so nobody seeds the wrong environment by accident.
+  const options = AppDataSource.options as { host?: string; database?: string };
+  console.log(`Banco: ${options.host || '(url)'} / ${options.database || '(url)'}`);
+
   const repository = AppDataSource.getRepository(BackofficeUser);
 
   const existing = await repository.findOne({ where: { email } });
@@ -53,7 +58,7 @@ async function run() {
     existing.backofficeRole = role;
     existing.isActive = true;
     await repository.save(existing);
-    console.log(`Updated back office user ${email} (${role})`);
+    console.log(`Usuario de backoffice ATUALIZADO: ${email} (${role})`);
   } else {
     const created = repository.create({
       name,
@@ -63,8 +68,15 @@ async function run() {
       isActive: true,
     });
     await repository.save(created);
-    console.log(`Created back office user ${email} (${role})`);
+    console.log(`Usuario de backoffice CRIADO: ${email} (${role})`);
   }
+
+  // Confirms the stored hash matches the password provided, so a shell-quoting
+  // mistake surfaces here instead of as a confusing 401 at login.
+  const saved = await repository.findOne({ where: { email } });
+  const matches = saved ? await bcrypt.compare(password, saved.password) : false;
+  console.log(`Verificacao da senha: ${matches ? 'OK' : 'FALHOU'}`);
+  console.log(`Tamanho da senha recebida: ${password.length} caracteres`);
 
   await AppDataSource.destroy();
 }

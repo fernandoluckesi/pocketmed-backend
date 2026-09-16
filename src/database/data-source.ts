@@ -36,22 +36,43 @@ import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { ClinicDoctorInvite } from '../clinic-doctor-association/entities/clinic-doctor-invite.entity';
 import { BackofficeUser } from '../entities/backoffice-user.entity';
 
+/**
+ * Railway exposes a ready-to-use connection string (MYSQL_URL / MYSQL_PUBLIC_URL).
+ * Accepting it lets operators run migrations/seeds against an environment by
+ * pasting a single variable instead of five.
+ */
+const connectionUrl =
+  process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL || process.env.MYSQL_URL;
+
+/**
+ * When a connection URL is provided it must win: TypeORM gives precedence to
+ * explicit host/port/username keys, so they are omitted entirely in that case.
+ */
+const connectionConfig = connectionUrl
+  ? { url: connectionUrl }
+  : {
+      host: process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MYSQLHOST || 'localhost',
+      port: Number(process.env.DB_PORT || process.env.MYSQL_PORT || process.env.MYSQLPORT || 3306),
+      username:
+        process.env.DB_USERNAME ||
+        process.env.MYSQL_USER ||
+        process.env.MYSQLUSER ||
+        'pocketmed_user',
+      password:
+        process.env.DB_PASSWORD ||
+        process.env.MYSQL_PASSWORD ||
+        process.env.MYSQLPASSWORD ||
+        'pocketmed_pass',
+      database:
+        process.env.DB_DATABASE ||
+        process.env.MYSQL_DATABASE ||
+        process.env.MYSQLDATABASE ||
+        'pocketmed',
+    };
+
 const AppDataSource = new DataSource({
   type: 'mysql',
-  host: process.env.DB_HOST || process.env.MYSQL_HOST || process.env.MYSQLHOST || 'localhost',
-  port: Number(process.env.DB_PORT || process.env.MYSQL_PORT || process.env.MYSQLPORT || 3306),
-  username:
-    process.env.DB_USERNAME || process.env.MYSQL_USER || process.env.MYSQLUSER || 'pocketmed_user',
-  password:
-    process.env.DB_PASSWORD ||
-    process.env.MYSQL_PASSWORD ||
-    process.env.MYSQLPASSWORD ||
-    'pocketmed_pass',
-  database:
-    process.env.DB_DATABASE ||
-    process.env.MYSQL_DATABASE ||
-    process.env.MYSQLDATABASE ||
-    'pocketmed',
+  ...connectionConfig,
   entities: [
     Patient,
     Doctor,
