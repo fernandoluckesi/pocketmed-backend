@@ -29,7 +29,8 @@ export class BackofficeAuthService {
     });
 
     // Same generic error for unknown email, wrong password and inactive account
-    // so the endpoint cannot be used to enumerate staff accounts.
+    // so the endpoint cannot be used to enumerate staff accounts. The specific
+    // reason goes to the audit trail only.
     const failLogin = async (reason: string) => {
       await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
         resourceType: AuditResourceType.USER,
@@ -38,7 +39,7 @@ export class BackofficeAuthService {
         reason: 'AUTHENTICATION_FAILED',
         metadata: { email: normalizedEmail, scope: 'backoffice', detail: reason },
       });
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Email ou senha inválidos.');
     };
 
     if (!user) return failLogin('USER_NOT_FOUND');
@@ -77,7 +78,7 @@ export class BackofficeAuthService {
   async getProfile(userId: string) {
     const user = await this.backofficeUserRepository.findOne({ where: { id: userId } });
     if (!user) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException('Sessão inválida. Faça login novamente.');
     }
     return {
       id: user.id,

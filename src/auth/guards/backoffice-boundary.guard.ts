@@ -43,11 +43,11 @@ export class BackofficeBoundaryGuard implements CanActivate {
     const isBackofficeUser = user.type === BACKOFFICE_PREFIX;
 
     if (isBackofficeUser && !isBackofficeRoute) {
-      throw new ForbiddenException('Back office accounts can only access back office endpoints');
+      throw new ForbiddenException('Contas de backoffice só podem acessar recursos do backoffice.');
     }
 
     if (!isBackofficeUser && isBackofficeRoute) {
-      throw new ForbiddenException('Only Hispora staff accounts can access back office endpoints');
+      throw new ForbiddenException('Apenas contas da equipe Hispora podem acessar o backoffice.');
     }
 
     return true;

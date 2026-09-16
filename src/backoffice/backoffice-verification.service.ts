@@ -117,7 +117,7 @@ export class BackofficeVerificationService {
   async getSubmission(doctorId: string) {
     const doctor = await this.doctorRepository.findOne({ where: { id: doctorId } });
     if (!doctor) {
-      throw new NotFoundException('Doctor not found');
+      throw new NotFoundException('Médico não encontrado.');
     }
 
     const documents = await this.documentRepository.find({
@@ -170,11 +170,12 @@ export class BackofficeVerificationService {
   ) {
     const document = await this.documentRepository.findOne({ where: { id: documentId } });
     if (!document) {
-      throw new NotFoundException('Document not found');
+      throw new NotFoundException('Documento não encontrado.');
     }
 
     if (document.status === status) {
-      throw new BadRequestException(`Document is already ${status.toLowerCase()}`);
+      const label = status === 'APPROVED' ? 'aprovado' : 'rejeitado';
+      throw new BadRequestException(`Este documento já foi ${label}.`);
     }
 
     const previousStatus = document.status;

@@ -306,7 +306,7 @@ describe('Backoffice product boundary (e2e)', () => {
         .set('Authorization', `Bearer ${backofficeToken}`)
         .expect(403);
 
-      expect(res.body.message).toBe('Back office accounts can only access back office endpoints');
+      expect(res.body.message).toBe('Contas de backoffice só podem acessar recursos do backoffice.');
     });
   });
 
@@ -367,7 +367,7 @@ describe('Backoffice product boundary (e2e)', () => {
         .send({ email: 'staff-boundary@hispora.com', password: 'wrong-password' })
         .expect(401);
 
-      expect(res.body.message).toBe('Invalid credentials');
+      expect(res.body.message).toBe('Email ou senha inválidos.');
     });
 
     it('returns the same generic error for an unknown email', async () => {
@@ -377,7 +377,7 @@ describe('Backoffice product boundary (e2e)', () => {
         .expect(401);
 
       // No account enumeration: identical message for unknown vs wrong password.
-      expect(res.body.message).toBe('Invalid credentials');
+      expect(res.body.message).toBe('Email ou senha inválidos.');
     });
   });
 });
