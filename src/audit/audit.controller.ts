@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuditService } from './audit.service';
 import { AuditIntegrityService } from './audit-integrity.service';
@@ -13,8 +13,15 @@ import { AuditAction, AuditResourceType } from './audit.constants';
 
 /**
  * REQ-AUD-048/049 — Protected audit query endpoints.
- * Only admin roles can access audit logs.
  * REQ-AUD-050 — Access to audit logs is itself audited.
+ *
+ * Two distinct audiences, deliberately separated:
+ *
+ * - **Clinic admin** (`@Roles('admin')`): may only read the audit trail of their
+ *   OWN clinic. The tenant is forced server-side from the JWT, so a clinic admin
+ *   can never read another clinic's events or the platform-wide trail.
+ * - **Platform staff** (`@Roles('backoffice')`): owns the platform-level
+ *   operations (integrity, monitoring, retention) and can read across tenants.
  *
  * Phase 2: Adds integrity verification, monitoring, anomaly alerts, and retention endpoints.
  */
@@ -32,20 +39,37 @@ export class AuditController {
 
   // ─── Events Query ───────────────────────────────────────────────
 
+  /**
+   * Resolves the tenant a clinic admin is allowed to read, ignoring any
+   * client-supplied `tenantId` so it cannot be used to read other clinics.
+   */
+  private resolveTenantScope(user: any): string {
+    if (!user?.activeClinicId) {
+      throw new ForbiddenException('Active clinic context is required to read audit logs');
+    }
+    return String(user.activeClinicId);
+  }
+
   @Get('events')
   @Roles('admin')
-  @ApiOperation({ summary: 'List audit events with filters and pagination' })
+  @ApiOperation({
+    summary: "List audit events of the admin's own clinic (filters + pagination)",
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of audit events' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   async listEvents(@Query() filters: AuditFilterDto, @CurrentUser() user: any) {
+    const tenantId = this.resolveTenantScope(user);
+
     // REQ-AUD-050 — Audit the access to audit logs
     await this.auditService.recordSecurityEvent(AuditAction.READ, {
       resourceType: AuditResourceType.AUDIT_EVENT,
-      metadata: { filters },
+      metadata: { filters, scope: 'clinic', tenantId },
     });
 
     const result = await this.auditService.findAll({
       ...filters,
+      // Server-side override: a clinic admin is always scoped to their clinic.
+      tenantId,
       startDate: filters.startDate ? new Date(filters.startDate) : undefined,
       endDate: filters.endDate ? new Date(filters.endDate) : undefined,
     });
@@ -55,18 +79,24 @@ export class AuditController {
 
   @Get('events/:id')
   @Roles('admin')
-  @ApiOperation({ summary: 'Get a single audit event by ID' })
+  @ApiOperation({ summary: "Get a single audit event from the admin's own clinic" })
   @ApiResponse({ status: 200, description: 'Audit event details' })
   @ApiResponse({ status: 404, description: 'Not found' })
   async getEvent(@Param('id') id: string, @CurrentUser() user: any) {
+    const tenantId = this.resolveTenantScope(user);
+
     // REQ-AUD-050
     await this.auditService.recordSecurityEvent(AuditAction.READ, {
       resourceType: AuditResourceType.AUDIT_EVENT,
       resourceId: id,
+      metadata: { scope: 'clinic', tenantId },
     });
 
     const event = await this.auditService.findById(id);
-    if (!event) {
+
+    // Same response for "does not exist" and "belongs to another clinic" so the
+    // endpoint cannot be used to probe for event ids across tenants.
+    if (!event || event.tenantId !== tenantId) {
       return { message: 'Audit event not found' };
     }
     return event;
@@ -75,7 +105,7 @@ export class AuditController {
   // ─── Integrity ──────────────────────────────────────────────────
 
   @Get('integrity/full')
-  @Roles('admin')
+  @Roles('backoffice')
   @ApiOperation({ summary: 'Run full hash chain integrity verification' })
   @ApiResponse({ status: 200, description: 'Integrity check result' })
   async verifyFullIntegrity(@CurrentUser() user: any) {
@@ -88,7 +118,7 @@ export class AuditController {
   }
 
   @Get('integrity/recent')
-  @Roles('admin')
+  @Roles('backoffice')
   @ApiOperation({ summary: 'Quick integrity check on last 100 events' })
   @ApiResponse({ status: 200, description: 'Recent integrity check result' })
   async verifyRecentIntegrity(@CurrentUser() user: any) {
@@ -103,7 +133,7 @@ export class AuditController {
   // ─── Monitoring ─────────────────────────────────────────────────
 
   @Get('monitoring/health')
-  @Roles('admin')
+  @Roles('backoffice')
   @ApiOperation({ summary: 'Audit system health: stats, integrity quick-check, retention policy' })
   @ApiResponse({ status: 200, description: 'Audit system health report' })
   async getHealth(@CurrentUser() user: any) {
@@ -133,7 +163,7 @@ export class AuditController {
   }
 
   @Get('monitoring/alerts')
-  @Roles('admin')
+  @Roles('backoffice')
   @ApiOperation({ summary: 'Get recent anomaly alerts' })
   @ApiResponse({ status: 200, description: 'List of anomaly alerts' })
   async getAlerts(@CurrentUser() user: any) {
@@ -144,7 +174,7 @@ export class AuditController {
   }
 
   @Post('monitoring/run-checks')
-  @Roles('admin')
+  @Roles('backoffice')
   @ApiOperation({ summary: 'Manually trigger anomaly detection checks' })
   @ApiResponse({ status: 200, description: 'Anomaly check results' })
   async runAnomalyChecks(@CurrentUser() user: any) {
@@ -163,7 +193,7 @@ export class AuditController {
   // ─── Retention ──────────────────────────────────────────────────
 
   @Get('retention/policy')
-  @Roles('admin')
+  @Roles('backoffice')
   @ApiOperation({ summary: 'Get current retention policy configuration' })
   @ApiResponse({ status: 200, description: 'Retention policy details' })
   async getRetentionPolicy() {
@@ -171,7 +201,7 @@ export class AuditController {
   }
 
   @Post('retention/run')
-  @Roles('admin')
+  @Roles('backoffice')
   @ApiOperation({ summary: 'Manually trigger retention cleanup' })
   @ApiResponse({ status: 200, description: 'Retention cleanup result' })
   async runRetention(@CurrentUser() user: any) {

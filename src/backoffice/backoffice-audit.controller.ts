@@ -19,6 +19,11 @@ import { AuditFilterDto } from '../audit/dto/audit-filter.dto';
 export class BackofficeAuditController {
   constructor(private readonly auditService: AuditService) {}
 
+  /**
+   * Platform-wide by design: internal staff need to correlate events across
+   * clinics. `tenantId` is accepted here as an optional narrowing filter, unlike
+   * `/audit/events` where it is forced from the clinic admin's own tenant.
+   */
   @Get('events')
   @ApiOperation({ summary: 'List audit events (approvals, rejections, access, etc.)' })
   @ApiResponse({ status: 200, description: 'Paginated audit events' })

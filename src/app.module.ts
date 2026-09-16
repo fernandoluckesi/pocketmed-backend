@@ -17,6 +17,7 @@ import { UploadModule } from './upload/upload.module';
 import { EmailModule } from './email/email.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { BackofficeBoundaryGuard } from './auth/guards/backoffice-boundary.guard';
 import { Patient } from './entities/patient.entity';
 import { Doctor } from './entities/doctor.entity';
 import { Dependent } from './entities/dependent.entity';
@@ -182,6 +183,12 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      // Runs after JwtAuthGuard so `request.user` is populated: keeps back office
+      // tokens out of clinical routes and clinical tokens out of /backoffice/*.
+      provide: APP_GUARD,
+      useClass: BackofficeBoundaryGuard,
     },
     {
       provide: APP_GUARD,
