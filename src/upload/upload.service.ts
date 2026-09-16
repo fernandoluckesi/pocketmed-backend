@@ -72,6 +72,11 @@ export class UploadService implements OnModuleInit {
     }
   }
 
+  /** True when object storage is usable. Lets callers fail fast when it is not. */
+  get isAvailable(): boolean {
+    return this.isConfigured && !!this.minioClient;
+  }
+
   async uploadFile(file: Express.Multer.File, folder: string = 'images'): Promise<string> {
     if (!this.isConfigured || !this.minioClient) {
       this.logger.warn('MinIO not configured — upload skipped, returning empty URL.');

@@ -65,10 +65,13 @@ export class BackofficeVerificationService {
        * "PENDING" yet already has files awaiting analysis. Filtering by the
        * doctor status alone made those submissions invisible to the reviewer.
        */
+      // `fileUrl <> ''` filters out broken uploads: without a stored file there
+      // is nothing for the reviewer to open.
       qb.where(
         `EXISTS (
           SELECT 1 FROM doctor_documents dd
           WHERE dd.doctorId = doctor.id AND dd.status = 'PENDING'
+            AND dd.fileUrl IS NOT NULL AND dd.fileUrl <> ''
         )`,
       );
     } else if (status === 'PENDING') {
@@ -79,6 +82,7 @@ export class BackofficeVerificationService {
         `NOT EXISTS (
           SELECT 1 FROM doctor_documents dd
           WHERE dd.doctorId = doctor.id AND dd.status = 'PENDING'
+            AND dd.fileUrl IS NOT NULL AND dd.fileUrl <> ''
         )`,
       );
     } else {
@@ -111,7 +115,8 @@ export class BackofficeVerificationService {
     });
 
     const data = doctors.map((doctor) => {
-      const docs = documents.filter((d) => d.doctorId === doctor.id);
+      // Ignore rows without a stored file (broken uploads).
+      const docs = documents.filter((d) => d.doctorId === doctor.id && d.fileUrl);
       return {
         ...this.sanitizeDoctor(doctor),
         documents: REQUIRED_DOCUMENT_TYPES.map((type) => {
@@ -145,10 +150,12 @@ export class BackofficeVerificationService {
       throw new NotFoundException('Médico não encontrado.');
     }
 
-    const documents = await this.documentRepository.find({
+    const allDocuments = await this.documentRepository.find({
       where: { doctorId },
       order: { createdAt: 'DESC' },
     });
+    // Only documents with a stored file can actually be reviewed.
+    const documents = allDocuments.filter((d) => d.fileUrl);
 
     // Viewing credential documents is sensitive → audit the access.
     await this.auditService.recordRead(AuditResourceType.PROFESSIONAL, doctorId, {
@@ -346,6 +353,7 @@ export class BackofficeVerificationService {
       EXISTS (
         SELECT 1 FROM doctor_documents dd
         WHERE dd.doctorId = doctor.id AND dd.status = 'PENDING'
+          AND dd.fileUrl IS NOT NULL AND dd.fileUrl <> ''
       )`;
 
     const [submitted, approved, rejected, pending] = await Promise.all([

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DoctorDocument } from '../entities/doctor-document.entity';
@@ -41,15 +46,32 @@ export class DoctorDocumentsService {
       where: { doctorId, type },
     });
 
-    // Validated BEFORE uploading: otherwise a rejected request would still leave
-    // an orphan file in the storage bucket.
-    if (existing?.status === 'PENDING') {
+    /**
+     * Validated BEFORE uploading: otherwise a rejected request would still leave
+     * an orphan file in the storage bucket.
+     *
+     * A row with an empty fileUrl is a broken upload (storage was unavailable),
+     * not a real submission, so it must remain replaceable even while PENDING.
+     */
+    if (existing?.status === 'PENDING' && existing.fileUrl) {
       throw new BadRequestException(
         'Este documento está em análise e não pode ser alterado até haver um retorno.',
       );
     }
 
     const fileUrl = await this.uploadService.uploadFile(file, `documents/doctors/${doctorId}`);
+
+    /**
+     * UploadService returns an empty string when storage is unavailable instead
+     * of throwing. Persisting that would create a document the doctor sees as
+     * "sent" but which has no file to open — and nothing for the reviewer to
+     * analyse. Fail loudly so the upload can be retried.
+     */
+    if (!fileUrl) {
+      throw new ServiceUnavailableException(
+        'Não foi possível armazenar o arquivo agora. Tente novamente em alguns instantes.',
+      );
+    }
 
     if (existing) {
       existing.fileUrl = fileUrl;
@@ -95,7 +117,10 @@ export class DoctorDocumentsService {
     const doctor = await this.doctorRepository.findOne({ where: { id: doctorId } });
 
     const documentStatus = VALID_DOCUMENT_TYPES.map((type) => {
-      const doc = documents.find((d) => d.type === type);
+      const found = documents.find((d) => d.type === type);
+      // Rows saved before the storage guard may carry an empty fileUrl; treat
+      // them as not uploaded so the doctor is prompted to send the file again.
+      const doc = found?.fileUrl ? found : undefined;
       const status = doc?.status || 'NOT_UPLOADED';
       return {
         id: doc?.id || null,
