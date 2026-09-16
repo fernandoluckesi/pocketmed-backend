@@ -55,11 +55,16 @@ export class ExamSchedulingService {
       );
     }
 
-    const scheduledDateTime = new Date(dto.scheduledDateTime);
-    if (scheduledDateTime <= new Date()) {
-      throw new BadRequestException(
-        'A data e horário do agendamento não podem estar no passado.',
-      );
+    // Date/time is optional (e.g. an exam prescribed during a consultation is
+    // not scheduled yet). Only validate "not in the past" when it is provided.
+    let scheduledDateTime: Date | null = null;
+    if (dto.scheduledDateTime) {
+      scheduledDateTime = new Date(dto.scheduledDateTime);
+      if (scheduledDateTime <= new Date()) {
+        throw new BadRequestException(
+          'A data e horário do agendamento não podem estar no passado.',
+        );
+      }
     }
 
     // When scheduling for a dependent, verify the caller is a responsible.
@@ -70,6 +75,7 @@ export class ExamSchedulingService {
     const schedule = this.examScheduleRepository.create({
       patientId,
       dependentId: dto.dependentId ?? null,
+      appointmentId: dto.appointmentId ?? null,
       scheduledDateTime,
       status: ExamScheduleStatus.PENDING,
     });
@@ -89,6 +95,23 @@ export class ExamSchedulingService {
     return this.examScheduleRepository.findOne({
       where: { id: savedSchedule.id },
       relations: SCHEDULE_RELATIONS,
+    });
+  }
+
+  /** Schedules linked to a given appointment, owned by the patient. */
+  async findByAppointment(
+    appointmentId: string,
+    patientId: string,
+  ): Promise<ExamSchedule[]> {
+    const dependentIds = await this.getDependentIds(patientId);
+    const where: any[] = [{ appointmentId, patientId, dependentId: IsNull() }];
+    if (dependentIds.length > 0) {
+      where.push({ appointmentId, dependentId: In(dependentIds) });
+    }
+    return this.examScheduleRepository.find({
+      where,
+      relations: SCHEDULE_RELATIONS,
+      order: { createdAt: 'ASC' },
     });
   }
 
@@ -142,6 +165,7 @@ export class ExamSchedulingService {
     data: {
       status?: string;
       scheduledDateTime?: string;
+      appointmentId?: string;
       exams?: { examCatalogId?: string | null; customExamName?: string | null }[];
     },
   ): Promise<ExamSchedule> {
@@ -154,6 +178,9 @@ export class ExamSchedulingService {
     }
     if (data.scheduledDateTime) {
       schedule.scheduledDateTime = new Date(data.scheduledDateTime);
+    }
+    if (data.appointmentId !== undefined) {
+      schedule.appointmentId = data.appointmentId;
     }
     await this.examScheduleRepository.save(schedule);
 

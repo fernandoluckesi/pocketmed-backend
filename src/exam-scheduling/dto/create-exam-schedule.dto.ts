@@ -47,10 +47,14 @@ export class CreateExamScheduleDto {
 
   @ApiProperty({
     example: '2024-06-15T09:00:00.000Z',
-    description: 'Scheduled date and time in ISO 8601 format',
+    description:
+      'Scheduled date and time in ISO 8601 format. Optional: an exam prescribed during a consultation may not be scheduled yet.',
+    required: false,
+    nullable: true,
   })
+  @IsOptional()
   @IsDateString()
-  scheduledDateTime: string;
+  scheduledDateTime?: string | null;
 
   @ApiProperty({
     example: '123e4567-e89b-12d3-a456-426614174000',
@@ -62,4 +66,14 @@ export class CreateExamScheduleDto {
   @IsOptional()
   @IsUUID()
   dependentId?: string | null;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Appointment ID when the exam is created from a consultation.',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID()
+  appointmentId?: string | null;
 }

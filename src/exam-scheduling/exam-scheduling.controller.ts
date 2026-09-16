@@ -46,6 +46,16 @@ export class ExamSchedulingController {
     return this.examSchedulingService.findAllByPatient(user.userId);
   }
 
+  @Get('by-appointment/:appointmentId')
+  @ApiOperation({ summary: 'Get exam schedules linked to a given appointment' })
+  @ApiResponse({ status: 200, description: 'Returns list of exam schedules' })
+  async findByAppointment(
+    @CurrentUser() user: any,
+    @Param('appointmentId') appointmentId: string,
+  ) {
+    return this.examSchedulingService.findByAppointment(appointmentId, user.userId);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a single exam schedule by id' })
   @ApiResponse({ status: 200, description: 'Returns the exam schedule' })
@@ -64,6 +74,7 @@ export class ExamSchedulingController {
     body: {
       status?: string;
       scheduledDateTime?: string;
+      appointmentId?: string;
       exams?: { examCatalogId?: string | null; customExamName?: string | null }[];
     },
   ) {
