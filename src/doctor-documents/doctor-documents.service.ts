@@ -24,31 +24,43 @@ export class DoctorDocumentsService {
   ): Promise<DoctorDocument> {
     if (!VALID_DOCUMENT_TYPES.includes(type)) {
       throw new BadRequestException(
-        `Invalid document type. Must be one of: ${VALID_DOCUMENT_TYPES.join(', ')}`,
+        `Tipo de documento inválido. Use um destes: ${VALID_DOCUMENT_TYPES.join(', ')}`,
       );
+    }
+
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo foi enviado.');
     }
 
     const doctor = await this.doctorRepository.findOne({ where: { id: doctorId } });
     if (!doctor) {
-      throw new NotFoundException('Doctor not found');
+      throw new NotFoundException('Médico não encontrado.');
     }
 
-    // Upload file to storage
-    const fileUrl = await this.uploadService.uploadFile(file, `documents/doctors/${doctorId}`);
-
-    // Check if document of this type already exists for this doctor
     const existing = await this.documentRepository.findOne({
       where: { doctorId, type },
     });
 
+    // Validated BEFORE uploading: otherwise a rejected request would still leave
+    // an orphan file in the storage bucket.
+    if (existing?.status === 'PENDING') {
+      throw new BadRequestException(
+        'Este documento está em análise e não pode ser alterado até haver um retorno.',
+      );
+    }
+
+    const fileUrl = await this.uploadService.uploadFile(file, `documents/doctors/${doctorId}`);
+
     if (existing) {
-      // Update existing document
       existing.fileUrl = fileUrl;
       existing.originalFileName = file.originalname;
       existing.status = 'PENDING';
       existing.rejectionReason = null;
       existing.reviewedAt = null;
-      return this.documentRepository.save(existing);
+      existing.reviewedBy = null;
+      const saved = await this.documentRepository.save(existing);
+      await this.updateDoctorVerificationStatus(doctorId);
+      return saved;
     }
 
     // Create new document record
@@ -84,13 +96,19 @@ export class DoctorDocumentsService {
 
     const documentStatus = VALID_DOCUMENT_TYPES.map((type) => {
       const doc = documents.find((d) => d.type === type);
+      const status = doc?.status || 'NOT_UPLOADED';
       return {
+        id: doc?.id || null,
         type,
         uploaded: !!doc,
-        status: doc?.status || 'NOT_UPLOADED',
+        status,
         fileUrl: doc?.fileUrl || null,
         originalFileName: doc?.originalFileName || null,
         rejectionReason: doc?.rejectionReason || null,
+        reviewedAt: doc?.reviewedAt || null,
+        submittedAt: doc?.updatedAt || null,
+        // Drives the UI lock: a document under review cannot be replaced.
+        canReplace: status !== 'PENDING',
       };
     });
 
@@ -99,19 +117,33 @@ export class DoctorDocumentsService {
       documents: documentStatus,
       allUploaded: documentStatus.every((d) => d.uploaded),
       allApproved: documentStatus.every((d) => d.status === 'APPROVED'),
+      pendingCount: documentStatus.filter((d) => d.status === 'PENDING').length,
+      rejectedCount: documentStatus.filter((d) => d.status === 'REJECTED').length,
     };
   }
 
+  /**
+   * Recomputes the doctor's overall status from the individual documents.
+   * Mirrors the back office logic so both sides always agree.
+   */
   private async updateDoctorVerificationStatus(doctorId: string) {
-    const documents = await this.documentRepository.find({
-      where: { doctorId },
-    });
+    const documents = await this.documentRepository.find({ where: { doctorId } });
+    const byType = new Map(documents.map((d) => [d.type, d]));
 
-    const uploadedTypes = documents.map((d) => d.type);
-    const allUploaded = VALID_DOCUMENT_TYPES.every((t) => uploadedTypes.includes(t));
+    const allUploaded = VALID_DOCUMENT_TYPES.every((t) => byType.has(t));
+    const hasRejected = VALID_DOCUMENT_TYPES.some((t) => byType.get(t)?.status === 'REJECTED');
+    const allApproved =
+      allUploaded && VALID_DOCUMENT_TYPES.every((t) => byType.get(t)?.status === 'APPROVED');
 
-    if (allUploaded) {
-      await this.doctorRepository.update(doctorId, { verificationStatus: 'SUBMITTED' });
+    let verificationStatus = 'PENDING';
+    if (hasRejected) {
+      verificationStatus = 'REJECTED';
+    } else if (allApproved) {
+      verificationStatus = 'APPROVED';
+    } else if (allUploaded) {
+      verificationStatus = 'SUBMITTED';
     }
+
+    await this.doctorRepository.update(doctorId, { verificationStatus });
   }
 }

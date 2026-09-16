@@ -6,6 +6,7 @@ import { Doctor } from '../entities/doctor.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { EmailService } from '../email/email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ListSubmissionsQueryDto } from './dto/list-submissions.query.dto';
 
 const REQUIRED_DOCUMENT_TYPES = ['CIM', 'DIPLOMA', 'REGULARIDADE', 'RQE'];
@@ -29,6 +30,7 @@ export class BackofficeVerificationService {
     private doctorRepository: Repository<Doctor>,
     private readonly auditService: AuditService,
     private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /** Sensitive doctor fields are never exposed to the back office listing. */
@@ -53,12 +55,35 @@ export class BackofficeVerificationService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
 
+    const status = query.status || 'SUBMITTED';
     const qb = this.doctorRepository.createQueryBuilder('doctor');
 
-    // Default queue: only what is actually waiting for a decision.
-    qb.where('doctor.verificationStatus = :status', {
-      status: query.status || 'SUBMITTED',
-    });
+    if (status === 'SUBMITTED') {
+      /**
+       * The review queue is driven by DOCUMENTS, not by the doctor's overall
+       * status: a doctor who uploaded only some of the required files stays
+       * "PENDING" yet already has files awaiting analysis. Filtering by the
+       * doctor status alone made those submissions invisible to the reviewer.
+       */
+      qb.where(
+        `EXISTS (
+          SELECT 1 FROM doctor_documents dd
+          WHERE dd.doctorId = doctor.id AND dd.status = 'PENDING'
+        )`,
+      );
+    } else if (status === 'PENDING') {
+      // Incomplete: no document awaiting review and not yet fully resolved.
+      qb.where('doctor.verificationStatus IN (:...statuses)', {
+        statuses: ['PENDING', 'SUBMITTED'],
+      }).andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM doctor_documents dd
+          WHERE dd.doctorId = doctor.id AND dd.status = 'PENDING'
+        )`,
+      );
+    } else {
+      qb.where('doctor.verificationStatus = :status', { status });
+    }
 
     if (query.search?.trim()) {
       const term = `%${query.search.trim().toLowerCase()}%`;
@@ -190,6 +215,7 @@ export class BackofficeVerificationService {
 
     await this.notifyDoctorOfDecision(
       document.doctorId,
+      documentId,
       document.type,
       status,
       verificationStatus,
@@ -222,6 +248,7 @@ export class BackofficeVerificationService {
    */
   private async notifyDoctorOfDecision(
     doctorId: string,
+    documentId: string,
     documentType: string,
     status: 'APPROVED' | 'REJECTED',
     verificationStatus: string,
@@ -232,7 +259,30 @@ export class BackofficeVerificationService {
 
     const label = DOCUMENT_LABELS[documentType] || documentType;
 
+    // In-app notification (bell + push). Never let a notification failure roll
+    // back a review decision that is already persisted and audited.
+    const notify = async (title: string, body: string, type: string) => {
+      try {
+        await this.notificationsService.createNotification(
+          doctorId,
+          'doctor',
+          title,
+          body,
+          type,
+          { documentType, status, verificationStatus, rejectionReason },
+          documentId,
+        );
+      } catch {
+        // Intentionally swallowed: audit already holds the record of the decision.
+      }
+    };
+
     if (status === 'REJECTED') {
+      await notify(
+        'Documento não aprovado',
+        `${label}: ${rejectionReason || 'Documento não aprovado pela análise.'}`,
+        'DOCTOR_DOCUMENT_REJECTED',
+      );
       await this.emailService.sendDocumentRejectedNotice(
         doctor.email,
         doctor.name,
@@ -242,12 +292,22 @@ export class BackofficeVerificationService {
       return;
     }
 
-    // Fully verified → send the completion email instead of a per-document one.
+    // Fully verified → send the completion message instead of a per-document one.
     if (verificationStatus === 'APPROVED') {
+      await notify(
+        'Verificação concluída',
+        'Todos os seus documentos foram aprovados. Seu cadastro está verificado.',
+        'DOCTOR_VERIFICATION_APPROVED',
+      );
       await this.emailService.sendVerificationApprovedNotice(doctor.email, doctor.name);
       return;
     }
 
+    await notify(
+      'Documento aprovado',
+      `${label} foi aprovado pela nossa equipe.`,
+      'DOCTOR_DOCUMENT_APPROVED',
+    );
     await this.emailService.sendDocumentApprovedNotice(doctor.email, doctor.name, label);
   }
 
@@ -277,13 +337,28 @@ export class BackofficeVerificationService {
     return verificationStatus;
   }
 
-  /** Counters for the back office dashboard/queue badges. */
+  /**
+   * Counters for the queue tabs. "submitted" counts doctors with at least one
+   * document awaiting review, matching what the SUBMITTED tab actually lists.
+   */
   async getStats() {
-    const [pending, submitted, approved, rejected] = await Promise.all([
-      this.doctorRepository.count({ where: { verificationStatus: 'PENDING' } }),
-      this.doctorRepository.count({ where: { verificationStatus: 'SUBMITTED' } }),
+    const withPendingDocs = `
+      EXISTS (
+        SELECT 1 FROM doctor_documents dd
+        WHERE dd.doctorId = doctor.id AND dd.status = 'PENDING'
+      )`;
+
+    const [submitted, approved, rejected, pending] = await Promise.all([
+      this.doctorRepository.createQueryBuilder('doctor').where(withPendingDocs).getCount(),
       this.doctorRepository.count({ where: { verificationStatus: 'APPROVED' } }),
       this.doctorRepository.count({ where: { verificationStatus: 'REJECTED' } }),
+      this.doctorRepository
+        .createQueryBuilder('doctor')
+        .where('doctor.verificationStatus IN (:...statuses)', {
+          statuses: ['PENDING', 'SUBMITTED'],
+        })
+        .andWhere(`NOT ${withPendingDocs}`)
+        .getCount(),
     ]);
 
     return { pending, submitted, approved, rejected };
