@@ -39,8 +39,15 @@ export class ExamSchedule {
   @JoinColumn({ name: 'dependentId' })
   dependent: Dependent | null;
 
-  @Column({ type: 'timestamp' })
-  scheduledDateTime: Date;
+  // When the schedule was created as part of a consultation, it is linked to
+  // the appointment. Null for standalone exam schedules.
+  @Column({ type: 'uuid', nullable: true })
+  appointmentId: string | null;
+
+  // Optional: an exam prescribed during a consultation may not be scheduled to
+  // a date/time yet. Null means "not scheduled".
+  @Column({ type: 'timestamp', nullable: true })
+  scheduledDateTime: Date | null;
 
   @Column({
     type: 'enum',

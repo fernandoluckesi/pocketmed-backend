@@ -148,6 +148,23 @@ export class DoctorsService {
       }
     }
 
+    // Block a new request when access is already granted (active permission),
+    // otherwise the doctor could re-request access they already have.
+    const existingPermission = await this.permissionRepository.findOne({
+      where: {
+        doctorId,
+        patientId: dto.patientId,
+        dependentId: dto.dependentId,
+        isActive: true,
+      },
+    });
+
+    if (existingPermission) {
+      throw new BadRequestException(
+        'Você já possui acesso ao prontuário deste paciente.',
+      );
+    }
+
     const existingRequest = await this.accessRequestRepository.findOne({
       where: {
         doctorId,
@@ -158,7 +175,7 @@ export class DoctorsService {
     });
 
     if (existingRequest) {
-      throw new BadRequestException('Access request already pending');
+      throw new BadRequestException('Já existe uma solicitação pendente para este paciente.');
     }
 
     const accessRequest = this.accessRequestRepository.create({
