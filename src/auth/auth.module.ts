@@ -13,6 +13,8 @@ import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
 import { BackofficeUser } from '../entities/backoffice-user.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
+import { DoctorDocument } from '../entities/doctor-document.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { UploadModule } from '../upload/upload.module';
 import { EmailModule } from '../email/email.module';
 
@@ -26,7 +28,9 @@ import { EmailModule } from '../email/email.module';
       Secretary,
       BackofficeUser,
       DoctorPermission,
+      DoctorDocument,
     ]),
+    NotificationsModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -7,7 +7,6 @@ import { Public } from '../auth/decorators/public.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { BackofficeAuthService } from './backoffice-auth.service';
 import { BackofficeLoginDto } from './dto/backoffice-login.dto';
-import { BootstrapBackofficeDto } from './dto/bootstrap-backoffice.dto';
 
 /**
  * Authentication for internal Hispora staff.
@@ -29,24 +28,6 @@ export class BackofficeAuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() dto: BackofficeLoginDto) {
     return this.backofficeAuthService.login(dto.email, dto.password);
-  }
-
-  /**
-   * TEMPORARY — creates the first back office account when there is no shell
-   * access to the production database.
-   *
-   * Disabled unless `BACKOFFICE_BOOTSTRAP_SECRET` is set, and refuses to run
-   * once any account exists. DELETE this route (and the env var) right after
-   * creating the first account.
-   */
-  @Public()
-  @Post('bootstrap')
-  @HttpCode(201)
-  @ApiOperation({ summary: 'TEMPORARY: create the first back office account' })
-  @ApiResponse({ status: 201, description: 'First account created' })
-  @ApiResponse({ status: 403, description: 'Disabled, wrong secret, or already initialized' })
-  async bootstrap(@Body() dto: BootstrapBackofficeDto) {
-    return this.backofficeAuthService.bootstrapFirstUser(dto);
   }
 
   @Get('me')

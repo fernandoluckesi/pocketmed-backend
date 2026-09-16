@@ -24,6 +24,8 @@ import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
+import { DoctorDocument } from '../entities/doctor-document.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ProfessionalRole } from './professional-role.enum';
 import { normalizeCpf, isValidCpf } from '../common/validators/cpf.util';
 
@@ -51,10 +53,13 @@ export class AuthService {
     private secretaryRepository: Repository<Secretary>,
     @InjectRepository(DoctorPermission)
     private doctorPermissionRepository: Repository<DoctorPermission>,
+    @InjectRepository(DoctorDocument)
+    private doctorDocumentRepository: Repository<DoctorDocument>,
     private jwtService: JwtService,
     private uploadService: UploadService,
     private emailService: EmailService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
     private dataSource: DataSource,
   ) {}
 
@@ -1731,6 +1736,24 @@ export class AuthService {
       const doctor = await this.doctorRepository.findOne({ where: { id: userId } });
       if (!doctor) throw new NotFoundException('Doctor not found');
 
+      /**
+       * Credential fields were validated against the approved documents, so
+       * changing them invalidates the verification: the doctor goes back to
+       * review instead of silently keeping an "approved" badge for data nobody
+       * checked. Only applied when the value actually changes.
+       */
+      const credentialChanges: Record<string, { before?: unknown; after?: unknown }> = {};
+      if (data.crm && data.crm !== doctor.crm) {
+        credentialChanges.crm = { before: doctor.crm, after: data.crm };
+      }
+      if (data.rqe !== undefined && (data.rqe || null) !== (doctor.rqe || null)) {
+        credentialChanges.rqe = { before: doctor.rqe, after: data.rqe || null };
+      }
+      if (data.specialty && data.specialty !== doctor.specialty) {
+        credentialChanges.specialty = { before: doctor.specialty, after: data.specialty };
+      }
+      const credentialsChanged = Object.keys(credentialChanges).length > 0;
+
       if (data.name) doctor.name = data.name;
       if (data.phone) doctor.phone = data.phone;
       if (data.gender) doctor.gender = data.gender;
@@ -1741,8 +1764,28 @@ export class AuthService {
       if (normalizedCpf) doctor.cpf = normalizedCpf;
       if (profileImageUrl) doctor.profileImage = profileImageUrl;
 
+      // Only an already-resolved verification needs to be reopened; a doctor
+      // still PENDING/SUBMITTED is under review anyway.
+      const wasResolved =
+        doctor.verificationStatus === 'APPROVED' || doctor.verificationStatus === 'REJECTED';
+      const reopenVerification = credentialsChanged && wasResolved;
+
+      if (reopenVerification) {
+        doctor.verificationStatus = 'SUBMITTED';
+      }
+
       await this.doctorRepository.save(doctor);
-      return { message: 'Profile updated', profileImage: doctor.profileImage };
+
+      if (reopenVerification) {
+        await this.reopenDoctorVerification(doctor, credentialChanges);
+      }
+
+      return {
+        message: 'Profile updated',
+        profileImage: doctor.profileImage,
+        verificationStatus: doctor.verificationStatus,
+        verificationReopened: reopenVerification,
+      };
     }
 
     if (userType === 'patient') {
@@ -1761,5 +1804,62 @@ export class AuthService {
     }
 
     throw new ForbiddenException('Invalid user type');
+  }
+
+  /**
+   * Sends the doctor's credential documents back to the review queue after a
+   * CRM/RQE/specialty change, and records/notifies the reason.
+   *
+   * Documents already under review are left untouched; the others are reset to
+   * PENDING so the back office re-checks them against the new credentials.
+   */
+  private async reopenDoctorVerification(
+    doctor: Doctor,
+    changedFields: Record<string, { before?: unknown; after?: unknown }>,
+  ) {
+    const documents = await this.doctorDocumentRepository.find({
+      where: { doctorId: doctor.id },
+    });
+
+    const toReset = documents.filter((doc) => doc.status !== 'PENDING');
+    if (toReset.length > 0) {
+      await this.doctorDocumentRepository.save(
+        toReset.map((doc) => ({
+          ...doc,
+          status: 'PENDING',
+          rejectionReason: null,
+          reviewedAt: null,
+          reviewedBy: null,
+        })),
+      );
+    }
+
+    await this.auditService.recordUpdate(
+      AuditResourceType.PROFESSIONAL,
+      doctor.id,
+      {
+        ...changedFields,
+        verificationStatus: { before: 'APPROVED/REJECTED', after: 'SUBMITTED' },
+      },
+      { metadata: { reason: 'CREDENTIALS_CHANGED', documentsReset: toReset.length } },
+    );
+
+    const fields = Object.keys(changedFields)
+      .map((f) => ({ crm: 'CRM', rqe: 'RQE', specialty: 'especialidade' })[f] || f)
+      .join(', ');
+
+    try {
+      await this.notificationsService.createNotification(
+        doctor.id,
+        'doctor',
+        'Verificação em reanálise',
+        `Você alterou ${fields}. Seus documentos voltaram para análise da nossa equipe.`,
+        'DOCTOR_VERIFICATION_REOPENED',
+        { changedFields: Object.keys(changedFields) },
+        doctor.id,
+      );
+    } catch {
+      // Non-critical: the status change is already persisted and audited.
+    }
   }
 }
