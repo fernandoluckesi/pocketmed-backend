@@ -22,9 +22,7 @@ export class AddCustomExamNameToScheduleItems1766100000000 implements MigrationI
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      'ALTER TABLE `exam_schedule_items` DROP COLUMN `customExamName`;',
-    );
+    await queryRunner.query('ALTER TABLE `exam_schedule_items` DROP COLUMN `customExamName`;');
     await queryRunner.query(
       'ALTER TABLE `exam_schedule_items` DROP FOREIGN KEY `FK_exam_schedule_items_catalog`;',
     );

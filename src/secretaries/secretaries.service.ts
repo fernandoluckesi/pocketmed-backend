@@ -54,7 +54,11 @@ export class SecretariesService {
     const saved = await this.secretaryRepository.save(secretary);
 
     // Send invitation email
-    await this.emailService.sendVerificationCode(normalizedEmail, verificationCode, dto.name.trim());
+    await this.emailService.sendVerificationCode(
+      normalizedEmail,
+      verificationCode,
+      dto.name.trim(),
+    );
 
     // Audit
     await this.auditService.recordCreate(AuditResourceType.USER, saved.id, {

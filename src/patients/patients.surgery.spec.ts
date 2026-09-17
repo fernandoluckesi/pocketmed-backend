@@ -178,9 +178,9 @@ describe('PatientsService - Surgeries', () => {
     });
 
     it('rejects post-op info on a planned surgery', async () => {
-      await expect(
-        create({ name: 'X', status: 'PLANNED', outcome: 'ok' }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(create({ name: 'X', status: 'PLANNED', outcome: 'ok' })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('rejects implant details without hasPermanentImplant', async () => {
@@ -230,14 +230,10 @@ describe('PatientsService - Surgeries', () => {
 
     it('forbids a patient from creating a surgery for another patient', async () => {
       await expect(
-        service.createSurgery(
-          OTHER_PATIENT_ID,
-          PATIENT_ID,
-          'patient',
-          null as any,
-          null as any,
-          { name: 'X', status: 'PLANNED' },
-        ),
+        service.createSurgery(OTHER_PATIENT_ID, PATIENT_ID, 'patient', null as any, null as any, {
+          name: 'X',
+          status: 'PLANNED',
+        }),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
@@ -271,15 +267,9 @@ describe('PatientsService - Surgeries', () => {
         date: new Date('2024-05-12'),
       });
       await expect(
-        service.updateSurgery(
-          PATIENT_ID,
-          's1',
-          PATIENT_ID,
-          'patient',
-          null as any,
-          null as any,
-          { dischargeDate: '2024-05-01' },
-        ),
+        service.updateSurgery(PATIENT_ID, 's1', PATIENT_ID, 'patient', null as any, null as any, {
+          dischargeDate: '2024-05-01',
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });

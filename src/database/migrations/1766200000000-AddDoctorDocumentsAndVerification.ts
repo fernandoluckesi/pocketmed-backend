@@ -31,8 +31,6 @@ export class AddDoctorDocumentsAndVerification1766200000000 implements Migration
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE \`doctor_documents\`;`);
-    await queryRunner.query(
-      `ALTER TABLE \`doctors\` DROP COLUMN \`verificationStatus\`;`,
-    );
+    await queryRunner.query(`ALTER TABLE \`doctors\` DROP COLUMN \`verificationStatus\`;`);
   }
 }

@@ -182,7 +182,12 @@ export class AuditService {
   async recordDelete(
     resourceType: AuditResourceType,
     resourceId: string,
-    opts?: { patientId?: string; reason?: string; metadata?: Record<string, unknown>; queryRunner?: QueryRunner },
+    opts?: {
+      patientId?: string;
+      reason?: string;
+      metadata?: Record<string, unknown>;
+      queryRunner?: QueryRunner;
+    },
   ) {
     return this.record(
       {
@@ -200,7 +205,12 @@ export class AuditService {
 
   async recordAccessDenied(
     resourceType: AuditResourceType,
-    opts?: { resourceId?: string; patientId?: string; reason?: string; metadata?: Record<string, unknown> },
+    opts?: {
+      resourceId?: string;
+      patientId?: string;
+      reason?: string;
+      metadata?: Record<string, unknown>;
+    },
   ) {
     return this.record({
       action: AuditAction.ACCESS_DENIED,
@@ -261,16 +271,24 @@ export class AuditService {
 
     if (filters.tenantId) qb.andWhere('audit.tenantId = :tenantId', { tenantId: filters.tenantId });
     if (filters.userId) qb.andWhere('audit.actorUserId = :userId', { userId: filters.userId });
-    if (filters.patientId) qb.andWhere('audit.patientId = :patientId', { patientId: filters.patientId });
-    if (filters.resourceType) qb.andWhere('audit.resourceType = :resourceType', { resourceType: filters.resourceType });
-    if (filters.resourceId) qb.andWhere('audit.resourceId = :resourceId', { resourceId: filters.resourceId });
+    if (filters.patientId)
+      qb.andWhere('audit.patientId = :patientId', { patientId: filters.patientId });
+    if (filters.resourceType)
+      qb.andWhere('audit.resourceType = :resourceType', { resourceType: filters.resourceType });
+    if (filters.resourceId)
+      qb.andWhere('audit.resourceId = :resourceId', { resourceId: filters.resourceId });
     if (filters.action) qb.andWhere('audit.action = :action', { action: filters.action });
-    if (filters.success !== undefined) qb.andWhere('audit.success = :success', { success: filters.success });
-    if (filters.startDate) qb.andWhere('audit.timestamp >= :startDate', { startDate: filters.startDate });
+    if (filters.success !== undefined)
+      qb.andWhere('audit.success = :success', { success: filters.success });
+    if (filters.startDate)
+      qb.andWhere('audit.timestamp >= :startDate', { startDate: filters.startDate });
     if (filters.endDate) qb.andWhere('audit.timestamp <= :endDate', { endDate: filters.endDate });
-    if (filters.ipAddress) qb.andWhere('audit.ipAddress = :ipAddress', { ipAddress: filters.ipAddress });
-    if (filters.requestId) qb.andWhere('audit.requestId = :requestId', { requestId: filters.requestId });
-    if (filters.correlationId) qb.andWhere('audit.correlationId = :correlationId', { correlationId: filters.correlationId });
+    if (filters.ipAddress)
+      qb.andWhere('audit.ipAddress = :ipAddress', { ipAddress: filters.ipAddress });
+    if (filters.requestId)
+      qb.andWhere('audit.requestId = :requestId', { requestId: filters.requestId });
+    if (filters.correlationId)
+      qb.andWhere('audit.correlationId = :correlationId', { correlationId: filters.correlationId });
 
     qb.orderBy('audit.timestamp', 'DESC');
     qb.skip(skip).take(limit);
@@ -321,8 +339,10 @@ export class AuditService {
     const qb = this.auditRepository.createQueryBuilder('audit');
     qb.where('audit.timestamp >= :since', { since: criteria.since });
     if (criteria.action) qb.andWhere('audit.action = :action', { action: criteria.action });
-    if (criteria.actorUserId) qb.andWhere('audit.actorUserId = :actorUserId', { actorUserId: criteria.actorUserId });
-    if (criteria.ipAddress) qb.andWhere('audit.ipAddress = :ipAddress', { ipAddress: criteria.ipAddress });
+    if (criteria.actorUserId)
+      qb.andWhere('audit.actorUserId = :actorUserId', { actorUserId: criteria.actorUserId });
+    if (criteria.ipAddress)
+      qb.andWhere('audit.ipAddress = :ipAddress', { ipAddress: criteria.ipAddress });
     return qb.getCount();
   }
 

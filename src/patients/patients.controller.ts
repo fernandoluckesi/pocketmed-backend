@@ -3,10 +3,12 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@ne
 import { PatientsService, SurgeryData } from './patients.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequireDoctorVerified } from '../auth/decorators/require-doctor-verified.decorator';
 
 @ApiTags('Patients')
 @Controller('patients')
 @UseGuards(JwtAuthGuard)
+@RequireDoctorVerified()
 @ApiBearerAuth('JWT-auth')
 export class PatientsController {
   constructor(private patientsService: PatientsService) {}
@@ -132,7 +134,16 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Consultation created' })
   async createConsultation(
     @Param('id') id: string,
-    @Body() body: { date: string; symptoms?: string; diagnosis?: string; prescription?: string; notes?: string; priority?: string; completed?: boolean },
+    @Body()
+    body: {
+      date: string;
+      symptoms?: string;
+      diagnosis?: string;
+      prescription?: string;
+      notes?: string;
+      priority?: string;
+      completed?: boolean;
+    },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.createConsultation(
@@ -151,7 +162,15 @@ export class PatientsController {
   async updateConsultation(
     @Param('id') id: string,
     @Param('consultationId') consultationId: string,
-    @Body() body: { date?: string; symptoms?: string; diagnosis?: string; prescription?: string; notes?: string; completed?: boolean },
+    @Body()
+    body: {
+      date?: string;
+      symptoms?: string;
+      diagnosis?: string;
+      prescription?: string;
+      notes?: string;
+      completed?: boolean;
+    },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updateConsultation(
@@ -174,12 +193,7 @@ export class PatientsController {
     @Body() body: { approved: boolean },
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.approveConsultation(
-      id,
-      consultationId,
-      user.userId,
-      body.approved,
-    );
+    return this.patientsService.approveConsultation(id, consultationId, user.userId, body.approved);
   }
 
   @Post(':id/consultations/:consultationId/resend')
@@ -205,7 +219,17 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Medication prescribed' })
   async prescribeMedication(
     @Param('id') id: string,
-    @Body() body: { name: string; dosage: string; frequency: string; type?: string; startDate: string; endDate?: string; notes?: string; appointmentId?: string },
+    @Body()
+    body: {
+      name: string;
+      dosage: string;
+      frequency: string;
+      type?: string;
+      startDate: string;
+      endDate?: string;
+      notes?: string;
+      appointmentId?: string;
+    },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.prescribeMedication(
@@ -223,7 +247,15 @@ export class PatientsController {
   @ApiResponse({ status: 200, description: 'Patient updated' })
   async updatePatient(
     @Param('id') id: string,
-    @Body() body: { name?: string; email?: string; phone?: string; gender?: string; birthDate?: string; profileImage?: string },
+    @Body()
+    body: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      gender?: string;
+      birthDate?: string;
+      profileImage?: string;
+    },
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updatePatient(
@@ -240,7 +272,13 @@ export class PatientsController {
   @ApiOperation({ summary: 'Get patient diseases list' })
   @ApiResponse({ status: 200, description: 'Diseases list' })
   async getDiseases(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.patientsService.getDiseases(id, user.userId, user.type, user.role, user.activeClinicId);
+    return this.patientsService.getDiseases(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   @Post(':id/diseases')
@@ -248,10 +286,26 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Disease created' })
   async createDisease(
     @Param('id') id: string,
-    @Body() body: { name: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    @Body()
+    body: {
+      name: string;
+      description?: string;
+      observations?: string;
+      status?: string;
+      diagnosisDate?: string;
+      treatmentStartDate?: string;
+      treatmentEndDate?: string;
+    },
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.createDisease(id, user.userId, user.type, user.role, user.activeClinicId, body);
+    return this.patientsService.createDisease(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Put(':id/diseases/:diseaseId')
@@ -260,10 +314,27 @@ export class PatientsController {
   async updateDisease(
     @Param('id') id: string,
     @Param('diseaseId') diseaseId: string,
-    @Body() body: { name?: string; description?: string; observations?: string; status?: string; diagnosisDate?: string; treatmentStartDate?: string; treatmentEndDate?: string },
+    @Body()
+    body: {
+      name?: string;
+      description?: string;
+      observations?: string;
+      status?: string;
+      diagnosisDate?: string;
+      treatmentStartDate?: string;
+      treatmentEndDate?: string;
+    },
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.updateDisease(id, diseaseId, user.userId, user.type, user.role, user.activeClinicId, body);
+    return this.patientsService.updateDisease(
+      id,
+      diseaseId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Delete(':id/diseases/:diseaseId')
@@ -274,7 +345,14 @@ export class PatientsController {
     @Param('diseaseId') diseaseId: string,
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.deleteDisease(id, diseaseId, user.userId, user.type, user.role, user.activeClinicId);
+    return this.patientsService.deleteDisease(
+      id,
+      diseaseId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   // ─── Allergies ────────────────────────────────────────────────────────────
@@ -282,25 +360,66 @@ export class PatientsController {
   @Get(':id/allergies')
   @ApiOperation({ summary: 'Get patient allergies' })
   async getAllergies(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.patientsService.getAllergies(id, user.userId, user.type, user.role, user.activeClinicId);
+    return this.patientsService.getAllergies(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   @Post(':id/allergies')
   @ApiOperation({ summary: 'Add allergy to patient' })
-  async createAllergy(@Param('id') id: string, @Body() body: { name: string; severity?: string; reaction?: string; notes?: string }, @CurrentUser() user: any) {
-    return this.patientsService.createAllergy(id, user.userId, user.type, user.role, user.activeClinicId, body);
+  async createAllergy(
+    @Param('id') id: string,
+    @Body() body: { name: string; severity?: string; reaction?: string; notes?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.createAllergy(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Put(':id/allergies/:allergyId')
   @ApiOperation({ summary: 'Update patient allergy' })
-  async updateAllergy(@Param('id') id: string, @Param('allergyId') allergyId: string, @Body() body: { name?: string; severity?: string; reaction?: string; notes?: string }, @CurrentUser() user: any) {
-    return this.patientsService.updateAllergy(id, allergyId, user.userId, user.type, user.role, user.activeClinicId, body);
+  async updateAllergy(
+    @Param('id') id: string,
+    @Param('allergyId') allergyId: string,
+    @Body() body: { name?: string; severity?: string; reaction?: string; notes?: string },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.updateAllergy(
+      id,
+      allergyId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Delete(':id/allergies/:allergyId')
   @ApiOperation({ summary: 'Delete patient allergy' })
-  async deleteAllergy(@Param('id') id: string, @Param('allergyId') allergyId: string, @CurrentUser() user: any) {
-    return this.patientsService.deleteAllergy(id, allergyId, user.userId, user.type, user.role, user.activeClinicId);
+  async deleteAllergy(
+    @Param('id') id: string,
+    @Param('allergyId') allergyId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.deleteAllergy(
+      id,
+      allergyId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   // ─── Vaccines ─────────────────────────────────────────────────────────────
@@ -308,25 +427,82 @@ export class PatientsController {
   @Get(':id/vaccines')
   @ApiOperation({ summary: 'Get patient vaccines' })
   async getVaccines(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.patientsService.getVaccines(id, user.userId, user.type, user.role, user.activeClinicId);
+    return this.patientsService.getVaccines(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   @Post(':id/vaccines')
   @ApiOperation({ summary: 'Add vaccine to patient' })
-  async createVaccine(@Param('id') id: string, @Body() body: { name: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }, @CurrentUser() user: any) {
-    return this.patientsService.createVaccine(id, user.userId, user.type, user.role, user.activeClinicId, body);
+  async createVaccine(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name: string;
+      dose?: string;
+      applicationDate?: string;
+      nextDoseDate?: string;
+      laboratory?: string;
+      notes?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.createVaccine(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Put(':id/vaccines/:vaccineId')
   @ApiOperation({ summary: 'Update patient vaccine' })
-  async updateVaccine(@Param('id') id: string, @Param('vaccineId') vaccineId: string, @Body() body: { name?: string; dose?: string; applicationDate?: string; nextDoseDate?: string; laboratory?: string; notes?: string }, @CurrentUser() user: any) {
-    return this.patientsService.updateVaccine(id, vaccineId, user.userId, user.type, user.role, user.activeClinicId, body);
+  async updateVaccine(
+    @Param('id') id: string,
+    @Param('vaccineId') vaccineId: string,
+    @Body()
+    body: {
+      name?: string;
+      dose?: string;
+      applicationDate?: string;
+      nextDoseDate?: string;
+      laboratory?: string;
+      notes?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.updateVaccine(
+      id,
+      vaccineId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Delete(':id/vaccines/:vaccineId')
   @ApiOperation({ summary: 'Delete patient vaccine' })
-  async deleteVaccine(@Param('id') id: string, @Param('vaccineId') vaccineId: string, @CurrentUser() user: any) {
-    return this.patientsService.deleteVaccine(id, vaccineId, user.userId, user.type, user.role, user.activeClinicId);
+  async deleteVaccine(
+    @Param('id') id: string,
+    @Param('vaccineId') vaccineId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.deleteVaccine(
+      id,
+      vaccineId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   // ─── Surgeries ────────────────────────────────────────────────────────────
@@ -335,7 +511,13 @@ export class PatientsController {
   @ApiOperation({ summary: 'Get patient surgical history' })
   @ApiResponse({ status: 200, description: 'Surgeries list' })
   async getSurgeries(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.patientsService.getSurgeries(id, user.userId, user.type, user.role, user.activeClinicId);
+    return this.patientsService.getSurgeries(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   @Post(':id/surgeries')
@@ -346,7 +528,14 @@ export class PatientsController {
     @Body() body: SurgeryData,
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.createSurgery(id, user.userId, user.type, user.role, user.activeClinicId, body);
+    return this.patientsService.createSurgery(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Put(':id/surgeries/:surgeryId')
@@ -358,7 +547,15 @@ export class PatientsController {
     @Body() body: SurgeryData,
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.updateSurgery(id, surgeryId, user.userId, user.type, user.role, user.activeClinicId, body);
+    return this.patientsService.updateSurgery(
+      id,
+      surgeryId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      body,
+    );
   }
 
   @Delete(':id/surgeries/:surgeryId')
@@ -369,7 +566,14 @@ export class PatientsController {
     @Param('surgeryId') surgeryId: string,
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.deleteSurgery(id, surgeryId, user.userId, user.type, user.role, user.activeClinicId);
+    return this.patientsService.deleteSurgery(
+      id,
+      surgeryId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   // ─── Dependents ─────────────────────────────────────────────────────────────
@@ -378,7 +582,13 @@ export class PatientsController {
   @ApiOperation({ summary: 'Get dependents for a patient' })
   @ApiResponse({ status: 200, description: 'Return dependents list' })
   async getDependents(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.patientsService.getDependents(id, user.userId, user.type, user.role, user.activeClinicId);
+    return this.patientsService.getDependents(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 
   // ─── Sprint 3: Timeline & Alerts ─────────────────────────────────────────

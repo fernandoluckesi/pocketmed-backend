@@ -12,7 +12,11 @@ export class LoginDto {
   @IsNotEmpty()
   password: string;
 
-  @ApiProperty({ example: 'patient', required: false, description: 'Login as patient or doctor (optional)' })
+  @ApiProperty({
+    example: 'patient',
+    required: false,
+    description: 'Login as patient or doctor (optional)',
+  })
   @IsOptional()
   @IsString()
   loginAs?: string;

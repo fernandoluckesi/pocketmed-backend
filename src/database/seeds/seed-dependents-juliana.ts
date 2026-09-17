@@ -32,7 +32,7 @@ async function run() {
 
   // Get the created dependents
   const deps = await AppDataSource.query(
-    "SELECT id, name FROM dependents WHERE adminResponsibleId = ? ORDER BY createdAt DESC LIMIT 3",
+    'SELECT id, name FROM dependents WHERE adminResponsibleId = ? ORDER BY createdAt DESC LIMIT 3',
     [patientId],
   );
   console.log('Dependents:', deps);
@@ -40,7 +40,7 @@ async function run() {
   // Link responsibles (many-to-many)
   for (const dep of deps) {
     await AppDataSource.query(
-      "INSERT INTO dependent_responsibles (dependentId, patientId) VALUES (?, ?)",
+      'INSERT INTO dependent_responsibles (dependentId, patientId) VALUES (?, ?)',
       [dep.id, patientId],
     );
   }

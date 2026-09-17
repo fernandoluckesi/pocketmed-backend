@@ -97,9 +97,7 @@ export class ExamsService {
         where: { id: dto.appointmentId },
       });
       if (!appointment || appointment.patientId !== dto.patientId) {
-        throw new BadRequestException(
-          'appointmentId inválido ou não pertence a este paciente',
-        );
+        throw new BadRequestException('appointmentId inválido ou não pertence a este paciente');
       }
     }
 

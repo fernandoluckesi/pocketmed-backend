@@ -160,9 +160,7 @@ export class DoctorsService {
     });
 
     if (existingPermission) {
-      throw new BadRequestException(
-        'Você já possui acesso ao prontuário deste paciente.',
-      );
+      throw new BadRequestException('Você já possui acesso ao prontuário deste paciente.');
     }
 
     const existingRequest = await this.accessRequestRepository.findOne({

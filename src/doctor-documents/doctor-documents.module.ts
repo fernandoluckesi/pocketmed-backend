@@ -7,10 +7,7 @@ import { Doctor } from '../entities/doctor.entity';
 import { UploadModule } from '../upload/upload.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([DoctorDocument, Doctor]),
-    UploadModule,
-  ],
+  imports: [TypeOrmModule.forFeature([DoctorDocument, Doctor]), UploadModule],
   controllers: [DoctorDocumentsController],
   providers: [DoctorDocumentsService],
   exports: [DoctorDocumentsService],

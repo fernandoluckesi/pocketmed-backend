@@ -16,12 +16,7 @@ import { AuditController } from './audit.controller';
 @Global()
 @Module({
   imports: [TypeOrmModule.forFeature([AuditEvent])],
-  providers: [
-    AuditService,
-    AuditIntegrityService,
-    AuditAnomalyService,
-    AuditRetentionService,
-  ],
+  providers: [AuditService, AuditIntegrityService, AuditAnomalyService, AuditRetentionService],
   controllers: [AuditController],
   exports: [AuditService, AuditIntegrityService, AuditAnomalyService, AuditRetentionService],
 })

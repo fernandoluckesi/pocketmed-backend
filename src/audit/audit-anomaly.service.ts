@@ -104,7 +104,10 @@ export class AuditAnomalyService {
       }
 
       for (const alert of newAlerts) {
-        this.logger.warn(`[ANOMALY] ${alert.severity.toUpperCase()}: ${alert.message}`, alert.details);
+        this.logger.warn(
+          `[ANOMALY] ${alert.severity.toUpperCase()}: ${alert.message}`,
+          alert.details,
+        );
       }
     }
 

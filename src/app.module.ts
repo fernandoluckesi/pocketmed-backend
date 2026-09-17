@@ -18,6 +18,7 @@ import { EmailModule } from './email/email.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { BackofficeBoundaryGuard } from './auth/guards/backoffice-boundary.guard';
+import { DoctorVerifiedGuard } from './auth/guards/doctor-verified.guard';
 import { Patient } from './entities/patient.entity';
 import { Doctor } from './entities/doctor.entity';
 import { Dependent } from './entities/dependent.entity';
@@ -193,6 +194,13 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      // Runs after JwtAuthGuard so `request.user.verificationStatus` is
+      // populated: blocks unapproved doctors from routes marked with
+      // `@RequireDoctorVerified()` (real patient data).
+      provide: APP_GUARD,
+      useClass: DoctorVerifiedGuard,
     },
     {
       provide: APP_INTERCEPTOR,

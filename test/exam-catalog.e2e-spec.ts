@@ -93,9 +93,7 @@ describe('Exam Catalog Module (e2e)', () => {
 
   describe('GET /exam-catalog', () => {
     it('should return paginated catalog (default page 1, limit 20)', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/exam-catalog')
-        .expect(200);
+      const res = await request(app.getHttpServer()).get('/exam-catalog').expect(200);
 
       expect(res.body).toHaveProperty('data');
       expect(res.body).toHaveProperty('total');
@@ -178,9 +176,7 @@ describe('Exam Catalog Module (e2e)', () => {
 
   describe('GET /exam-catalog/categories', () => {
     it('should return all categories', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/exam-catalog/categories')
-        .expect(200);
+      const res = await request(app.getHttpServer()).get('/exam-catalog/categories').expect(200);
 
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body.length).toBe(3);

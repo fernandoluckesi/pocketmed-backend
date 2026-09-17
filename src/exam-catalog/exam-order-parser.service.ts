@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  BadRequestException,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ExamCatalog } from '../entities/exam-catalog.entity';
@@ -40,9 +35,7 @@ export class ExamOrderParserService implements OnModuleInit {
     // Failure here is non-fatal — it just means the first request warms it.
     this.getOcrWorker().catch((err) => {
       this.logger.warn(
-        `OCR worker warm-up failed (will retry on first use): ${
-          (err as Error).message
-        }`,
+        `OCR worker warm-up failed (will retry on first use): ${(err as Error).message}`,
       );
     });
   }
@@ -99,9 +92,7 @@ export class ExamOrderParserService implements OnModuleInit {
       throw new BadRequestException('Não foi possível ler o arquivo enviado.');
     }
 
-    throw new BadRequestException(
-      'Formato de arquivo não suportado. Envie PDF ou imagem.',
-    );
+    throw new BadRequestException('Formato de arquivo não suportado. Envie PDF ou imagem.');
   }
 
   private async extractPdfText(buffer: Buffer): Promise<string> {
@@ -124,17 +115,13 @@ export class ExamOrderParserService implements OnModuleInit {
     // gateway kills the whole process ("Application failed to respond").
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error('OCR timed out')),
-        OCR_TIMEOUT_MS,
-      );
+      timer = setTimeout(() => reject(new Error('OCR timed out')), OCR_TIMEOUT_MS);
     });
 
     try {
-      const result = (await Promise.race([
-        worker.recognize(buffer),
-        timeout,
-      ])) as { data?: { text?: string } };
+      const result = (await Promise.race([worker.recognize(buffer), timeout])) as {
+        data?: { text?: string };
+      };
       return result?.data?.text ?? '';
     } finally {
       if (timer) clearTimeout(timer);
@@ -154,9 +141,7 @@ export class ExamOrderParserService implements OnModuleInit {
    * when its normalized name (or any of its synonyms) appears as a substring in
    * the extracted text.
    */
-  private async matchExams(
-    normalizedText: string,
-  ): Promise<Pick<ExamCatalog, 'id' | 'name'>[]> {
+  private async matchExams(normalizedText: string): Promise<Pick<ExamCatalog, 'id' | 'name'>[]> {
     const catalog = await this.examCatalogRepository.find({
       where: { isActive: true },
       select: ['id', 'name', 'synonyms'],
@@ -169,9 +154,7 @@ export class ExamOrderParserService implements OnModuleInit {
         .map((c) => this.normalize(c.trim()))
         .filter((c) => c.length >= 3);
 
-      const isMatch = candidates.some((candidate) =>
-        normalizedText.includes(candidate),
-      );
+      const isMatch = candidates.some((candidate) => normalizedText.includes(candidate));
 
       if (isMatch) {
         matched.push({ id: exam.id, name: exam.name });

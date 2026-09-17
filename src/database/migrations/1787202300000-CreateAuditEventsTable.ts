@@ -31,13 +31,27 @@ export class CreateAuditEventsTable1787202300000 implements MigrationInterface {
       ) ENGINE=InnoDB
     `);
 
-    await queryRunner.query(`CREATE INDEX \`IDX_audit_patient_timestamp\` ON \`audit_events\` (\`patientId\`, \`timestamp\`)`);
-    await queryRunner.query(`CREATE INDEX \`IDX_audit_actor_timestamp\` ON \`audit_events\` (\`actorUserId\`, \`timestamp\`)`);
-    await queryRunner.query(`CREATE INDEX \`IDX_audit_resource\` ON \`audit_events\` (\`resourceType\`, \`resourceId\`)`);
-    await queryRunner.query(`CREATE INDEX \`IDX_audit_tenant_timestamp\` ON \`audit_events\` (\`tenantId\`, \`timestamp\`)`);
-    await queryRunner.query(`CREATE INDEX \`IDX_audit_action_timestamp\` ON \`audit_events\` (\`action\`, \`timestamp\`)`);
-    await queryRunner.query(`CREATE INDEX \`IDX_audit_request_id\` ON \`audit_events\` (\`requestId\`)`);
-    await queryRunner.query(`CREATE INDEX \`IDX_audit_correlation_id\` ON \`audit_events\` (\`correlationId\`)`);
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_audit_patient_timestamp\` ON \`audit_events\` (\`patientId\`, \`timestamp\`)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_audit_actor_timestamp\` ON \`audit_events\` (\`actorUserId\`, \`timestamp\`)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_audit_resource\` ON \`audit_events\` (\`resourceType\`, \`resourceId\`)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_audit_tenant_timestamp\` ON \`audit_events\` (\`tenantId\`, \`timestamp\`)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_audit_action_timestamp\` ON \`audit_events\` (\`action\`, \`timestamp\`)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_audit_request_id\` ON \`audit_events\` (\`requestId\`)`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX \`IDX_audit_correlation_id\` ON \`audit_events\` (\`correlationId\`)`,
+    );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

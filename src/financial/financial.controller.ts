@@ -54,11 +54,7 @@ export class FinancialController {
   }
 
   @Put('cost-centers/:id')
-  updateCostCenter(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateCostCenter(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateCostCenter(user.activeClinicId, id, dto);
   }
 
@@ -80,11 +76,7 @@ export class FinancialController {
   }
 
   @Put('convenios/:id')
-  updateConvenio(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateConvenio(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateConvenio(user.activeClinicId, id, dto);
   }
 
@@ -134,11 +126,7 @@ export class FinancialController {
   }
 
   @Put('revenues/:id')
-  updateRevenue(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateRevenue(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateRevenue(user.activeClinicId, id, dto);
   }
 
@@ -198,11 +186,7 @@ export class FinancialController {
   }
 
   @Put('expenses/:id')
-  updateExpense(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateExpense(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateExpense(user.activeClinicId, id, dto);
   }
 
@@ -240,10 +224,7 @@ export class FinancialController {
   }
 
   @Get('transfers/calculate')
-  calculateTransfers(
-    @CurrentUser() user: any,
-    @Query('month') month: string,
-  ) {
+  calculateTransfers(@CurrentUser() user: any, @Query('month') month: string) {
     return this.financialService.calculateTransfers(user.activeClinicId, month);
   }
 
@@ -303,11 +284,7 @@ export class FinancialController {
   // ─── DRE ──────────────────────────────────────────────────────────────────
 
   @Get('dre')
-  getDRE(
-    @CurrentUser() user: any,
-    @Query('year') year: string,
-    @Query('month') month: string,
-  ) {
+  getDRE(@CurrentUser() user: any, @Query('year') year: string, @Query('month') month: string) {
     return this.financialService.getDRE(
       user.activeClinicId,
       parseInt(year, 10),
@@ -328,10 +305,7 @@ export class FinancialController {
   }
 
   @Get('dashboard/recent-transactions')
-  getRecentTransactions(
-    @CurrentUser() user: any,
-    @Query('limit') limit?: string,
-  ) {
+  getRecentTransactions(@CurrentUser() user: any, @Query('limit') limit?: string) {
     return this.financialService.getRecentTransactions(
       user.activeClinicId,
       limit ? parseInt(limit, 10) : 10,
@@ -348,7 +322,12 @@ export class FinancialController {
     @Query('doctorId') doctorId?: string,
     @Query('convenioId') convenioId?: string,
   ) {
-    return this.financialService.getRevenueReport(user.activeClinicId, { startDate, endDate, doctorId, convenioId });
+    return this.financialService.getRevenueReport(user.activeClinicId, {
+      startDate,
+      endDate,
+      doctorId,
+      convenioId,
+    });
   }
 
   @Get('reports/inadimplencia')
@@ -372,7 +351,11 @@ export class FinancialController {
     @Query('endDate') endDate: string,
     @Query('convenioId') convenioId?: string,
   ) {
-    return this.financialService.getGlosaReport(user.activeClinicId, { startDate, endDate, convenioId });
+    return this.financialService.getGlosaReport(user.activeClinicId, {
+      startDate,
+      endDate,
+      convenioId,
+    });
   }
 
   @Get('reports/expenses-by-cost-center')
@@ -382,7 +365,11 @@ export class FinancialController {
     @Query('endDate') endDate: string,
     @Query('costCenterId') costCenterId?: string,
   ) {
-    return this.financialService.getExpensesByCostCenterReport(user.activeClinicId, { startDate, endDate, costCenterId });
+    return this.financialService.getExpensesByCostCenterReport(user.activeClinicId, {
+      startDate,
+      endDate,
+      costCenterId,
+    });
   }
 
   @Get('reports/productivity')

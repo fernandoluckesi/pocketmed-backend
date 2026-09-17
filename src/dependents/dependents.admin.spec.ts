@@ -124,9 +124,9 @@ describe('DependentsService - admin transfer & deletion impact', () => {
         responsibles: [{ id: ADMIN_ID }, { id: OTHER_RESP_ID }],
       });
 
-      await expect(
-        service.transferAdmin('dep-1', STRANGER_ID, ADMIN_ID),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.transferAdmin('dep-1', STRANGER_ID, ADMIN_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
       expect(dependentRepo.save).not.toHaveBeenCalled();
     });
 
@@ -137,9 +137,9 @@ describe('DependentsService - admin transfer & deletion impact', () => {
         responsibles: [{ id: ADMIN_ID }, { id: OTHER_RESP_ID }],
       });
 
-      await expect(
-        service.transferAdmin('dep-1', ADMIN_ID, ADMIN_ID),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.transferAdmin('dep-1', ADMIN_ID, ADMIN_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
 
     it('throws when the dependent does not exist', async () => {

@@ -9,7 +9,10 @@ import AppDataSource from '../data-source';
 
 const API_URL = 'http://localhost:3000';
 
-async function request(path: string, options: { method?: string; body?: any; token?: string } = {}) {
+async function request(
+  path: string,
+  options: { method?: string; body?: any; token?: string } = {},
+) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (options.token) headers['Authorization'] = `Bearer ${options.token}`;
 
@@ -52,23 +55,59 @@ async function main() {
   // Login as existing doctor if registration failed (409)
   let drToken = doctorToken;
   if (!drToken) {
-    const login = await request('/auth/login', { method: 'POST', body: { email: 'lucas.andrade@pocketmed.com', password: '123456' } });
+    const login = await request('/auth/login', {
+      method: 'POST',
+      body: { email: 'lucas.andrade@pocketmed.com', password: '123456' },
+    });
     drToken = login.token;
   }
 
   // Also get Fernando's token
-  const fernandoLogin = await request('/auth/login', { method: 'POST', body: { email: 'fernando.luckesi.dr@gmail.com', password: '958969' } });
+  const fernandoLogin = await request('/auth/login', {
+    method: 'POST',
+    body: { email: 'fernando.luckesi.dr@gmail.com', password: '958969' },
+  });
   const fernandoToken = fernandoLogin.token;
   const fernandoUser = fernandoLogin.user;
 
   // 2. Register patients
   console.log('\n👤 Creating patients...');
   const patients = [
-    { name: 'Ana Clara Oliveira', email: 'ana.clara@email.com', gender: 'female', phone: '11911111111', birthDate: '1990-03-12' },
-    { name: 'Roberto Santos', email: 'roberto.santos2@email.com', gender: 'male', phone: '11922222222', birthDate: '1975-08-25' },
-    { name: 'Maria Heloísa Silva', email: 'maria.heloisa@email.com', gender: 'female', phone: '11933333333', birthDate: '1988-11-30' },
-    { name: 'Carlos Eduardo Lima', email: 'carlos.lima@email.com', gender: 'male', phone: '11944444444', birthDate: '1965-01-20' },
-    { name: 'Beatriz Mendes', email: 'beatriz.mendes@email.com', gender: 'female', phone: '11955555555', birthDate: '1995-07-08' },
+    {
+      name: 'Ana Clara Oliveira',
+      email: 'ana.clara@email.com',
+      gender: 'female',
+      phone: '11911111111',
+      birthDate: '1990-03-12',
+    },
+    {
+      name: 'Roberto Santos',
+      email: 'roberto.santos2@email.com',
+      gender: 'male',
+      phone: '11922222222',
+      birthDate: '1975-08-25',
+    },
+    {
+      name: 'Maria Heloísa Silva',
+      email: 'maria.heloisa@email.com',
+      gender: 'female',
+      phone: '11933333333',
+      birthDate: '1988-11-30',
+    },
+    {
+      name: 'Carlos Eduardo Lima',
+      email: 'carlos.lima@email.com',
+      gender: 'male',
+      phone: '11944444444',
+      birthDate: '1965-01-20',
+    },
+    {
+      name: 'Beatriz Mendes',
+      email: 'beatriz.mendes@email.com',
+      gender: 'female',
+      phone: '11955555555',
+      birthDate: '1995-07-08',
+    },
   ];
 
   const patientIds: string[] = [];
@@ -82,7 +121,10 @@ async function main() {
       console.log(`   ✓ ${p.name}`);
     } else {
       // Try to find existing
-      const login = await request('/auth/login', { method: 'POST', body: { email: p.email, password: '123456' } });
+      const login = await request('/auth/login', {
+        method: 'POST',
+        body: { email: p.email, password: '123456' },
+      });
       if (login.user?.id) {
         patientIds.push(login.user.id);
         console.log(`   ✓ ${p.name} (existing)`);
@@ -91,14 +133,29 @@ async function main() {
   }
 
   // Also use maria.silva from before
-  const mariaLogin = await request('/auth/login', { method: 'POST', body: { email: 'maria.silva@email.com', password: '958969' } });
+  const mariaLogin = await request('/auth/login', {
+    method: 'POST',
+    body: { email: 'maria.silva@email.com', password: '958969' },
+  });
   if (mariaLogin.user?.id) patientIds.push(mariaLogin.user.id);
 
   // 3. Create shadow patients for Fernando
   console.log('\n👻 Creating shadow patients for Fernando...');
   const shadowPatients = [
-    { name: 'José Ferreira Neto', email: 'jose.neto@email.com', gender: 'male', phone: '11966666666', birthDate: '1955-04-10' },
-    { name: 'Lucia Aparecida Gomes', email: 'lucia.gomes@email.com', gender: 'female', phone: '11977777777', birthDate: '1970-12-05' },
+    {
+      name: 'José Ferreira Neto',
+      email: 'jose.neto@email.com',
+      gender: 'male',
+      phone: '11966666666',
+      birthDate: '1955-04-10',
+    },
+    {
+      name: 'Lucia Aparecida Gomes',
+      email: 'lucia.gomes@email.com',
+      gender: 'female',
+      phone: '11977777777',
+      birthDate: '1970-12-05',
+    },
   ];
 
   for (const p of shadowPatients) {
@@ -118,13 +175,25 @@ async function main() {
   // Today's appointments
   for (let i = 0; i < 5; i++) {
     const hour = 8 + i * 2;
-    const dateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, 0).toISOString();
+    const dateTime = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      hour,
+      0,
+    ).toISOString();
     await request(`/patients/${patientIds[i % patientIds.length]}/consultations`, {
       method: 'POST',
       token: fernandoToken,
       body: {
         date: dateTime,
-        symptoms: ['Check-up Geral', 'Dor no peito', 'Retorno de exames', 'Consulta de rotina', 'Avaliação cardíaca'][i],
+        symptoms: [
+          'Check-up Geral',
+          'Dor no peito',
+          'Retorno de exames',
+          'Consulta de rotina',
+          'Avaliação cardíaca',
+        ][i],
         completed: i < 3, // First 3 completed
       },
     });
@@ -141,7 +210,16 @@ async function main() {
       token: fernandoToken,
       body: {
         date: futureDate.toISOString(),
-        symptoms: ['Acompanhamento', 'Retorno', 'Check-up', 'Exame de rotina', 'Consulta preventiva', 'Avaliação', 'Revisão de medicamentos', 'Controle'][i - 1],
+        symptoms: [
+          'Acompanhamento',
+          'Retorno',
+          'Check-up',
+          'Exame de rotina',
+          'Consulta preventiva',
+          'Avaliação',
+          'Revisão de medicamentos',
+          'Controle',
+        ][i - 1],
       },
     });
     console.log(`   ✓ Consulta futura +${i * 2} dias`);
@@ -172,9 +250,21 @@ async function main() {
     { name: 'Losartana Potássica', dosage: '50mg', frequency: 'daily', startDate: '2026-01-15' },
     { name: 'Metformina', dosage: '850mg', frequency: 'twice_daily', startDate: '2026-02-01' },
     { name: 'Atorvastatina', dosage: '20mg', frequency: 'daily', startDate: '2026-03-10' },
-    { name: 'Omeprazol', dosage: '20mg', frequency: 'daily', startDate: '2026-04-01', endDate: '2026-07-01' },
+    {
+      name: 'Omeprazol',
+      dosage: '20mg',
+      frequency: 'daily',
+      startDate: '2026-04-01',
+      endDate: '2026-07-01',
+    },
     { name: 'Vitamina D3', dosage: '2000 UI', frequency: 'daily', startDate: '2026-01-01' },
-    { name: 'Rivotril', dosage: '0.5mg', frequency: 'daily', startDate: '2026-05-15', notes: 'Tomar à noite antes de dormir' },
+    {
+      name: 'Rivotril',
+      dosage: '0.5mg',
+      frequency: 'daily',
+      startDate: '2026-05-15',
+      notes: 'Tomar à noite antes de dormir',
+    },
   ];
 
   for (let i = 0; i < medications.length; i++) {
@@ -184,17 +274,43 @@ async function main() {
       token: fernandoToken,
       body: medications[i],
     });
-    console.log(`   ✓ ${medications[i].name} para paciente ${i % patientIds.length + 1}`);
+    console.log(`   ✓ ${medications[i].name} para paciente ${(i % patientIds.length) + 1}`);
   }
 
   // 6. Create diseases
   console.log('\n🏥 Creating diseases...');
   const diseases = [
-    { name: 'Hipertensão Arterial', status: 'in_treatment', diagnosisDate: '2020-03-15', treatmentStartDate: '2020-03-20' },
-    { name: 'Diabetes Tipo 2', status: 'in_treatment', diagnosisDate: '2021-06-10', treatmentStartDate: '2021-06-15' },
-    { name: 'Asma Brônquica', status: 'cured', diagnosisDate: '2015-01-20', treatmentStartDate: '2015-02-01', treatmentEndDate: '2023-12-01' },
-    { name: 'Hipotireoidismo', status: 'in_treatment', diagnosisDate: '2022-09-05', treatmentStartDate: '2022-09-10' },
-    { name: 'Artrite Reumatoide', status: 'treatment_suspended', diagnosisDate: '2019-11-20', treatmentStartDate: '2019-12-01' },
+    {
+      name: 'Hipertensão Arterial',
+      status: 'in_treatment',
+      diagnosisDate: '2020-03-15',
+      treatmentStartDate: '2020-03-20',
+    },
+    {
+      name: 'Diabetes Tipo 2',
+      status: 'in_treatment',
+      diagnosisDate: '2021-06-10',
+      treatmentStartDate: '2021-06-15',
+    },
+    {
+      name: 'Asma Brônquica',
+      status: 'cured',
+      diagnosisDate: '2015-01-20',
+      treatmentStartDate: '2015-02-01',
+      treatmentEndDate: '2023-12-01',
+    },
+    {
+      name: 'Hipotireoidismo',
+      status: 'in_treatment',
+      diagnosisDate: '2022-09-05',
+      treatmentStartDate: '2022-09-10',
+    },
+    {
+      name: 'Artrite Reumatoide',
+      status: 'treatment_suspended',
+      diagnosisDate: '2019-11-20',
+      treatmentStartDate: '2019-12-01',
+    },
   ];
 
   for (let i = 0; i < diseases.length; i++) {
@@ -232,14 +348,52 @@ async function main() {
   // 8. Create vaccines
   console.log('\n💉 Creating vaccines...');
   const vaccines = [
-    { name: 'COVID-19 Pfizer', dose: '3ª dose (reforço)', applicationDate: '2025-03-15', laboratory: 'Pfizer/BioNTech' },
-    { name: 'Influenza 2026', dose: 'Dose única', applicationDate: '2026-04-10', laboratory: 'Butantan' },
+    {
+      name: 'COVID-19 Pfizer',
+      dose: '3ª dose (reforço)',
+      applicationDate: '2025-03-15',
+      laboratory: 'Pfizer/BioNTech',
+    },
+    {
+      name: 'Influenza 2026',
+      dose: 'Dose única',
+      applicationDate: '2026-04-10',
+      laboratory: 'Butantan',
+    },
     { name: 'Hepatite B', dose: '3ª dose', applicationDate: '2024-08-20', laboratory: 'Fiocruz' },
-    { name: 'Tétano (dT)', dose: 'Reforço', applicationDate: '2023-11-05', nextDoseDate: '2033-11-05', laboratory: 'Butantan' },
-    { name: 'Febre Amarela', dose: 'Dose única', applicationDate: '2022-01-20', laboratory: 'Bio-Manguinhos' },
-    { name: 'Pneumocócica 23', dose: '1ª dose', applicationDate: '2026-02-28', nextDoseDate: '2031-02-28', laboratory: 'MSD' },
-    { name: 'Herpes Zóster', dose: '1ª dose', applicationDate: '2026-06-15', nextDoseDate: '2026-08-15', laboratory: 'GSK' },
-    { name: 'COVID-19 Pfizer', dose: '4ª dose (bivalente)', applicationDate: '2026-05-01', laboratory: 'Pfizer/BioNTech' },
+    {
+      name: 'Tétano (dT)',
+      dose: 'Reforço',
+      applicationDate: '2023-11-05',
+      nextDoseDate: '2033-11-05',
+      laboratory: 'Butantan',
+    },
+    {
+      name: 'Febre Amarela',
+      dose: 'Dose única',
+      applicationDate: '2022-01-20',
+      laboratory: 'Bio-Manguinhos',
+    },
+    {
+      name: 'Pneumocócica 23',
+      dose: '1ª dose',
+      applicationDate: '2026-02-28',
+      nextDoseDate: '2031-02-28',
+      laboratory: 'MSD',
+    },
+    {
+      name: 'Herpes Zóster',
+      dose: '1ª dose',
+      applicationDate: '2026-06-15',
+      nextDoseDate: '2026-08-15',
+      laboratory: 'GSK',
+    },
+    {
+      name: 'COVID-19 Pfizer',
+      dose: '4ª dose (bivalente)',
+      applicationDate: '2026-05-01',
+      laboratory: 'Pfizer/BioNTech',
+    },
   ];
 
   for (let i = 0; i < vaccines.length; i++) {
@@ -258,14 +412,59 @@ async function main() {
   const batchId2 = crypto.randomUUID();
 
   const exams = [
-    { name: 'Hemograma Completo', type: 'blood_test', description: 'Exames de rotina - check-up anual', patientId: patientIds[0], batchId: batchId1 },
-    { name: 'Glicose', type: 'blood_test', description: 'Exames de rotina - check-up anual', patientId: patientIds[0], batchId: batchId1 },
-    { name: 'Colesterol Total e Frações', type: 'blood_test', description: 'Exames de rotina - check-up anual', patientId: patientIds[0], batchId: batchId1 },
-    { name: 'TSH', type: 'blood_test', description: 'Controle de tireoide', patientId: patientIds[1], batchId: batchId2 },
-    { name: 'T4 Livre', type: 'blood_test', description: 'Controle de tireoide', patientId: patientIds[1], batchId: batchId2 },
-    { name: 'Ecocardiograma', type: 'ultrasound', description: 'Avaliação cardíaca', patientId: patientIds[2] },
-    { name: 'Eletrocardiograma', type: 'ecg', description: 'ECG de repouso', patientId: patientIds[3] },
-    { name: 'Raio-X Tórax', type: 'xray', description: 'Avaliação pulmonar', patientId: patientIds[4] },
+    {
+      name: 'Hemograma Completo',
+      type: 'blood_test',
+      description: 'Exames de rotina - check-up anual',
+      patientId: patientIds[0],
+      batchId: batchId1,
+    },
+    {
+      name: 'Glicose',
+      type: 'blood_test',
+      description: 'Exames de rotina - check-up anual',
+      patientId: patientIds[0],
+      batchId: batchId1,
+    },
+    {
+      name: 'Colesterol Total e Frações',
+      type: 'blood_test',
+      description: 'Exames de rotina - check-up anual',
+      patientId: patientIds[0],
+      batchId: batchId1,
+    },
+    {
+      name: 'TSH',
+      type: 'blood_test',
+      description: 'Controle de tireoide',
+      patientId: patientIds[1],
+      batchId: batchId2,
+    },
+    {
+      name: 'T4 Livre',
+      type: 'blood_test',
+      description: 'Controle de tireoide',
+      patientId: patientIds[1],
+      batchId: batchId2,
+    },
+    {
+      name: 'Ecocardiograma',
+      type: 'ultrasound',
+      description: 'Avaliação cardíaca',
+      patientId: patientIds[2],
+    },
+    {
+      name: 'Eletrocardiograma',
+      type: 'ecg',
+      description: 'ECG de repouso',
+      patientId: patientIds[3],
+    },
+    {
+      name: 'Raio-X Tórax',
+      type: 'xray',
+      description: 'Avaliação pulmonar',
+      patientId: patientIds[4],
+    },
   ];
 
   for (const exam of exams) {

@@ -28,10 +28,13 @@ export class AuditRetentionService {
       10,
     );
     this.enabled =
-      (this.configService.get<string>('AUDIT_RETENTION_ENABLED') || 'false').toLowerCase() === 'true';
+      (this.configService.get<string>('AUDIT_RETENTION_ENABLED') || 'false').toLowerCase() ===
+      'true';
 
     if (this.enabled) {
-      this.logger.log(`Audit retention enabled: events older than ${this.retentionDays} days will be purged`);
+      this.logger.log(
+        `Audit retention enabled: events older than ${this.retentionDays} days will be purged`,
+      );
     } else {
       this.logger.log('Audit retention is DISABLED. Events will be kept indefinitely.');
     }
@@ -44,7 +47,7 @@ export class AuditRetentionService {
     return {
       enabled: this.enabled,
       retentionDays: this.retentionDays,
-      retentionYears: Math.round(this.retentionDays / 365 * 10) / 10,
+      retentionYears: Math.round((this.retentionDays / 365) * 10) / 10,
       note: 'CFM Resolution 1821/2007 requires 20+ years for medical records. Audit logs follow a separate policy.',
     };
   }
@@ -62,7 +65,9 @@ export class AuditRetentionService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - this.retentionDays);
 
-    this.logger.log(`Running retention cleanup: removing events before ${cutoffDate.toISOString()}`);
+    this.logger.log(
+      `Running retention cleanup: removing events before ${cutoffDate.toISOString()}`,
+    );
 
     try {
       const deleted = await this.auditService.deleteOlderThan(cutoffDate);
@@ -80,7 +85,9 @@ export class AuditRetentionService {
     cutoffDate.setDate(cutoffDate.getDate() - this.retentionDays);
 
     const deleted = await this.auditService.deleteOlderThan(cutoffDate);
-    this.logger.log(`Manual retention cleanup: ${deleted} events purged (before ${cutoffDate.toISOString()})`);
+    this.logger.log(
+      `Manual retention cleanup: ${deleted} events purged (before ${cutoffDate.toISOString()})`,
+    );
 
     return { deleted, cutoffDate };
   }

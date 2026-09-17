@@ -417,7 +417,6 @@ export class FinancialService {
     await this.expenseRepo.remove(expense);
   }
 
-
   // ─── DOCTOR TRANSFERS ──────────────────────────────────────────────────────
 
   async listTransfers(
@@ -644,10 +643,7 @@ export class FinancialService {
     const transfers = await this.transferRepo.find({
       where: { clinicId, referenceMonth },
     });
-    const custosAssistenciais = transfers.reduce(
-      (sum, t) => sum + (Number(t.netTransfer) || 0),
-      0,
-    );
+    const custosAssistenciais = transfers.reduce((sum, t) => sum + (Number(t.netTransfer) || 0), 0);
 
     // Lucro Bruto
     const lucroBruto = receitaLiquida - custosAssistenciais;
@@ -659,10 +655,7 @@ export class FinancialService {
         dueDate: Between(startDate, endDate) as any,
       },
     });
-    const despesasOperacionais = expenses.reduce(
-      (sum, e) => sum + (Number(e.netValue) || 0),
-      0,
-    );
+    const despesasOperacionais = expenses.reduce((sum, e) => sum + (Number(e.netValue) || 0), 0);
 
     // EBITDA
     const ebitda = lucroBruto - despesasOperacionais;
@@ -743,10 +736,7 @@ export class FinancialService {
     const prevRevenues = await this.revenueRepo.find({
       where: { clinicId, dueDate: Between(prevStartDate, prevEndDate) as any },
     });
-    const prevFaturamento = prevRevenues.reduce(
-      (sum, r) => sum + (Number(r.netValue) || 0),
-      0,
-    );
+    const prevFaturamento = prevRevenues.reduce((sum, r) => sum + (Number(r.netValue) || 0), 0);
     const crescimento =
       prevFaturamento > 0 ? ((faturamento - prevFaturamento) / prevFaturamento) * 100 : 0;
 
@@ -792,13 +782,20 @@ export class FinancialService {
 
   // ─── REPORTS ───────────────────────────────────────────────────────────────
 
-  async getRevenueReport(clinicId: string, filters: { startDate: string; endDate: string; doctorId?: string; convenioId?: string }) {
+  async getRevenueReport(
+    clinicId: string,
+    filters: { startDate: string; endDate: string; doctorId?: string; convenioId?: string },
+  ) {
     const where: any = { clinicId };
     if (filters.doctorId) where.doctorId = filters.doctorId;
     if (filters.convenioId) where.convenioId = filters.convenioId;
     where.dueDate = Between(new Date(filters.startDate), new Date(filters.endDate));
 
-    const revenues = await this.revenueRepo.find({ where, relations: ['convenio'], order: { dueDate: 'ASC' } });
+    const revenues = await this.revenueRepo.find({
+      where,
+      relations: ['convenio'],
+      order: { dueDate: 'ASC' },
+    });
 
     const byConvenio: Record<string, { name: string; total: number; count: number }> = {};
     const byDoctor: Record<string, { total: number; count: number }> = {};
@@ -818,30 +815,50 @@ export class FinancialService {
       byDoctor[docId].count += 1;
     }
 
-    return { totalGeral, totalRegistros: revenues.length, byConvenio: Object.values(byConvenio), byDoctor: Object.values(byDoctor), details: revenues };
+    return {
+      totalGeral,
+      totalRegistros: revenues.length,
+      byConvenio: Object.values(byConvenio),
+      byDoctor: Object.values(byDoctor),
+      details: revenues,
+    };
   }
 
-  async getInadimplenciaReport(clinicId: string, filters: { startDate?: string; endDate?: string; minValue?: number }) {
+  async getInadimplenciaReport(
+    clinicId: string,
+    filters: { startDate?: string; endDate?: string; minValue?: number },
+  ) {
     const where: any = { clinicId, status: 'VENCIDO' };
     if (filters.startDate && filters.endDate) {
       where.dueDate = Between(new Date(filters.startDate), new Date(filters.endDate));
     }
 
-    let revenues = await this.revenueRepo.find({ where, relations: ['convenio'], order: { dueDate: 'ASC' } });
+    let revenues = await this.revenueRepo.find({
+      where,
+      relations: ['convenio'],
+      order: { dueDate: 'ASC' },
+    });
     if (filters.minValue) {
-      revenues = revenues.filter(r => Number(r.netValue) >= filters.minValue);
+      revenues = revenues.filter((r) => Number(r.netValue) >= filters.minValue);
     }
 
     const totalInadimplente = revenues.reduce((sum, r) => sum + (Number(r.netValue) || 0), 0);
     return { totalInadimplente, totalRegistros: revenues.length, details: revenues };
   }
 
-  async getGlosaReport(clinicId: string, filters: { startDate: string; endDate: string; convenioId?: string }) {
+  async getGlosaReport(
+    clinicId: string,
+    filters: { startDate: string; endDate: string; convenioId?: string },
+  ) {
     const where: any = { clinicId, status: 'GLOSADO' };
     if (filters.convenioId) where.convenioId = filters.convenioId;
     where.dueDate = Between(new Date(filters.startDate), new Date(filters.endDate));
 
-    const revenues = await this.revenueRepo.find({ where, relations: ['convenio'], order: { dueDate: 'ASC' } });
+    const revenues = await this.revenueRepo.find({
+      where,
+      relations: ['convenio'],
+      order: { dueDate: 'ASC' },
+    });
 
     const byConvenio: Record<string, { name: string; totalGlosa: number; count: number }> = {};
     let totalGlosa = 0;
@@ -855,15 +872,27 @@ export class FinancialService {
       byConvenio[convName].count += 1;
     }
 
-    return { totalGlosa, totalRegistros: revenues.length, byConvenio: Object.values(byConvenio), details: revenues };
+    return {
+      totalGlosa,
+      totalRegistros: revenues.length,
+      byConvenio: Object.values(byConvenio),
+      details: revenues,
+    };
   }
 
-  async getExpensesByCostCenterReport(clinicId: string, filters: { startDate: string; endDate: string; costCenterId?: string }) {
+  async getExpensesByCostCenterReport(
+    clinicId: string,
+    filters: { startDate: string; endDate: string; costCenterId?: string },
+  ) {
     const where: any = { clinicId };
     if (filters.costCenterId) where.costCenterId = filters.costCenterId;
     where.dueDate = Between(new Date(filters.startDate), new Date(filters.endDate));
 
-    const expenses = await this.expenseRepo.find({ where, relations: ['costCenter'], order: { dueDate: 'ASC' } });
+    const expenses = await this.expenseRepo.find({
+      where,
+      relations: ['costCenter'],
+      order: { dueDate: 'ASC' },
+    });
 
     const byCostCenter: Record<string, { name: string; total: number; count: number }> = {};
     let totalGeral = 0;
@@ -877,7 +906,12 @@ export class FinancialService {
       byCostCenter[ccName].count += 1;
     }
 
-    return { totalGeral, totalRegistros: expenses.length, byCostCenter: Object.values(byCostCenter), details: expenses };
+    return {
+      totalGeral,
+      totalRegistros: expenses.length,
+      byCostCenter: Object.values(byCostCenter),
+      details: expenses,
+    };
   }
 
   async getProductivityReport(clinicId: string, filters: { startDate: string; endDate: string }) {
@@ -886,18 +920,22 @@ export class FinancialService {
 
     const revenues = await this.revenueRepo.find({ where, order: { dueDate: 'ASC' } });
 
-    const byDoctor: Record<string, { doctorId: string; total: number; count: number; ticketMedio: number }> = {};
+    const byDoctor: Record<
+      string,
+      { doctorId: string; total: number; count: number; ticketMedio: number }
+    > = {};
 
     for (const rev of revenues) {
       const docId = rev.doctorId || 'unknown';
       const val = Number(rev.netValue) || 0;
-      if (!byDoctor[docId]) byDoctor[docId] = { doctorId: docId, total: 0, count: 0, ticketMedio: 0 };
+      if (!byDoctor[docId])
+        byDoctor[docId] = { doctorId: docId, total: 0, count: 0, ticketMedio: 0 };
       byDoctor[docId].total += val;
       byDoctor[docId].count += 1;
     }
 
     const ranking = Object.values(byDoctor)
-      .map(d => ({ ...d, ticketMedio: d.count > 0 ? d.total / d.count : 0 }))
+      .map((d) => ({ ...d, ticketMedio: d.count > 0 ? d.total / d.count : 0 }))
       .sort((a, b) => b.total - a.total);
 
     return { ranking, totalMedicos: ranking.length };
