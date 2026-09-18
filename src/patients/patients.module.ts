@@ -14,6 +14,7 @@ import { PatientDisease } from '../entities/patient-disease.entity';
 import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
+import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { CertificatesModule } from '../certificates/certificates.module';
 
@@ -32,6 +33,7 @@ import { CertificatesModule } from '../certificates/certificates.module';
       PatientAllergy,
       PatientVaccine,
       PatientSurgery,
+      FinancialConvenio,
     ]),
     NotificationsModule,
     CertificatesModule,

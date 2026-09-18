@@ -13,6 +13,7 @@ import { Patient } from './patient.entity';
 import { Dependent } from './dependent.entity';
 import { Medication } from './medication.entity';
 import { Exam } from './exam.entity';
+import { FinancialConvenio } from './financial-convenio.entity';
 
 export enum AppointmentStatus {
   PENDING = 'pending',
@@ -103,6 +104,21 @@ export class Appointment {
   /** Once a doctor modifies, patient cannot edit/delete */
   @Column({ type: 'boolean', default: false })
   lockedByDoctor: boolean;
+
+  /** 'consulta' | 'retorno' */
+  @Column({ type: 'varchar', length: 20, default: 'consulta' })
+  visitType: string;
+
+  /** 'particular' | 'convenio' */
+  @Column({ type: 'varchar', length: 20, default: 'particular' })
+  paymentType: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  convenioId: string | null;
+
+  @ManyToOne(() => FinancialConvenio, { nullable: true })
+  @JoinColumn({ name: 'convenioId' })
+  convenio: FinancialConvenio;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsDateString, IsUUID, IsOptional, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsDateString,
+  IsUUID,
+  IsOptional,
+  IsBoolean,
+  IsIn,
+} from 'class-validator';
 
 export class CreateAppointmentDto {
   @ApiProperty({
@@ -71,4 +79,19 @@ export class CreateAppointmentDto {
   @IsUUID()
   @IsOptional()
   dependentId?: string;
+
+  @ApiProperty({ example: 'consulta', enum: ['consulta', 'retorno'], required: false })
+  @IsIn(['consulta', 'retorno'])
+  @IsOptional()
+  visitType?: string;
+
+  @ApiProperty({ example: 'particular', enum: ['particular', 'convenio'], required: false })
+  @IsIn(['particular', 'convenio'])
+  @IsOptional()
+  paymentType?: string;
+
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000', required: false })
+  @IsUUID()
+  @IsOptional()
+  convenioId?: string;
 }

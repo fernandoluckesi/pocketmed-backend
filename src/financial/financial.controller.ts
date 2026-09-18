@@ -66,6 +66,7 @@ export class FinancialController {
   // ─── CONVENIOS ────────────────────────────────────────────────────────────
 
   @Get('convenios')
+  @Roles('doctor', 'admin', 'secretary')
   listConvenios(@CurrentUser() user: any) {
     return this.financialService.listConvenios(user.activeClinicId);
   }

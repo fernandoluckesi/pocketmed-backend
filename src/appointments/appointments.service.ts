@@ -11,6 +11,7 @@ import { Doctor } from '../entities/doctor.entity';
 import { Patient } from '../entities/patient.entity';
 import { Dependent } from '../entities/dependent.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
+import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { DoctorsService } from '../doctors/doctors.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -33,6 +34,8 @@ export class AppointmentsService {
     private dependentRepository: Repository<Dependent>,
     @InjectRepository(ClinicMembership)
     private clinicMembershipRepository: Repository<ClinicMembership>,
+    @InjectRepository(FinancialConvenio)
+    private financialConvenioRepository: Repository<FinancialConvenio>,
     private doctorsService: DoctorsService,
     private notificationsService: NotificationsService,
     private patientsService: PatientsService,
@@ -72,6 +75,16 @@ export class AppointmentsService {
 
     const doctorIds = await this.getClinicDoctorIds(activeClinicId);
     return doctorIds.includes(appointmentDoctorId);
+  }
+
+  private async validateConvenioId(convenioId?: string): Promise<void> {
+    if (!convenioId) return;
+    const convenio = await this.financialConvenioRepository.findOne({
+      where: { id: convenioId },
+    });
+    if (!convenio) {
+      throw new BadRequestException('convenioId inválido');
+    }
   }
 
   private sanitizeForSecretary(appointment: Appointment) {
@@ -218,6 +231,8 @@ export class AppointmentsService {
       }
     }
 
+    await this.validateConvenioId(dto.convenioId);
+
     const appointment = this.appointmentRepository.create({
       doctorCrm: doctor.crm,
       doctorName: doctor.name,
@@ -231,6 +246,9 @@ export class AppointmentsService {
       patientId: dto.patientId,
       dependentId: dto.dependentId,
       status: AppointmentStatus.PENDING,
+      visitType: dto.visitType || 'consulta',
+      paymentType: dto.paymentType || 'particular',
+      convenioId: dto.paymentType === 'convenio' ? dto.convenioId || null : null,
     });
 
     const saved = await this.appointmentRepository.save(appointment);
@@ -373,20 +391,20 @@ export class AppointmentsService {
 
         return await this.appointmentRepository.find({
           where: doctorIds.map((doctorId) => ({ doctorId })),
-          relations: ['doctor', 'patient', 'dependent'],
+          relations: ['doctor', 'patient', 'dependent', 'convenio'],
         });
       }
 
       return await this.appointmentRepository.find({
         where: { doctorId: userId },
-        relations: ['doctor', 'patient', 'dependent'],
+        relations: ['doctor', 'patient', 'dependent', 'convenio'],
       });
     }
 
     if (userType === 'patient') {
       const patientAppointments = await this.appointmentRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'patient', 'dependent'],
+        relations: ['doctor', 'patient', 'dependent', 'convenio'],
       });
 
       const dependents = await this.dependentRepository
@@ -404,6 +422,7 @@ export class AppointmentsService {
           .leftJoinAndSelect('appointment.doctor', 'doctor')
           .leftJoinAndSelect('appointment.patient', 'patient')
           .leftJoinAndSelect('appointment.dependent', 'dependent')
+          .leftJoinAndSelect('appointment.convenio', 'convenio')
           .where('appointment.dependentId IN (:...dependentIds)', { dependentIds })
           .getMany();
       }
@@ -428,7 +447,7 @@ export class AppointmentsService {
   ) {
     const appointment = await this.appointmentRepository.findOne({
       where: { id },
-      relations: ['doctor', 'patient', 'dependent', 'dependent.responsibles'],
+      relations: ['doctor', 'patient', 'dependent', 'dependent.responsibles', 'convenio'],
     });
 
     if (!appointment) {
@@ -475,7 +494,7 @@ export class AppointmentsService {
   ) {
     const appointment = await this.appointmentRepository.findOne({
       where: { id },
-      relations: ['doctor', 'patient', 'dependent', 'dependent.responsibles'],
+      relations: ['doctor', 'patient', 'dependent', 'dependent.responsibles', 'convenio'],
     });
 
     if (!appointment) {
@@ -544,10 +563,16 @@ export class AppointmentsService {
       }
     }
 
+    await this.validateConvenioId(dto.convenioId);
+
     const isDoctorRequestingCompletion = dto.isCompleted === true && isOwnerDoctor;
     const isPatientRequestingCompletion = dto.isCompleted === true && isOwnerPatient;
 
     Object.assign(appointment, dto);
+
+    if (dto.paymentType === 'particular') {
+      appointment.convenioId = null;
+    }
 
     if (dto.dateTime) {
       appointment.dateTime = new Date(dto.dateTime);

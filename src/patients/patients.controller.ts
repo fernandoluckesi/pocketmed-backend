@@ -147,6 +147,9 @@ export class PatientsController {
       notes?: string;
       priority?: string;
       completed?: boolean;
+      visitType?: string;
+      paymentType?: string;
+      convenioId?: string;
     },
     @CurrentUser() user: any,
   ) {
@@ -174,6 +177,9 @@ export class PatientsController {
       prescription?: string;
       notes?: string;
       completed?: boolean;
+      visitType?: string;
+      paymentType?: string;
+      convenioId?: string;
     },
     @CurrentUser() user: any,
   ) {
