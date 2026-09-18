@@ -15,6 +15,7 @@ import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { CertificatesModule } from '../certificates/certificates.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       PatientSurgery,
     ]),
     NotificationsModule,
+    CertificatesModule,
   ],
   controllers: [PatientsController],
   providers: [PatientsService],

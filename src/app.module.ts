@@ -25,6 +25,7 @@ import { Dependent } from './entities/dependent.entity';
 import { Appointment } from './entities/appointment.entity';
 import { Medication } from './entities/medication.entity';
 import { Exam } from './entities/exam.entity';
+import { Certificate } from './entities/certificate.entity';
 import { DoctorAccessRequest } from './entities/doctor-access-request.entity';
 import { DoctorPermission } from './entities/doctor-permission.entity';
 import { DependentResponsibleInvite } from './entities/dependent-responsible-invite.entity';
@@ -69,6 +70,7 @@ import { BackofficeUser } from './entities/backoffice-user.entity';
 import { AuditEvent } from './audit/entities/audit-event.entity';
 import { ClinicDoctorInvite } from './clinic-doctor-association/entities/clinic-doctor-invite.entity';
 import { ClinicDoctorAssociationModule } from './clinic-doctor-association/clinic-doctor-association.module';
+import { CertificatesModule } from './certificates/certificates.module';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
 import { AuditContextInterceptor } from './audit/audit-context.interceptor';
 
@@ -148,6 +150,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           BackofficeUser,
           AuditEvent,
           ClinicDoctorInvite,
+          Certificate,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -177,6 +180,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     CepModule,
     BackofficeModule,
     ClinicDoctorAssociationModule,
+    CertificatesModule,
   ],
   controllers: [AppController],
   providers: [
