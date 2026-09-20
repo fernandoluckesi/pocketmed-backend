@@ -1,9 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class ConfirmEmailChangeDto {
-  @ApiProperty({ example: '123456', description: 'Code sent to the new email' })
+  // Optional while code validation is disabled for the Apple review build.
+  @ApiProperty({ example: '123456', description: 'Code sent to the new email', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  code?: string;
 }

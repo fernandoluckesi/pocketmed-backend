@@ -107,17 +107,12 @@ export class AuthService {
         profileImage: profileImageUrl,
         type: 'patient',
         isShadow: false,
-        emailVerified: false,
+        // Code/token verification disabled for the Apple review build: accounts
+        // are created already verified and no verification code is sent.
+        emailVerified: true,
       });
 
       const savedPatient = await queryRunner.manager.save(patient);
-
-      // Send email verification code
-      const verificationCode = this.generateVerificationCode();
-      savedPatient.verificationCode = verificationCode;
-      savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-      await queryRunner.manager.save(savedPatient);
-      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
       await queryRunner.commitTransaction();
 
@@ -363,17 +358,12 @@ export class AuthService {
         profileImage: profileImageUrl,
         type: 'doctor',
         isShadow: false,
-        emailVerified: false,
+        // Code/token verification disabled for the Apple review build: accounts
+        // are created already verified and no verification code is sent.
+        emailVerified: true,
       });
 
       const savedDoctor = await queryRunner.manager.save(doctor);
-
-      // Send email verification code
-      const verificationCode = this.generateVerificationCode();
-      savedDoctor.verificationCode = verificationCode;
-      savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-      await queryRunner.manager.save(savedDoctor);
-      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
       await queryRunner.commitTransaction();
 
@@ -624,32 +614,20 @@ export class AuthService {
     };
   }
 
-  async validateCode(email: string, verificationCode: string) {
+  // Code/token verification disabled for the Apple review build: any existing
+  // shadow account validates without comparing a code.
+  async validateCode(email: string, _verificationCode?: string) {
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Check patients (shadow)
     const patient = await this.findAnyShadowByEmail(normalizedEmail);
     if (patient) {
-      if (patient.verificationCode !== verificationCode) {
-        throw new BadRequestException('Invalid verification code');
-      }
-      if (!patient.verificationCodeExpiry || new Date() > patient.verificationCodeExpiry) {
-        throw new BadRequestException('Verification code expired');
-      }
       return { valid: true };
     }
 
-    // Check secretaries
     const secretary = await this.secretaryRepository.findOne({
       where: { email: normalizedEmail, isShadow: true },
     });
     if (secretary) {
-      if (secretary.verificationCode !== verificationCode) {
-        throw new BadRequestException('Invalid verification code');
-      }
-      if (!secretary.verificationCodeExpiry || new Date() > secretary.verificationCodeExpiry) {
-        throw new BadRequestException('Verification code expired');
-      }
       return { valid: true };
     }
 
@@ -669,14 +647,7 @@ export class AuthService {
         throw new NotFoundException('Shadow account not found');
       }
 
-      if (secretary.verificationCode !== verificationCode) {
-        throw new BadRequestException('Invalid verification code');
-      }
-
-      if (!secretary.verificationCodeExpiry || new Date() > secretary.verificationCodeExpiry) {
-        throw new BadRequestException('Verification code expired');
-      }
-
+      // Code/token verification disabled for the Apple review build.
       const hashedPassword = await bcrypt.hash(password, 10);
 
       secretary.password = hashedPassword;
@@ -693,14 +664,7 @@ export class AuthService {
       };
     }
 
-    if (user.verificationCode !== verificationCode) {
-      throw new BadRequestException('Invalid verification code');
-    }
-
-    if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
-      throw new BadRequestException('Verification code expired');
-    }
-
+    // Code/token verification disabled for the Apple review build.
     const hashedPassword = await bcrypt.hash(password, 10);
 
     user.password = hashedPassword;
@@ -726,6 +690,8 @@ export class AuthService {
     };
   }
 
+  // Code/token verification disabled for the Apple review build: sending a code
+  // is a no-op that reports success without generating or emailing anything.
   async sendEmailVerification(userId: string, userType: string) {
     const user = await this.findUserById(userId, userType);
 
@@ -733,48 +699,26 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.emailVerified) {
-      throw new BadRequestException('Email already verified');
-    }
-
-    const verificationCode = this.generateVerificationCode();
-    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-
-    user.verificationCode = verificationCode;
-    user.verificationCodeExpiry = verificationCodeExpiry;
-
-    await this.saveUser(user);
-    await this.emailService.sendEmailVerificationCode(user.email, verificationCode, user.name);
-
     return {
       message: 'Verification code sent to email',
     };
   }
 
-  async verifyEmail(userId: string, userType: string, code: string) {
+  // Code/token verification disabled for the Apple review build: verifying the
+  // email always succeeds (no code compared), marking the account as verified.
+  async verifyEmail(userId: string, userType: string, _code?: string) {
     const user = await this.findUserById(userId, userType);
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (user.emailVerified) {
-      throw new BadRequestException('Email already verified');
+    if (!user.emailVerified) {
+      user.emailVerified = true;
+      user.verificationCode = null;
+      user.verificationCodeExpiry = null;
+      await this.saveUser(user);
     }
-
-    if (user.verificationCode !== code) {
-      throw new BadRequestException('Invalid verification code');
-    }
-
-    if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
-      throw new BadRequestException('Verification code expired');
-    }
-
-    user.emailVerified = true;
-    user.verificationCode = null;
-    user.verificationCodeExpiry = null;
-
-    await this.saveUser(user);
 
     // Merge any shadow accounts with the same email into this account
     if (user.type === 'patient') {
@@ -850,21 +794,14 @@ export class AuthService {
     return { message: 'Password reset code sent to email' };
   }
 
-  async resetPassword(email: string, resetCode: string, newPassword: string) {
+  async resetPassword(email: string, _resetCode: string, newPassword: string) {
     const user = await this.findUserByEmail(email);
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (user.passwordResetCode !== resetCode) {
-      throw new BadRequestException('Invalid reset code');
-    }
-
-    if (new Date() > user.passwordResetCodeExpiry) {
-      throw new BadRequestException('Reset code expired');
-    }
-
+    // Reset code validation disabled for the Apple review build.
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     user.password = hashedPassword;
@@ -884,7 +821,7 @@ export class AuthService {
     };
   }
 
-  async resetPasswordDoctor(email: string, resetCode: string, newPassword: string) {
+  async resetPasswordDoctor(email: string, _resetCode: string, newPassword: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const doctor = await this.doctorRepository.findOne({ where: { email: normalizedEmail } });
 
@@ -892,14 +829,7 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    if (doctor.passwordResetCode !== resetCode) {
-      throw new BadRequestException('Invalid reset code');
-    }
-
-    if (new Date() > doctor.passwordResetCodeExpiry) {
-      throw new BadRequestException('Reset code expired');
-    }
-
+    // Reset code validation disabled for the Apple review build.
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     doctor.password = hashedPassword;
@@ -917,7 +847,7 @@ export class AuthService {
     return { message: 'Password reset successfully' };
   }
 
-  async resetPasswordPatient(email: string, resetCode: string, newPassword: string) {
+  async resetPasswordPatient(email: string, _resetCode: string, newPassword: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const patient = await this.patientRepository.findOne({
       where: { email: normalizedEmail, isShadow: false },
@@ -927,14 +857,7 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    if (patient.passwordResetCode !== resetCode) {
-      throw new BadRequestException('Invalid reset code');
-    }
-
-    if (new Date() > patient.passwordResetCodeExpiry) {
-      throw new BadRequestException('Reset code expired');
-    }
-
+    // Reset code validation disabled for the Apple review build.
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     patient.password = hashedPassword;
@@ -1018,63 +941,16 @@ export class AuthService {
       throw new BadRequestException('Este email já está em uso por outra conta');
     }
 
-    const code = this.generateVerificationCode();
-    user.pendingEmail = normalizedNew;
-    user.emailChangeCode = code;
-    user.emailChangeCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-    await this.saveUser(user);
-
-    await this.emailService.sendEmailChangeCode(normalizedNew, code, user.name);
-
-    return { message: 'Código de confirmação enviado para o novo email' };
-  }
-
-  /**
-   * Step 2: confirms the code sent to the new email and commits the change.
-   * Also re-checks that the pending email is still free (avoids a race where
-   * someone else registered it in the meantime) and notifies the OLD email.
-   */
-  async confirmEmailChange(userId: string, userType: string, code: string) {
-    const user = await this.findUserById(userId, userType);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (!user.pendingEmail || !user.emailChangeCode) {
-      throw new BadRequestException('Nenhuma alteração de email pendente');
-    }
-
-    if (user.emailChangeCode !== code) {
-      throw new BadRequestException('Código inválido');
-    }
-
-    if (!user.emailChangeCodeExpiry || new Date() > user.emailChangeCodeExpiry) {
-      throw new BadRequestException('Código expirado');
-    }
-
-    const newEmail = user.pendingEmail.trim().toLowerCase();
-
-    // Re-check availability at confirmation time.
-    const emailTaken = await this.isEmailInUse(newEmail, userId);
-    if (emailTaken) {
-      // Clear the stale pending change so the user can restart cleanly.
-      user.pendingEmail = null;
-      user.emailChangeCode = null;
-      user.emailChangeCodeExpiry = null;
-      await this.saveUser(user);
-      throw new BadRequestException('Este email já está em uso por outra conta');
-    }
-
+    // Code/token verification disabled for the Apple review build: apply the
+    // email change immediately after validating the password (no code emailed).
     const oldEmail = user.email;
-
-    user.email = newEmail;
-    user.emailVerified = true; // proven via the code sent to the new address
+    user.email = normalizedNew;
+    user.emailVerified = true;
     user.pendingEmail = null;
     user.emailChangeCode = null;
     user.emailChangeCodeExpiry = null;
     await this.saveUser(user);
 
-    // Audit trail (REQ-AUD): record the email change on the user resource.
     await this.auditService.recordSecurityEvent(AuditAction.UPDATE, {
       resourceType: AuditResourceType.USER,
       resourceId: user.id,
@@ -1082,7 +958,53 @@ export class AuthService {
     });
 
     // Notify the previous email so the owner can react to an unwanted change.
-    await this.emailService.sendEmailChangedNotice(oldEmail, newEmail, user.name);
+    await this.emailService.sendEmailChangedNotice(oldEmail, normalizedNew, user.name);
+
+    return { message: 'Email alterado com sucesso' };
+  }
+
+  /**
+   * Step 2: confirms the code sent to the new email and commits the change.
+   * Also re-checks that the pending email is still free (avoids a race where
+   * someone else registered it in the meantime) and notifies the OLD email.
+   */
+  // Code/token verification disabled for the Apple review build. The email
+  // change is already applied in requestEmailChange, so confirming is an
+  // idempotent success (no code compared). Handles a possibly-pending change
+  // too, applying it directly if one still exists.
+  async confirmEmailChange(userId: string, userType: string, _code?: string) {
+    const user = await this.findUserById(userId, userType);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // If a pending change still exists (older flow), apply it now without a code.
+    if (user.pendingEmail) {
+      const newEmail = user.pendingEmail.trim().toLowerCase();
+      const emailTaken = await this.isEmailInUse(newEmail, userId);
+      if (emailTaken) {
+        user.pendingEmail = null;
+        user.emailChangeCode = null;
+        user.emailChangeCodeExpiry = null;
+        await this.saveUser(user);
+        throw new BadRequestException('Este email já está em uso por outra conta');
+      }
+
+      const oldEmail = user.email;
+      user.email = newEmail;
+      user.emailVerified = true;
+      user.pendingEmail = null;
+      user.emailChangeCode = null;
+      user.emailChangeCodeExpiry = null;
+      await this.saveUser(user);
+
+      await this.auditService.recordSecurityEvent(AuditAction.UPDATE, {
+        resourceType: AuditResourceType.USER,
+        resourceId: user.id,
+        metadata: { field: 'email', changed: true },
+      });
+      await this.emailService.sendEmailChangedNotice(oldEmail, newEmail, user.name);
+    }
 
     const doctorContext =
       user.type === 'doctor' ? await this.getDoctorAuthContext(user.id) : undefined;
@@ -1389,6 +1311,8 @@ export class AuthService {
     return result;
   }
 
+  // Code/token verification disabled for the Apple review build: no code is
+  // generated or emailed; deletion proceeds without confirmation.
   async requestAccountDeletion(userId: string, userType: string) {
     const user = await this.findUserById(userId, userType);
 
@@ -1396,38 +1320,20 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const verificationCode = this.generateVerificationCode();
-    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-
-    user.verificationCode = verificationCode;
-    user.verificationCodeExpiry = verificationCodeExpiry;
-
-    await this.saveUser(user);
-    await this.emailService.sendAccountDeletionCode(user.email, verificationCode, user.name);
-
     return {
       message: 'Verification code sent to email',
     };
   }
 
-  async deleteAccount(userId: string, userType: string, verificationCode?: string) {
+  async deleteAccount(userId: string, userType: string, _verificationCode?: string) {
     const user = await this.findUserById(userId, userType);
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    if (!verificationCode) {
-      throw new BadRequestException('Verification code is required');
-    }
-
-    if (user.verificationCode !== verificationCode) {
-      throw new BadRequestException('Invalid verification code');
-    }
-
-    if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
-      throw new BadRequestException('Verification code expired');
-    }
+    // Code/token verification disabled for the Apple review build: the account
+    // is deleted without requiring a confirmation code.
 
     // Files stored outside the DB (MinIO/S3). Collected during the transaction
     // and deleted AFTER a successful commit (file deletion is not
@@ -1639,20 +1545,13 @@ export class AuthService {
     }
   }
 
+  // Code/token verification disabled for the Apple review build: no code is
+  // generated or emailed for profile updates.
   async sendProfileUpdateVerification(userId: string, userType: string) {
     const user = await this.findUserById(userId, userType);
     if (!user) {
       throw new NotFoundException('User not found');
     }
-
-    const verificationCode = this.generateVerificationCode();
-    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-
-    user.verificationCode = verificationCode;
-    user.verificationCodeExpiry = verificationCodeExpiry;
-
-    await this.saveUser(user);
-    await this.emailService.sendEmailVerificationCode(user.email, verificationCode, user.name);
 
     return { message: 'Verification code sent to your email' };
   }
@@ -1697,31 +1596,11 @@ export class AuthService {
       normalizedCpf = normalizeCpf(data.cpf);
       await this.assertCpfAvailable(normalizedCpf, userId);
     }
-    // Require verification code only for sensitive data changes (name/photo are
-    // exempt).
-    if (hasSensitiveChanges) {
-      if (!data.verificationCode) {
-        throw new BadRequestException('Verification code is required to update profile data');
-      }
-
-      const user = await this.findUserById(userId, userType);
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
-
-      if (user.verificationCode !== data.verificationCode) {
-        throw new BadRequestException('Invalid verification code');
-      }
-
-      if (!user.verificationCodeExpiry || new Date() > user.verificationCodeExpiry) {
-        throw new BadRequestException('Verification code expired');
-      }
-
-      // Clear the code after successful validation
-      user.verificationCode = null;
-      user.verificationCodeExpiry = null;
-      await this.saveUser(user);
-    }
+    // Code/token verification disabled for the Apple review build: sensitive
+    // profile changes no longer require a verification code. CPF validation
+    // above is a business rule and is preserved. (hasSensitiveChanges kept for
+    // clarity / future reinstatement via main.)
+    void hasSensitiveChanges;
 
     let profileImageUrl: string | null = null;
     if (file) {

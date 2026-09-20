@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
@@ -9,9 +8,12 @@ import { Doctor } from '../entities/doctor.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
+import { DoctorPermission } from '../entities/doctor-permission.entity';
+import { DoctorDocument } from '../entities/doctor-document.entity';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Unit tests for AuthService.deleteAccount focusing on the hard-delete
@@ -107,10 +109,13 @@ describe('AuthService - deleteAccount', () => {
         { provide: getRepositoryToken(ClinicMembership), useValue: {} },
         { provide: getRepositoryToken(ClinicAdminProfile), useValue: {} },
         { provide: getRepositoryToken(Secretary), useValue: {} },
+        { provide: getRepositoryToken(DoctorPermission), useValue: {} },
+        { provide: getRepositoryToken(DoctorDocument), useValue: {} },
         { provide: JwtService, useValue: { sign: jest.fn() } },
         { provide: UploadService, useValue: { deleteFile } },
         { provide: EmailService, useValue: { sendAccountDeletionCode: jest.fn() } },
         { provide: AuditService, useValue: { recordDelete } },
+        { provide: NotificationsService, useValue: {} },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
@@ -124,23 +129,14 @@ describe('AuthService - deleteAccount', () => {
       .map((q) => q.sql.match(/DELETE FROM `(\w+)`/)?.[1])
       .filter(Boolean);
 
-  it('rejects an invalid verification code without touching the DB', async () => {
-    await expect(service.deleteAccount(USER_ID, 'patient', 'wrong')).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-    expect(queries).toHaveLength(0);
-  });
+  // Code/token verification is disabled for the Apple review build: deletion
+  // proceeds WITHOUT a verification code (no code required or checked).
+  it('deletes the account without requiring a verification code', async () => {
+    const res = await service.deleteAccount(USER_ID, 'patient');
 
-  it('rejects an expired verification code', async () => {
-    patientRepo.findOne.mockResolvedValue({
-      id: USER_ID,
-      type: 'patient',
-      verificationCode: VALID_CODE,
-      verificationCodeExpiry: new Date(Date.now() - 1000),
-    });
-    await expect(service.deleteAccount(USER_ID, 'patient', VALID_CODE)).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    expect(res).toEqual({ message: 'Account deleted successfully' });
+    expect(committed).toBe(true);
+    expect(deletedTables()).toContain('patients');
   });
 
   it('hard-deletes all patient-scoped data and the patient (no dependents)', async () => {

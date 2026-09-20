@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, IsOptional, MinLength, Matches } from 'class-validator';
 
 export class ResetPasswordDto {
   @ApiProperty({ example: 'fernando.luckesi@email.com' })
@@ -7,10 +7,11 @@ export class ResetPasswordDto {
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ example: '123456' })
+  // Optional while code validation is disabled for the Apple review build.
+  @ApiProperty({ example: '123456', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  resetCode: string;
+  resetCode?: string;
 
   @ApiProperty({ example: 'NovaSenha@123' })
   @IsString()

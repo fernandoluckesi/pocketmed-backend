@@ -110,7 +110,8 @@ export class ClinicsService {
         profileImage: profileImageUrl,
         type: 'doctor',
         isShadow: false,
-        emailVerified: false,
+        // Code/token verification disabled for the Apple review build.
+        emailVerified: true,
       });
       const savedDoctor = await queryRunner.manager.save(doctor);
 
@@ -140,16 +141,8 @@ export class ClinicsService {
       });
       await queryRunner.manager.save(membership);
 
-      // 4. Send email verification
-      const verificationCode = this.generateVerificationCode();
-      savedDoctor.verificationCode = verificationCode;
-      savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-      await queryRunner.manager.save(savedDoctor);
-      await this.emailService.sendEmailVerificationCode(
-        dto.email.trim().toLowerCase(),
-        verificationCode,
-        dto.name,
-      );
+      // 4. Email verification disabled for the Apple review build: no code is
+      // generated or sent; the doctor is already emailVerified above.
 
       await queryRunner.commitTransaction();
 

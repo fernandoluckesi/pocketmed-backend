@@ -1,10 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, Length } from 'class-validator';
+import { IsString, IsOptional } from 'class-validator';
 
 export class VerifyEmailDto {
-  @ApiProperty({ example: '123456' })
+  // Verification code is optional while token/code validation is disabled for
+  // the Apple review build. Kept in the DTO for compatibility with the client.
+  @ApiProperty({ example: '123456', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @Length(6, 6)
-  code: string;
+  code?: string;
 }
