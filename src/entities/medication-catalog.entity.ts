@@ -3,14 +3,16 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 
 /**
  * Medicamentos registrados na ANVISA, importados da lista oficial de preços
  * (CMED). Uma linha por apresentação comercial (não por princípio ativo).
+ *
+ * `substance` é TEXT (não varchar): associações de vacinas multivalentes
+ * (ex.: pneumocócicas) listam dezenas de sorotipos e passam de 1400 caracteres.
  */
 @Entity('medication_catalog')
 export class MedicationCatalog {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index()
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'text' })
   substance: string;
 
   @Index()
