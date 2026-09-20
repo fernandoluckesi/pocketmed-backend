@@ -36,9 +36,12 @@ export class CertificatesController {
   constructor(private certificatesService: CertificatesService) {}
 
   @Post()
-  @Roles('doctor', 'admin')
+  @Roles('doctor', 'admin', 'patient')
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Issue a certificate ("atestado") for a patient/dependent' })
+  @ApiOperation({
+    summary:
+      'Issue a certificate ("atestado") — by a doctor for a patient/dependent, or self-reported by the patient',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Certificate created successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - No permission' })
@@ -48,7 +51,7 @@ export class CertificatesController {
     @Body() dto: CreateCertificateDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.certificatesService.create(user.userId, dto, file);
+    return this.certificatesService.create(user.userId, user.type, dto, file);
   }
 
   @Get()
@@ -69,9 +72,9 @@ export class CertificatesController {
   }
 
   @Put(':id')
-  @Roles('doctor', 'admin')
+  @Roles('doctor', 'admin', 'patient')
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Update a certificate (issuing doctor only)' })
+  @ApiOperation({ summary: 'Update a certificate (issuing doctor or owning patient)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Certificate updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
@@ -86,8 +89,8 @@ export class CertificatesController {
   }
 
   @Delete(':id')
-  @Roles('doctor', 'admin')
-  @ApiOperation({ summary: 'Delete a certificate (issuing doctor only)' })
+  @Roles('doctor', 'admin', 'patient')
+  @ApiOperation({ summary: 'Delete a certificate (issuing doctor or owning patient)' })
   @ApiResponse({ status: 200, description: 'Certificate deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Certificate not found' })

@@ -12,7 +12,7 @@ export class CreateCertificatesTable1798000000000 implements MigrationInterface 
     await queryRunner.query(`
       CREATE TABLE certificates (
         id VARCHAR(36) NOT NULL,
-        doctorId VARCHAR(36) NOT NULL,
+        doctorId VARCHAR(36) NULL,
         patientId VARCHAR(36) NULL,
         dependentId VARCHAR(36) NULL,
         appointmentId VARCHAR(36) NULL,

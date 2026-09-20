@@ -26,6 +26,7 @@ import { Appointment } from './entities/appointment.entity';
 import { Medication } from './entities/medication.entity';
 import { Exam } from './entities/exam.entity';
 import { Certificate } from './entities/certificate.entity';
+import { MedicationCatalog } from './entities/medication-catalog.entity';
 import { DoctorAccessRequest } from './entities/doctor-access-request.entity';
 import { DoctorPermission } from './entities/doctor-permission.entity';
 import { DependentResponsibleInvite } from './entities/dependent-responsible-invite.entity';
@@ -58,6 +59,7 @@ import { Secretary } from './entities/secretary.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
 import { ExamCatalogModule } from './exam-catalog/exam-catalog.module';
+import { MedicationCatalogModule } from './medication-catalog/medication-catalog.module';
 import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
 import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.module';
 import { FinancialModule } from './financial/financial.module';
@@ -151,6 +153,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           AuditEvent,
           ClinicDoctorInvite,
           Certificate,
+          MedicationCatalog,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -171,6 +174,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     NotificationsModule,
     ClinicAdminModule,
     ExamCatalogModule,
+    MedicationCatalogModule,
     ExamSchedulingModule,
     DoctorDocumentsModule,
     FinancialModule,

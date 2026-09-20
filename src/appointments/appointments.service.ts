@@ -330,6 +330,8 @@ export class AppointmentsService {
       }
     }
 
+    await this.validateConvenioId(dto.convenioId);
+
     const appointment = this.appointmentRepository.create({
       doctorCrm,
       doctorName,
@@ -342,6 +344,9 @@ export class AppointmentsService {
       createdByPatientId: patientId,
       dependentId: dto.dependentId,
       status: AppointmentStatus.APPROVED,
+      visitType: dto.visitType || 'consulta',
+      paymentType: dto.paymentType || 'particular',
+      convenioId: dto.paymentType === 'convenio' ? dto.convenioId || null : null,
     });
 
     const saved = await this.appointmentRepository.save(appointment);

@@ -5,7 +5,14 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, LessThanOrEqual, FindOptionsWhere } from 'typeorm';
+import {
+  Repository,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
+  FindOptionsWhere,
+  Like,
+} from 'typeorm';
 import { FinancialSettings } from '../entities/financial-settings.entity';
 import { FinancialCostCenter } from '../entities/financial-cost-center.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
@@ -111,6 +118,20 @@ export class FinancialService {
     return this.convenioRepo.find({
       where: { clinicId },
       order: { name: 'ASC' },
+    });
+  }
+
+  /** Cross-clinic search by name — used by the patient app, which has no
+   * active clinic of its own to scope by. */
+  async searchConvenios(q: string) {
+    if (!q || q.trim().length < 3) {
+      return [];
+    }
+
+    return this.convenioRepo.find({
+      where: { name: Like(`%${q.trim()}%`), active: true },
+      order: { name: 'ASC' },
+      take: 30,
     });
   }
 

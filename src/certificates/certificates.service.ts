@@ -33,7 +33,24 @@ export class CertificatesService {
     private uploadService: UploadService,
   ) {}
 
-  async create(doctorId: string, dto: CreateCertificateDto, file?: Express.Multer.File) {
+  async create(
+    userId: string,
+    userType: string,
+    dto: CreateCertificateDto,
+    file?: Express.Multer.File,
+  ) {
+    if (userType === 'patient') {
+      return this.createByPatient(userId, dto, file);
+    }
+
+    return this.createByDoctor(userId, dto, file);
+  }
+
+  private async createByDoctor(
+    doctorId: string,
+    dto: CreateCertificateDto,
+    file?: Express.Multer.File,
+  ) {
     if (!dto.patientId && !dto.dependentId) {
       throw new BadRequestException('Either patientId or dependentId must be provided');
     }
@@ -93,6 +110,75 @@ export class CertificatesService {
     const certificate = this.certificateRepository.create({
       ...dto,
       doctorId,
+      issueDate: dto.issueDate ? new Date(dto.issueDate) : null,
+      fileUrl,
+    });
+
+    return await this.certificateRepository.save(certificate);
+  }
+
+  /**
+   * A patient self-reporting a certificate they received (mirrors
+   * ExamsService.createByPatient). Unlike exams, appointmentId is optional —
+   * a patient may log a certificate without having recorded the underlying
+   * consultation. No acting doctor user, so doctorId stays null; the CRM the
+   * patient types in is what identifies the issuing doctor on the document.
+   */
+  private async createByPatient(
+    patientUserId: string,
+    dto: CreateCertificateDto,
+    file?: Express.Multer.File,
+  ) {
+    let patientId: string | null = null;
+    let dependentId: string | null = null;
+
+    if (dto.dependentId) {
+      const dependent = await this.dependentRepository
+        .createQueryBuilder('dependent')
+        .leftJoinAndSelect('dependent.responsibles', 'responsibles')
+        .where('dependent.id = :dependentId', { dependentId: dto.dependentId })
+        .getOne();
+
+      if (!dependent) {
+        throw new NotFoundException('Dependent not found');
+      }
+
+      const isResponsible = dependent.responsibles.some((r) => r.id === patientUserId);
+      if (!isResponsible) {
+        throw new ForbiddenException('You are not responsible for this dependent');
+      }
+
+      dependentId = dependent.id;
+    } else {
+      patientId = patientUserId;
+    }
+
+    if (dto.appointmentId) {
+      const appointment = await this.appointmentRepository.findOne({
+        where: { id: dto.appointmentId },
+      });
+      const belongsToTarget = dependentId
+        ? appointment?.dependentId === dependentId
+        : appointment?.patientId === patientId;
+      if (!appointment || !belongsToTarget) {
+        throw new BadRequestException('appointmentId inválido ou não pertence a este paciente');
+      }
+    }
+
+    let fileUrl: string | null = null;
+    if (file) {
+      fileUrl = await this.uploadService.uploadFile(file, 'certificates');
+    }
+
+    const certificate = this.certificateRepository.create({
+      crm: dto.crm,
+      cid: dto.cid,
+      description: dto.description,
+      daysOff: dto.daysOff,
+      appointmentId: dto.appointmentId,
+      doctorId: null,
+      patientId,
+      dependentId,
       issueDate: dto.issueDate ? new Date(dto.issueDate) : null,
       fileUrl,
     });
@@ -170,13 +256,25 @@ export class CertificatesService {
     dto: UpdateCertificateDto,
     file?: Express.Multer.File,
   ) {
-    const certificate = await this.certificateRepository.findOne({ where: { id } });
+    const certificate = await this.certificateRepository.findOne({
+      where: { id },
+      relations: ['dependent', 'dependent.responsibles'],
+    });
     if (!certificate) {
       throw new NotFoundException('Certificate not found');
     }
 
-    if (userType !== 'doctor' || certificate.doctorId !== userId) {
-      throw new ForbiddenException('Only the doctor who issued the certificate can update it');
+    const isOwnerDoctor = userType === 'doctor' && certificate.doctorId === userId;
+    const isOwnerPatient =
+      userType === 'patient' &&
+      (certificate.patientId === userId ||
+        (certificate.dependentId &&
+          certificate.dependent?.responsibles?.some((r) => r.id === userId)));
+
+    if (!isOwnerDoctor && !isOwnerPatient) {
+      throw new ForbiddenException(
+        'Only the doctor who issued the certificate or the patient who owns it can update it',
+      );
     }
 
     Object.assign(certificate, dto);
@@ -196,13 +294,25 @@ export class CertificatesService {
   }
 
   async delete(id: string, userId: string, userType: string) {
-    const certificate = await this.certificateRepository.findOne({ where: { id } });
+    const certificate = await this.certificateRepository.findOne({
+      where: { id },
+      relations: ['dependent', 'dependent.responsibles'],
+    });
     if (!certificate) {
       throw new NotFoundException('Certificate not found');
     }
 
-    if (userType !== 'doctor' || certificate.doctorId !== userId) {
-      throw new ForbiddenException('Only the doctor who issued the certificate can delete it');
+    const isOwnerDoctor = userType === 'doctor' && certificate.doctorId === userId;
+    const isOwnerPatient =
+      userType === 'patient' &&
+      (certificate.patientId === userId ||
+        (certificate.dependentId &&
+          certificate.dependent?.responsibles?.some((r) => r.id === userId)));
+
+    if (!isOwnerDoctor && !isOwnerPatient) {
+      throw new ForbiddenException(
+        'Only the doctor who issued the certificate or the patient who owns it can delete it',
+      );
     }
 
     if (certificate.fileUrl) {

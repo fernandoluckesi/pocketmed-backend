@@ -4,7 +4,6 @@ import { PatientsService, SurgeryData } from './patients.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequireDoctorVerified } from '../auth/decorators/require-doctor-verified.decorator';
-import { CertificatesService } from '../certificates/certificates.service';
 
 @ApiTags('Patients')
 @Controller('patients')
@@ -12,10 +11,7 @@ import { CertificatesService } from '../certificates/certificates.service';
 @RequireDoctorVerified()
 @ApiBearerAuth('JWT-auth')
 export class PatientsController {
-  constructor(
-    private patientsService: PatientsService,
-    private certificatesService: CertificatesService,
-  ) {}
+  constructor(private patientsService: PatientsService) {}
 
   @Get('stats/summary')
   @ApiOperation({ summary: 'Get patients summary for current doctor' })
@@ -656,6 +652,12 @@ export class PatientsController {
   @ApiOperation({ summary: 'Get certificates ("atestados") issued for a patient' })
   @ApiResponse({ status: 200, description: 'Return patient certificates' })
   async getCertificates(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.certificatesService.findAll(user.userId, user.type, id);
+    return this.patientsService.getCertificates(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
   }
 }

@@ -71,6 +71,17 @@ export class FinancialController {
     return this.financialService.listConvenios(user.activeClinicId);
   }
 
+  /**
+   * Cross-clinic search, unlike listConvenios above: a patient has no active
+   * clinic, so the insurance-plan picker in the patient app needs a global
+   * lookup by name instead of "this clinic's list".
+   */
+  @Get('convenios/search')
+  @Roles('doctor', 'admin', 'secretary', 'patient')
+  searchConvenios(@Query('q') q: string) {
+    return this.financialService.searchConvenios(q);
+  }
+
   @Post('convenios')
   createConvenio(@CurrentUser() user: any, @Body() dto: any) {
     return this.financialService.createConvenio(user.activeClinicId, dto);

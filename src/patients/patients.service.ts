@@ -19,6 +19,7 @@ import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
+import { Certificate } from '../entities/certificate.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -98,6 +99,8 @@ export class PatientsService {
     private dependentRepository: Repository<Dependent>,
     @InjectRepository(FinancialConvenio)
     private financialConvenioRepository: Repository<FinancialConvenio>,
+    @InjectRepository(Certificate)
+    private certificateRepository: Repository<Certificate>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -1752,6 +1755,21 @@ export class PatientsService {
       where: { patientId },
       order: { createdAt: 'DESC' },
       take: 100,
+    });
+  }
+
+  async getCertificates(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
+    const patient = await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const isDependent = (patient as any).isDependent === true;
+    return this.certificateRepository.find({
+      where: isDependent ? { dependentId: patientId } : { patientId },
+      order: { createdAt: 'DESC' },
     });
   }
 }

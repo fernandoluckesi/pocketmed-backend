@@ -25,6 +25,7 @@
     "seed:run": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed.ts",
     "seed:clinic": "ts-node -r tsconfig-paths/register src/database/seeds/seed-clinic.ts",
     "seed:exams": "ts-node -r tsconfig-paths/register src/database/seeds/seed-exam-catalog.ts",
+    "seed:medications": "ts-node -r tsconfig-paths/register src/database/seeds/seed-medication-catalog.ts",
     "seed:financial": "ts-node -r tsconfig-paths/register src/database/seeds/seed-financial.ts",
     "seed:appointments": "ts-node -r tsconfig-paths/register src/database/seeds/seed-appointments.ts",
     "seed:backoffice": "ts-node -r tsconfig-paths/register src/database/seeds/seed-backoffice-user.ts",

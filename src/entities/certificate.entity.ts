@@ -19,10 +19,12 @@ export class Certificate {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'uuid' })
-  doctorId: string;
+  /** Nullable: a patient self-reporting a certificate has no acting doctor
+   * user — the issuing doctor's CRM is still captured in the `crm` column. */
+  @Column({ type: 'uuid', nullable: true })
+  doctorId: string | null;
 
-  @ManyToOne(() => Doctor)
+  @ManyToOne(() => Doctor, { nullable: true })
   @JoinColumn({ name: 'doctorId' })
   doctor: Doctor;
 
