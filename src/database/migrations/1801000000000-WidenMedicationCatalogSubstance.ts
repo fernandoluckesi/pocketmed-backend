@@ -12,9 +12,7 @@ export class WidenMedicationCatalogSubstance1801000000000 implements MigrationIn
     await queryRunner.query(
       'ALTER TABLE `medication_catalog` DROP INDEX `IDX_medication_catalog_substance`;',
     );
-    await queryRunner.query(
-      'ALTER TABLE `medication_catalog` MODIFY `substance` TEXT NOT NULL;',
-    );
+    await queryRunner.query('ALTER TABLE `medication_catalog` MODIFY `substance` TEXT NOT NULL;');
     await queryRunner.query(
       'ALTER TABLE `medication_catalog` ADD INDEX `IDX_medication_catalog_substance` (`substance`(191));',
     );

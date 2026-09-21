@@ -10,6 +10,7 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -21,6 +22,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { CertificatesService } from './certificates.service';
+import { CertificateParserService } from './certificate-parser.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -28,12 +30,27 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateCertificateDto } from './dto/create-certificate.dto';
 import { UpdateCertificateDto } from './dto/update-certificate.dto';
 
+const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
+const ALLOWED_MIMETYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/tiff',
+  'image/heic',
+  'image/webp',
+];
+
 @ApiTags('Certificates')
 @Controller('certificates')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class CertificatesController {
-  constructor(private certificatesService: CertificatesService) {}
+  constructor(
+    private certificatesService: CertificatesService,
+    private certificateParserService: CertificateParserService,
+  ) {}
 
   @Post()
   @Roles('doctor', 'admin', 'patient')
@@ -52,6 +69,31 @@ export class CertificatesController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.certificatesService.create(user.userId, user.type, dto, file);
+  }
+
+  @Post('parse')
+  @Roles('doctor', 'admin', 'patient')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_FILE_SIZE },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Parse an attached certificate (PDF/image) and extract CRM, CID, description, days off and issue date',
+  })
+  @ApiResponse({ status: 200, description: 'Returns the fields detected in the attachment' })
+  async parse(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+    if (!ALLOWED_MIMETYPES.includes(file.mimetype)) {
+      throw new BadRequestException(
+        'Formato não suportado. Aceitos: PDF, JPEG, JPG, PNG, GIF, TIFF, HEIC, WEBP.',
+      );
+    }
+    return this.certificateParserService.parseCertificate(file);
   }
 
   @Get()
