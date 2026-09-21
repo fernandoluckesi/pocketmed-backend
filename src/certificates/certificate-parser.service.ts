@@ -114,7 +114,10 @@ export class CertificateParserService {
 
   /** The sentence around the typical "atesto que ..." certificate boilerplate. */
   private extractDescription(text: string): string | null {
-    const match = text.match(/atesto[^.\n]{0,280}[.\n]/i);
+    // Non-greedy up to a period that isn't part of a number (CPF, dates,
+    // decimals like "123.456.789-00" all contain periods that aren't sentence
+    // ends), spanning line breaks since the sentence itself often wraps.
+    const match = text.match(/atesto[\s\S]{0,280}?(?<!\d)\.(?!\d)/i);
     if (!match) return null;
     return match[0]
       .replace(/\s+/g, ' ')
