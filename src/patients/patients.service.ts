@@ -20,6 +20,7 @@ import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { Certificate } from '../entities/certificate.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -101,6 +102,8 @@ export class PatientsService {
     private financialConvenioRepository: Repository<FinancialConvenio>,
     @InjectRepository(Certificate)
     private certificateRepository: Repository<Certificate>,
+    @InjectRepository(Clinic)
+    private clinicRepository: Repository<Clinic>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -684,6 +687,36 @@ export class PatientsService {
       specialty: string;
     } | null;
 
+    let location: Pick<
+      Appointment,
+      | 'locationClinicName'
+      | 'locationStreet'
+      | 'locationNumber'
+      | 'locationNeighborhood'
+      | 'locationCity'
+      | 'locationState'
+    > = {
+      locationClinicName: null,
+      locationStreet: null,
+      locationNumber: null,
+      locationNeighborhood: null,
+      locationCity: null,
+      locationState: null,
+    };
+    if (activeClinicId) {
+      const clinic = await this.clinicRepository.findOne({ where: { id: activeClinicId } });
+      if (clinic) {
+        location = {
+          locationClinicName: clinic.name,
+          locationStreet: clinic.street,
+          locationNumber: clinic.number,
+          locationNeighborhood: clinic.neighborhood,
+          locationCity: clinic.city,
+          locationState: clinic.state,
+        };
+      }
+    }
+
     const appointment = this.appointmentRepository.create({
       patientId,
       doctorId,
@@ -702,6 +735,7 @@ export class PatientsService {
       visitType: data.visitType || 'consulta',
       paymentType: data.paymentType || 'particular',
       convenioId: data.paymentType === 'convenio' ? data.convenioId || null : null,
+      ...location,
     });
 
     const saved = await this.appointmentRepository.save(appointment);

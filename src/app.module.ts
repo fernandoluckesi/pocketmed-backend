@@ -64,6 +64,8 @@ import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
 import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.module';
 import { FinancialModule } from './financial/financial.module';
 import { ClinicsModule } from './clinics/clinics.module';
+import { PlansModule } from './plans/plans.module';
+import { PaymentsModule } from './payments/payments.module';
 import { AuditModule } from './audit/audit.module';
 import { SecretariesModule } from './secretaries/secretaries.module';
 import { CepModule } from './cep/cep.module';
@@ -179,6 +181,8 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     DoctorDocumentsModule,
     FinancialModule,
     ClinicsModule,
+    PlansModule,
+    PaymentsModule,
     AuditModule,
     SecretariesModule,
     CepModule,

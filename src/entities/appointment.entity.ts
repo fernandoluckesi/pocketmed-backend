@@ -120,6 +120,30 @@ export class Appointment {
   @JoinColumn({ name: 'convenioId' })
   convenio: FinancialConvenio;
 
+  /**
+   * Where the consultation takes place. When created from within a clinic
+   * (staff scheduling, or a doctor with an active clinic), these are
+   * snapshotted from the clinic's own address so the record stays accurate
+   * even if the clinic later moves; otherwise a doctor can fill them by hand.
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  locationClinicName: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  locationStreet: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  locationNumber: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  locationNeighborhood: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  locationCity: string | null;
+
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  locationState: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

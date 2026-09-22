@@ -12,6 +12,7 @@ import { Patient } from '../entities/patient.entity';
 import { Dependent } from '../entities/dependent.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { DoctorsService } from '../doctors/doctors.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -36,6 +37,8 @@ export class AppointmentsService {
     private clinicMembershipRepository: Repository<ClinicMembership>,
     @InjectRepository(FinancialConvenio)
     private financialConvenioRepository: Repository<FinancialConvenio>,
+    @InjectRepository(Clinic)
+    private clinicRepository: Repository<Clinic>,
     private doctorsService: DoctorsService,
     private notificationsService: NotificationsService,
     private patientsService: PatientsService,
@@ -87,6 +90,50 @@ export class AppointmentsService {
     }
   }
 
+  /**
+   * When the appointment is created within a clinic (staff scheduling, or a
+   * doctor with an active clinic), the clinic's own address is snapshotted —
+   * the doctor doesn't choose it. Without an active clinic (private
+   * practice), whatever address the doctor typed by hand is used as-is.
+   */
+  private async resolveLocation(
+    dto: CreateAppointmentDto,
+    activeClinicId?: string | null,
+  ): Promise<
+    Pick<
+      Appointment,
+      | 'locationClinicName'
+      | 'locationStreet'
+      | 'locationNumber'
+      | 'locationNeighborhood'
+      | 'locationCity'
+      | 'locationState'
+    >
+  > {
+    if (activeClinicId) {
+      const clinic = await this.clinicRepository.findOne({ where: { id: activeClinicId } });
+      if (clinic) {
+        return {
+          locationClinicName: clinic.name,
+          locationStreet: clinic.street,
+          locationNumber: clinic.number,
+          locationNeighborhood: clinic.neighborhood,
+          locationCity: clinic.city,
+          locationState: clinic.state,
+        };
+      }
+    }
+
+    return {
+      locationClinicName: dto.locationClinicName || null,
+      locationStreet: dto.locationStreet || null,
+      locationNumber: dto.locationNumber || null,
+      locationNeighborhood: dto.locationNeighborhood || null,
+      locationCity: dto.locationCity || null,
+      locationState: dto.locationState || null,
+    };
+  }
+
   private sanitizeForSecretary(appointment: Appointment) {
     return {
       id: appointment.id,
@@ -116,7 +163,7 @@ export class AppointmentsService {
       if (userRole && userRole !== ProfessionalRole.DOCTOR) {
         throw new ForbiddenException('Only doctors can create appointments');
       }
-      return this.createByDoctor(userId, dto);
+      return this.createByDoctor(userId, dto, activeClinicId);
     }
 
     if (userType === 'patient') {
@@ -167,15 +214,23 @@ export class AppointmentsService {
       throw new ForbiddenException('Selected doctor is not an active member of your clinic');
     }
 
-    return this.createByDoctor(dto.doctorId, {
-      ...dto,
-      isCompleted: false,
-      doctorFeedback: undefined,
-      doctorInstructions: undefined,
-    });
+    return this.createByDoctor(
+      dto.doctorId,
+      {
+        ...dto,
+        isCompleted: false,
+        doctorFeedback: undefined,
+        doctorInstructions: undefined,
+      },
+      activeClinicId,
+    );
   }
 
-  private async createByDoctor(doctorId: string, dto: CreateAppointmentDto) {
+  private async createByDoctor(
+    doctorId: string,
+    dto: CreateAppointmentDto,
+    activeClinicId?: string | null,
+  ) {
     if (!dto.patientId && !dto.dependentId) {
       throw new BadRequestException('Either patientId or dependentId must be provided');
     }
@@ -232,6 +287,7 @@ export class AppointmentsService {
     }
 
     await this.validateConvenioId(dto.convenioId);
+    const location = await this.resolveLocation(dto, activeClinicId);
 
     const appointment = this.appointmentRepository.create({
       doctorCrm: doctor.crm,
@@ -248,6 +304,7 @@ export class AppointmentsService {
       status: AppointmentStatus.PENDING,
       visitType: dto.visitType || 'consulta',
       paymentType: dto.paymentType || 'particular',
+      ...location,
       convenioId: dto.paymentType === 'convenio' ? dto.convenioId || null : null,
     });
 
@@ -347,6 +404,12 @@ export class AppointmentsService {
       visitType: dto.visitType || 'consulta',
       paymentType: dto.paymentType || 'particular',
       convenioId: dto.paymentType === 'convenio' ? dto.convenioId || null : null,
+      locationClinicName: dto.locationClinicName || null,
+      locationStreet: dto.locationStreet || null,
+      locationNumber: dto.locationNumber || null,
+      locationNeighborhood: dto.locationNeighborhood || null,
+      locationCity: dto.locationCity || null,
+      locationState: dto.locationState || null,
     });
 
     const saved = await this.appointmentRepository.save(appointment);

@@ -94,4 +94,39 @@ export class CreateAppointmentDto {
   @IsUUID()
   @IsOptional()
   convenioId?: string;
+
+  @ApiProperty({
+    example: 'Clínica Saúde Integral',
+    required: false,
+    description:
+      'Manual location (ignored when the doctor has an active clinic — the clinic address is used instead)',
+  })
+  @IsString()
+  @IsOptional()
+  locationClinicName?: string;
+
+  @ApiProperty({ example: 'Av. Paulista', required: false })
+  @IsString()
+  @IsOptional()
+  locationStreet?: string;
+
+  @ApiProperty({ example: '1000', required: false })
+  @IsString()
+  @IsOptional()
+  locationNumber?: string;
+
+  @ApiProperty({ example: 'Bela Vista', required: false })
+  @IsString()
+  @IsOptional()
+  locationNeighborhood?: string;
+
+  @ApiProperty({ example: 'São Paulo', required: false })
+  @IsString()
+  @IsOptional()
+  locationCity?: string;
+
+  @ApiProperty({ example: 'SP', required: false })
+  @IsString()
+  @IsOptional()
+  locationState?: string;
 }

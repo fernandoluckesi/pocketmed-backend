@@ -16,6 +16,7 @@ import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { Certificate } from '../entities/certificate.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       PatientSurgery,
       FinancialConvenio,
       Certificate,
+      Clinic,
     ]),
     NotificationsModule,
   ],

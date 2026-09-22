@@ -1,21 +1,35 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
+import { DataSource, In, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Clinic } from '../entities/clinic.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { Doctor } from '../entities/doctor.entity';
+import { Appointment } from '../entities/appointment.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { CreateClinicDto } from './dto/create-clinic.dto';
 import { UpdateClinicDto } from './dto/update-clinic.dto';
+import { ConvertToClinicDto } from './dto/convert-to-clinic.dto';
+import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
+import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { JwtService } from '@nestjs/jwt';
+import { getPlan } from '../plans/plans.config';
+import { StripeService } from '../payments/stripe.service';
+
+/** "Active" patient: had an appointment (created or last touched) with the
+ * clinic in the last 12 months — matches the plan's definition, so a clinic
+ * isn't penalized just for having a large historical patient base. */
+const ACTIVE_PATIENT_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class ClinicsService {
@@ -26,10 +40,14 @@ export class ClinicsService {
     private clinicMembershipRepository: Repository<ClinicMembership>,
     @InjectRepository(Doctor)
     private doctorRepository: Repository<Doctor>,
+    @InjectRepository(Appointment)
+    private appointmentRepository: Repository<Appointment>,
     private dataSource: DataSource,
     private uploadService: UploadService,
     private emailService: EmailService,
     private jwtService: JwtService,
+    private stripeService: StripeService,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -276,6 +294,14 @@ export class ClinicsService {
     if (dto.name !== undefined) clinic.name = dto.name.trim();
     if (dto.cnpj !== undefined) clinic.cnpj = dto.cnpj;
     if (dto.isActive !== undefined) clinic.isActive = dto.isActive;
+    if (dto.cep !== undefined) clinic.cep = dto.cep;
+    if (dto.street !== undefined) clinic.street = dto.street;
+    if (dto.number !== undefined) clinic.number = dto.number;
+    if (dto.complement !== undefined) clinic.complement = dto.complement;
+    if (dto.neighborhood !== undefined) clinic.neighborhood = dto.neighborhood;
+    if (dto.city !== undefined) clinic.city = dto.city;
+    if (dto.state !== undefined) clinic.state = dto.state;
+    if (dto.noNumber !== undefined) clinic.noNumber = dto.noNumber;
 
     const updatedClinic = await this.clinicRepository.save(clinic);
 
@@ -283,6 +309,267 @@ export class ClinicsService {
       message: 'Clinic updated successfully',
       clinic: updatedClinic,
     };
+  }
+
+  /**
+   * Converts the authenticated doctor's account into owning a new clinic:
+   * creates the Clinic (with CNPJ, address and the chosen plan) and makes
+   * the doctor its admin member. The doctor keeps any memberships they had
+   * in other clinics — this only adds a new one they now own.
+   */
+  async convertToClinic(user: any, dto: ConvertToClinicDto) {
+    if (user.type !== 'doctor') {
+      throw new ForbiddenException('Only professional accounts can become a clinic');
+    }
+
+    const existingCnpj = await this.clinicRepository.findOne({
+      where: { cnpj: dto.cnpj },
+    });
+    if (existingCnpj) {
+      throw new ConflictException({
+        message: 'CNPJ já cadastrado para outra clínica',
+        conflicts: ['cnpj'],
+      });
+    }
+
+    const doctor = await this.doctorRepository.findOne({ where: { id: user.userId } });
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const clinic = queryRunner.manager.create(Clinic, {
+        name: dto.clinicName.trim(),
+        cnpj: dto.cnpj,
+        isActive: true,
+        cep: dto.cep,
+        street: dto.street,
+        number: dto.noNumber ? null : dto.number || null,
+        complement: dto.complement || null,
+        neighborhood: dto.neighborhood,
+        city: dto.city,
+        state: dto.state,
+        noNumber: dto.noNumber ?? false,
+        planId: getPlan(dto.planId).id,
+      });
+      const savedClinic = await queryRunner.manager.save(clinic);
+
+      const membership = queryRunner.manager.create(ClinicMembership, {
+        clinicId: savedClinic.id,
+        professionalId: doctor.id,
+        role: ProfessionalRole.ADMIN,
+        isActive: true,
+        invitedBy: null,
+      });
+      await queryRunner.manager.save(membership);
+
+      await queryRunner.commitTransaction();
+
+      // New JWT so the frontend can switch straight into the new clinic's context.
+      const token = this.jwtService.sign({
+        sub: doctor.id,
+        email: doctor.email,
+        type: 'doctor',
+        role: ProfessionalRole.ADMIN,
+        activeClinicId: savedClinic.id,
+      });
+
+      return {
+        message: 'Clinic created successfully',
+        clinic: savedClinic,
+        token,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /** Current plan + usage (professionals and "active" patients) vs. the plan's limits. */
+  async getSubscription(clinicId: string, user: any) {
+    const membership = await this.assertMembership(clinicId, user);
+    const clinic = membership.clinic;
+    const plan = getPlan(clinic.planId);
+
+    const professionalsCount = await this.clinicMembershipRepository.count({
+      where: {
+        clinicId,
+        isActive: true,
+        role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
+      },
+    });
+
+    const clinicDoctorIds = (
+      await this.clinicMembershipRepository.find({
+        where: {
+          clinicId,
+          isActive: true,
+          role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
+        },
+        select: ['professionalId'],
+      })
+    ).map((m) => m.professionalId);
+
+    let activePatientsCount = 0;
+    if (clinicDoctorIds.length > 0) {
+      const since = new Date(Date.now() - ACTIVE_PATIENT_WINDOW_MS);
+      const result = await this.appointmentRepository
+        .createQueryBuilder('appointment')
+        .select('COUNT(DISTINCT appointment.patientId)', 'count')
+        .where('appointment.doctorId IN (:...clinicDoctorIds)', { clinicDoctorIds })
+        .andWhere('appointment.patientId IS NOT NULL')
+        .andWhere('(appointment.dateTime >= :since OR appointment.updatedAt >= :since)', {
+          since,
+        })
+        .getRawOne<{ count: string }>();
+      activePatientsCount = Number(result?.count || 0);
+    }
+
+    return {
+      plan,
+      additionalProfessionals: clinic.additionalProfessionals,
+      usage: {
+        professionals: professionalsCount,
+        professionalsLimit:
+          plan.professionalsIncluded === null
+            ? null
+            : plan.professionalsIncluded + clinic.additionalProfessionals,
+        activePatients: activePatientsCount,
+        activePatientsLimit: plan.activePatientsIncluded,
+      },
+      billing: {
+        // Whether this clinic has ever completed a Stripe checkout — the
+        // frontend uses this to decide whether "manage billing" makes sense.
+        managed: clinic.stripeCustomerId !== null,
+        status: clinic.subscriptionStatus,
+        currentPeriodEnd: clinic.currentPeriodEnd,
+        gatewayAvailable: this.stripeService.isConfigured(),
+      },
+    };
+  }
+
+  /** Changes the clinic's plan and/or add-on seats (admin only). No payment
+   * is collected here — this only records the selection. */
+  async updateSubscription(clinicId: string, dto: UpdateSubscriptionDto, user: any) {
+    const membership = await this.assertMembership(clinicId, user, ProfessionalRole.ADMIN);
+    const clinic = membership.clinic;
+
+    if (dto.planId !== undefined) clinic.planId = getPlan(dto.planId).id;
+    if (dto.additionalProfessionals !== undefined) {
+      clinic.additionalProfessionals = dto.additionalProfessionals;
+    }
+
+    const updatedClinic = await this.clinicRepository.save(clinic);
+
+    return {
+      message: 'Subscription updated successfully',
+      clinic: updatedClinic,
+    };
+  }
+
+  /** Starts a Stripe Checkout session to subscribe the clinic to a plan
+   * (or change its add-on seats) via real payment. Requires the gateway
+   * to be configured (STRIPE_SECRET_KEY + the plan's price id env vars) —
+   * until then this is unavailable and the frontend should fall back to
+   * the manual `updateSubscription` path. */
+  async createCheckoutSession(clinicId: string, dto: CreateCheckoutSessionDto, user: any) {
+    if (!this.stripeService.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'Payment gateway is not configured yet (STRIPE_SECRET_KEY missing)',
+      );
+    }
+
+    const membership = await this.assertMembership(clinicId, user, ProfessionalRole.ADMIN);
+    const clinic = membership.clinic;
+    const plan = getPlan(dto.planId);
+
+    const priceId = this.stripeService.getPriceId(plan.id);
+    if (!priceId) {
+      throw new BadRequestException(
+        `Plan "${plan.id}" has no self-serve Stripe price configured (Enterprise is negotiated manually)`,
+      );
+    }
+
+    const doctor = await this.doctorRepository.findOne({ where: { id: user.userId } });
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found');
+    }
+
+    if (!clinic.stripeCustomerId) {
+      clinic.stripeCustomerId = await this.stripeService.createCustomer({
+        email: doctor.email,
+        name: clinic.name,
+        clinicId: clinic.id,
+      });
+      await this.clinicRepository.save(clinic);
+    }
+
+    const addonPriceId = this.stripeService.getAddonPriceId(plan.id);
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+
+    return this.stripeService.createCheckoutSession({
+      customerId: clinic.stripeCustomerId,
+      clinicId: clinic.id,
+      planId: plan.id,
+      priceId,
+      addonPriceId,
+      addonQuantity: dto.additionalProfessionals,
+      successUrl: `${frontendUrl}/account?tab=subscription&checkout=success`,
+      cancelUrl: `${frontendUrl}/account?tab=subscription&checkout=canceled`,
+    });
+  }
+
+  /** Opens the Stripe-hosted billing portal (invoices, payment method,
+   * cancellation) for a clinic that already has a Stripe customer. */
+  async createBillingPortalSession(clinicId: string, user: any) {
+    if (!this.stripeService.isConfigured()) {
+      throw new ServiceUnavailableException(
+        'Payment gateway is not configured yet (STRIPE_SECRET_KEY missing)',
+      );
+    }
+
+    const membership = await this.assertMembership(clinicId, user, ProfessionalRole.ADMIN);
+    const clinic = membership.clinic;
+
+    if (!clinic.stripeCustomerId) {
+      throw new BadRequestException(
+        'This clinic has no billing set up yet — subscribe to a plan first',
+      );
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+
+    return this.stripeService.createBillingPortalSession({
+      customerId: clinic.stripeCustomerId,
+      returnUrl: `${frontendUrl}/account?tab=subscription`,
+    });
+  }
+
+  private async assertMembership(clinicId: string, user: any, requiredRole?: ProfessionalRole) {
+    if (user.type !== 'doctor') {
+      throw new ForbiddenException('Only professional accounts can access clinics');
+    }
+
+    const membership = await this.clinicMembershipRepository.findOne({
+      where: { clinicId, professionalId: user.userId, isActive: true },
+      relations: ['clinic'],
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Clinic not found or you are not a member');
+    }
+
+    if (requiredRole && membership.role !== requiredRole) {
+      throw new ForbiddenException('Only clinic admins can manage the subscription');
+    }
+
+    return membership;
   }
 
   private generateVerificationCode(): string {

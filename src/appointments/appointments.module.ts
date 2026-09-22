@@ -8,6 +8,7 @@ import { Patient } from '../entities/patient.entity';
 import { Dependent } from '../entities/dependent.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { DoctorsModule } from '../doctors/doctors.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PatientsModule } from 'src/patients/patients.module';
@@ -21,6 +22,7 @@ import { PatientsModule } from 'src/patients/patients.module';
       Dependent,
       ClinicMembership,
       FinancialConvenio,
+      Clinic,
     ]),
     DoctorsModule,
     NotificationsModule,

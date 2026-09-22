@@ -4,7 +4,9 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true lets webhook handlers (Stripe) verify signatures against
+  // the exact bytes received, before Nest's JSON body parser touches them.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors();
 
