@@ -307,20 +307,41 @@ export class FinancialController {
   // ─── DASHBOARD ────────────────────────────────────────────────────────────
 
   @Get('dashboard/kpis')
-  getDashboardKPIs(@CurrentUser() user: any) {
-    return this.financialService.getDashboardKPIs(user.activeClinicId);
+  getDashboardKPIs(
+    @CurrentUser() user: any,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    return this.financialService.getDashboardKPIs(
+      user.activeClinicId,
+      year ? parseInt(year, 10) : undefined,
+      month ? parseInt(month, 10) : undefined,
+    );
   }
 
   @Get('dashboard/revenue-by-specialty')
-  getRevenueBySpecialty(@CurrentUser() user: any) {
-    return this.financialService.getRevenueBySpecialty(user.activeClinicId);
+  getRevenueBySpecialty(
+    @CurrentUser() user: any,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    return this.financialService.getRevenueBySpecialty(
+      user.activeClinicId,
+      year ? parseInt(year, 10) : undefined,
+      month ? parseInt(month, 10) : undefined,
+    );
   }
 
   @Get('dashboard/recent-transactions')
-  getRecentTransactions(@CurrentUser() user: any, @Query('limit') limit?: string) {
+  getRecentTransactions(
+    @CurrentUser() user: any,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+  ) {
     return this.financialService.getRecentTransactions(
       user.activeClinicId,
       limit ? parseInt(limit, 10) : 10,
+      status,
     );
   }
 

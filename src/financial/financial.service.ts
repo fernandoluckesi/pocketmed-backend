@@ -721,9 +721,11 @@ export class FinancialService {
 
   // ─── DASHBOARD KPIs ────────────────────────────────────────────────────────
 
-  async getDashboardKPIs(clinicId: string) {
+  async getDashboardKPIs(clinicId: string, year?: number, month?: number) {
     const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const targetYear = year || now.getFullYear();
+    const targetMonth = month || now.getMonth() + 1;
+    const currentMonth = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
     const startDate = new Date(`${currentMonth}-01`);
     const endDate = new Date(`${currentMonth}-31`);
 
@@ -748,9 +750,9 @@ export class FinancialService {
     const totalDespesas = expenses.reduce((sum, e) => sum + (Number(e.netValue) || 0), 0);
     const lucro = faturamento - totalDespesas;
 
-    // Growth (compare with previous month)
-    const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-    const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    // Growth (compare with previous month, relative to the selected period)
+    const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1;
+    const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear;
     const prevStartDate = new Date(`${prevYear}-${String(prevMonth).padStart(2, '0')}-01`);
     const prevEndDate = new Date(`${prevYear}-${String(prevMonth).padStart(2, '0')}-31`);
 
@@ -772,8 +774,13 @@ export class FinancialService {
     };
   }
 
-  async getRevenueBySpecialty(clinicId: string) {
-    const revenues = await this.revenueRepo.find({ where: { clinicId } });
+  async getRevenueBySpecialty(clinicId: string, year?: number, month?: number) {
+    const where: FindOptionsWhere<FinancialRevenue> = { clinicId };
+    if (year && month) {
+      const period = `${year}-${String(month).padStart(2, '0')}`;
+      where.dueDate = Between(new Date(`${period}-01`), new Date(`${period}-31`)) as any;
+    }
+    const revenues = await this.revenueRepo.find({ where });
     const bySpecialty: Record<string, { total: number; count: number }> = {};
 
     for (const rev of revenues) {
@@ -792,9 +799,11 @@ export class FinancialService {
     }));
   }
 
-  async getRecentTransactions(clinicId: string, limit: number) {
+  async getRecentTransactions(clinicId: string, limit: number, status?: string) {
+    const where: FindOptionsWhere<FinancialRevenue> = { clinicId };
+    if (status) where.status = status;
     return this.revenueRepo.find({
-      where: { clinicId },
+      where,
       relations: ['convenio'],
       order: { createdAt: 'DESC' },
       take: limit,

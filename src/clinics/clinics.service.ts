@@ -13,6 +13,7 @@ import * as bcrypt from 'bcrypt';
 import { Clinic } from '../entities/clinic.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { Doctor } from '../entities/doctor.entity';
+import { Secretary } from '../entities/secretary.entity';
 import { Appointment } from '../entities/appointment.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { CreateClinicDto } from './dto/create-clinic.dto';
@@ -40,6 +41,8 @@ export class ClinicsService {
     private clinicMembershipRepository: Repository<ClinicMembership>,
     @InjectRepository(Doctor)
     private doctorRepository: Repository<Doctor>,
+    @InjectRepository(Secretary)
+    private secretaryRepository: Repository<Secretary>,
     @InjectRepository(Appointment)
     private appointmentRepository: Repository<Appointment>,
     private dataSource: DataSource,
@@ -209,10 +212,32 @@ export class ClinicsService {
 
   /**
    * Returns all clinics the authenticated doctor belongs to.
+   *
+   * Secretaries aren't `ClinicMembership` rows (they belong to exactly one
+   * clinic via `Secretary.clinicId`), so they're resolved separately.
    */
   async findMyClinic(user: any) {
     if (user.type !== 'doctor') {
       throw new ForbiddenException('Only professional accounts can access clinics');
+    }
+
+    if (user.role === ProfessionalRole.SECRETARY) {
+      const secretary = await this.secretaryRepository.findOne({
+        where: { id: user.userId, isActive: true },
+        relations: ['clinic'],
+      });
+      if (!secretary) return [];
+      return [
+        {
+          clinicId: secretary.clinic.id,
+          name: secretary.clinic.name,
+          cnpj: secretary.clinic.cnpj,
+          isActive: secretary.clinic.isActive,
+          role: ProfessionalRole.SECRETARY,
+          membershipId: secretary.id,
+          joinedAt: secretary.createdAt,
+        },
+      ];
     }
 
     const memberships = await this.clinicMembershipRepository.find({
@@ -233,11 +258,26 @@ export class ClinicsService {
   }
 
   /**
-   * Get a specific clinic by ID (must be a member).
+   * Get a specific clinic by ID (must be a member, or the clinic's secretary).
    */
   async findOne(id: string, user: any) {
     if (user.type !== 'doctor') {
       throw new ForbiddenException('Only professional accounts can access clinics');
+    }
+
+    if (user.role === ProfessionalRole.SECRETARY) {
+      const secretary = await this.secretaryRepository.findOne({
+        where: { id: user.userId, clinicId: id, isActive: true },
+        relations: ['clinic'],
+      });
+      if (!secretary) {
+        throw new NotFoundException('Clinic not found or you are not a member');
+      }
+      return {
+        clinic: secretary.clinic,
+        role: ProfessionalRole.SECRETARY,
+        membershipId: secretary.id,
+      };
     }
 
     const membership = await this.clinicMembershipRepository.findOne({
