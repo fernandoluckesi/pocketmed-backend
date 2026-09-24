@@ -26,6 +26,9 @@ import { EmailService } from '../email/email.service';
 import { JwtService } from '@nestjs/jwt';
 import { getPlan } from '../plans/plans.config';
 import { StripeService } from '../payments/stripe.service';
+import { MercadoPagoService } from '../payments/mercadopago.service';
+import { PaymentsService } from '../payments/payments.service';
+import { buildExternalReference } from '../payments/mercadopago-reference';
 
 /** "Active" patient: had an appointment (created or last touched) with the
  * clinic in the last 12 months — matches the plan's definition, so a clinic
@@ -50,6 +53,8 @@ export class ClinicsService {
     private emailService: EmailService,
     private jwtService: JwtService,
     private stripeService: StripeService,
+    private mercadoPagoService: MercadoPagoService,
+    private paymentsService: PaymentsService,
     private configService: ConfigService,
   ) {}
 
@@ -484,12 +489,18 @@ export class ClinicsService {
         activePatientsLimit: plan.activePatientsIncluded,
       },
       billing: {
-        // Whether this clinic has ever completed a Stripe checkout — the
-        // frontend uses this to decide whether "manage billing" makes sense.
-        managed: clinic.stripeCustomerId !== null,
+        // Whether this clinic has ever completed a checkout — the frontend
+        // uses this to decide whether "manage billing" makes sense.
+        managed: clinic.mercadoPagoPreapprovalId !== null || clinic.stripeCustomerId !== null,
         status: clinic.subscriptionStatus,
         currentPeriodEnd: clinic.currentPeriodEnd,
-        gatewayAvailable: this.stripeService.isConfigured(),
+        provider: clinic.mercadoPagoPreapprovalId
+          ? 'mercadopago'
+          : clinic.stripeCustomerId
+            ? 'stripe'
+            : null,
+        gatewayAvailable:
+          this.mercadoPagoService.isConfigured() || this.stripeService.isConfigured(),
       },
     };
   }
@@ -514,14 +525,16 @@ export class ClinicsService {
   }
 
   /** Starts a Stripe Checkout session to subscribe the clinic to a plan
-   * (or change its add-on seats) via real payment. Requires the gateway
-   * to be configured (STRIPE_SECRET_KEY + the plan's price id env vars) —
+   * (or change its add-on seats) via real payment. Prefers Mercado Pago
+   * (the active gateway, PIX/boleto/cartão for Brazil); falls back to
+   * Stripe if that's configured instead. Requires at least one gateway —
    * until then this is unavailable and the frontend should fall back to
    * the manual `updateSubscription` path. */
   async createCheckoutSession(clinicId: string, dto: CreateCheckoutSessionDto, user: any) {
-    if (!this.stripeService.isConfigured()) {
+    const useMercadoPago = this.mercadoPagoService.isConfigured();
+    if (!useMercadoPago && !this.stripeService.isConfigured()) {
       throw new ServiceUnavailableException(
-        'Payment gateway is not configured yet (STRIPE_SECRET_KEY missing)',
+        'Payment gateway is not configured yet (no MERCADOPAGO_ACCESS_TOKEN or STRIPE_SECRET_KEY)',
       );
     }
 
@@ -529,16 +542,54 @@ export class ClinicsService {
     const clinic = membership.clinic;
     const plan = getPlan(dto.planId);
 
-    const priceId = this.stripeService.getPriceId(plan.id);
-    if (!priceId) {
+    if (plan.price === null) {
       throw new BadRequestException(
-        `Plan "${plan.id}" has no self-serve Stripe price configured (Enterprise is negotiated manually)`,
+        `Plan "${plan.id}" has no self-serve price configured (Enterprise is negotiated manually)`,
       );
     }
 
     const doctor = await this.doctorRepository.findOne({ where: { id: user.userId } });
     if (!doctor) {
       throw new NotFoundException('Doctor not found');
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const additionalProfessionals = dto.additionalProfessionals || 0;
+
+    if (useMercadoPago) {
+      const amount = plan.price + (plan.additionalProfessionalPrice || 0) * additionalProfessionals;
+
+      // Mercado Pago rejects a non-HTTPS back_url outright. In local dev
+      // (FRONTEND_URL still http://localhost) there's no reachable HTTPS
+      // callback yet, so fall back to Mercado Pago's own domain — the
+      // payment is authorized server-side regardless of where the browser
+      // lands afterwards; the frontend also offers a manual "check status"
+      // action for exactly this case (see Account page's subscription tab).
+      const backUrl = frontendUrl.startsWith('https://')
+        ? `${frontendUrl}/account?tab=subscription&checkout=success`
+        : 'https://www.mercadopago.com.br';
+
+      const subscription = await this.mercadoPagoService.createSubscription({
+        reason: `Hispora — Plano ${plan.name}`,
+        amount,
+        payerEmail: doctor.email,
+        externalReference: buildExternalReference({
+          clinicId: clinic.id,
+          planId: plan.id,
+          additionalProfessionals,
+        }),
+        backUrl,
+      });
+
+      clinic.mercadoPagoPreapprovalId = subscription.id;
+      await this.clinicRepository.save(clinic);
+
+      return { url: subscription.initPoint };
+    }
+
+    const priceId = this.stripeService.getPriceId(plan.id);
+    if (!priceId) {
+      throw new BadRequestException(`Plan "${plan.id}" has no self-serve Stripe price configured`);
     }
 
     if (!clinic.stripeCustomerId) {
@@ -551,7 +602,6 @@ export class ClinicsService {
     }
 
     const addonPriceId = this.stripeService.getAddonPriceId(plan.id);
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
 
     return this.stripeService.createCheckoutSession({
       customerId: clinic.stripeCustomerId,
@@ -559,19 +609,50 @@ export class ClinicsService {
       planId: plan.id,
       priceId,
       addonPriceId,
-      addonQuantity: dto.additionalProfessionals,
+      addonQuantity: additionalProfessionals,
       successUrl: `${frontendUrl}/account?tab=subscription&checkout=success`,
       cancelUrl: `${frontendUrl}/account?tab=subscription&checkout=canceled`,
     });
   }
 
+  /** Cancels the clinic's active subscription. Mercado Pago has no hosted
+   * self-service portal like Stripe, so cancellation happens directly via
+   * API instead of a redirect. */
+  async cancelSubscription(clinicId: string, user: any) {
+    const membership = await this.assertMembership(clinicId, user, ProfessionalRole.ADMIN);
+    const clinic = membership.clinic;
+
+    if (!clinic.mercadoPagoPreapprovalId) {
+      throw new BadRequestException('This clinic has no active gateway subscription to cancel');
+    }
+
+    await this.mercadoPagoService.cancelSubscription(clinic.mercadoPagoPreapprovalId);
+    clinic.subscriptionStatus = 'cancelled';
+    await this.clinicRepository.save(clinic);
+
+    return { message: 'Subscription cancelled successfully' };
+  }
+
+  /** Re-fetches the clinic's subscription status directly from the gateway
+   * — called by the frontend right after returning from checkout, since a
+   * webhook isn't guaranteed to have arrived yet (and can't reach
+   * localhost at all in local development). */
+  async syncSubscription(clinicId: string, user: any) {
+    const membership = await this.assertMembership(clinicId, user, ProfessionalRole.ADMIN);
+    const clinic = membership.clinic;
+
+    if (clinic.mercadoPagoPreapprovalId) {
+      await this.paymentsService.syncMercadoPagoSubscription(clinic.mercadoPagoPreapprovalId);
+    }
+
+    return this.getSubscription(clinicId, user);
+  }
+
   /** Opens the Stripe-hosted billing portal (invoices, payment method,
-   * cancellation) for a clinic that already has a Stripe customer. */
+   * cancellation) — only reachable when Stripe is the active gateway. */
   async createBillingPortalSession(clinicId: string, user: any) {
     if (!this.stripeService.isConfigured()) {
-      throw new ServiceUnavailableException(
-        'Payment gateway is not configured yet (STRIPE_SECRET_KEY missing)',
-      );
+      throw new ServiceUnavailableException('Stripe is not configured');
     }
 
     const membership = await this.assertMembership(clinicId, user, ProfessionalRole.ADMIN);

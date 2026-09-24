@@ -105,9 +105,9 @@ export class ClinicsController {
   @Roles('admin')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
-    summary: 'Start a Stripe Checkout session to subscribe/change plan (admin only)',
+    summary: 'Start a checkout (Mercado Pago or Stripe) to subscribe/change plan (admin only)',
   })
-  @ApiResponse({ status: 201, description: 'Checkout session URL returned' })
+  @ApiResponse({ status: 201, description: 'Checkout URL returned' })
   @ApiResponse({ status: 503, description: 'Payment gateway not configured yet' })
   async createCheckoutSession(
     @CurrentUser() user: any,
@@ -115,6 +115,28 @@ export class ClinicsController {
     @Body() dto: CreateCheckoutSessionDto,
   ) {
     return this.clinicsService.createCheckoutSession(id, dto, user);
+  }
+
+  @Post(':id/subscription/sync')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Re-fetch subscription status directly from the gateway (admin only)',
+  })
+  @ApiResponse({ status: 201, description: 'Subscription returned' })
+  async syncSubscription(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.syncSubscription(id, user);
+  }
+
+  @Post(':id/subscription/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Cancel the clinic subscription (admin only)' })
+  @ApiResponse({ status: 201, description: 'Subscription cancelled' })
+  async cancelSubscription(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.cancelSubscription(id, user);
   }
 
   @Post(':id/subscription/portal')

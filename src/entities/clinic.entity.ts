@@ -63,13 +63,18 @@ export class Clinic {
   @Column({ type: 'varchar', length: 255, nullable: true })
   stripeSubscriptionId: string | null;
 
-  /** Mirrors Stripe's subscription status (active/past_due/canceled/...).
-   * `null` means the plan was set manually and isn't billed through Stripe. */
+  /** Mirrors the active gateway's subscription status — Mercado Pago
+   * (pending/authorized/paused/cancelled) or Stripe (active/past_due/...).
+   * `null` means the plan was set manually and isn't billed through a gateway. */
   @Column({ type: 'varchar', length: 30, nullable: true })
   subscriptionStatus: string | null;
 
   @Column({ type: 'datetime', nullable: true })
   currentPeriodEnd: Date | null;
+
+  /** Mercado Pago subscription (preapproval) id — the active gateway. */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  mercadoPagoPreapprovalId: string | null;
 
   @OneToMany(() => ClinicMembership, (membership) => membership.clinic)
   memberships: ClinicMembership[];

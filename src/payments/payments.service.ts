@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import Stripe from 'stripe';
 import { Clinic } from '../entities/clinic.entity';
 import { planIdForStripePrice } from './stripe-price-map';
+import { MercadoPagoService } from './mercadopago.service';
+import { parseExternalReference } from './mercadopago-reference';
+import { getPlan } from '../plans/plans.config';
 
 @Injectable()
 export class PaymentsService {
@@ -12,7 +15,41 @@ export class PaymentsService {
   constructor(
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
+    private mercadoPagoService: MercadoPagoService,
   ) {}
+
+  /** Re-fetches a Mercado Pago subscription's authoritative state (used by
+   * both the webhook handler and the frontend's post-checkout return path,
+   * since a redirect back doesn't guarantee the webhook has arrived yet —
+   * especially in local development, where MP can't reach localhost at all). */
+  async syncMercadoPagoSubscription(preapprovalId: string): Promise<Clinic | null> {
+    const clinic = await this.clinicRepository.findOne({
+      where: { mercadoPagoPreapprovalId: preapprovalId },
+    });
+    if (!clinic) {
+      this.logger.warn(`No clinic found for Mercado Pago subscription ${preapprovalId}`);
+      return null;
+    }
+
+    const subscription = await this.mercadoPagoService.getSubscription(preapprovalId);
+    if (subscription.status) clinic.subscriptionStatus = subscription.status;
+    if (subscription.next_payment_date) {
+      clinic.currentPeriodEnd = new Date(subscription.next_payment_date);
+    }
+
+    // Only apply the pending plan change once MP confirms the recurring
+    // charge was actually authorized — a merely "pending" preapproval hasn't
+    // been paid for yet and shouldn't unlock the plan's features.
+    if (subscription.status === 'authorized') {
+      const parsed = parseExternalReference(subscription.external_reference);
+      if (parsed) {
+        clinic.planId = getPlan(parsed.planId).id;
+        clinic.additionalProfessionals = parsed.additionalProfessionals;
+      }
+    }
+
+    return this.clinicRepository.save(clinic);
+  }
 
   async handleWebhookEvent(event: Stripe.Event): Promise<void> {
     switch (event.type) {
