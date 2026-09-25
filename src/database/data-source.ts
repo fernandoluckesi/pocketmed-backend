@@ -36,6 +36,8 @@ import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { ClinicDoctorInvite } from '../clinic-doctor-association/entities/clinic-doctor-invite.entity';
 import { BackofficeUser } from '../entities/backoffice-user.entity';
 import { MedicationCatalog } from '../entities/medication-catalog.entity';
+import { SubscriptionPayment } from '../entities/subscription-payment.entity';
+import { CnesEstablishment } from '../entities/cnes-establishment.entity';
 
 /**
  * Railway exposes a ready-to-use connection string (MYSQL_URL / MYSQL_PUBLIC_URL).
@@ -110,6 +112,8 @@ const AppDataSource = new DataSource({
     ClinicDoctorInvite,
     BackofficeUser,
     MedicationCatalog,
+    SubscriptionPayment,
+    CnesEstablishment,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

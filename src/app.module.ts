@@ -36,6 +36,7 @@ import { DeviceToken } from './entities/device-token.entity';
 import { Notification } from './entities/notification.entity';
 import { Clinic } from './entities/clinic.entity';
 import { SubscriptionPayment } from './entities/subscription-payment.entity';
+import { CnesEstablishment } from './entities/cnes-establishment.entity';
 import { ClinicMembership } from './entities/clinic-membership.entity';
 import { ClinicAdminProfile } from './entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from './entities/secretary-profile.entity';
@@ -67,6 +68,7 @@ import { FinancialModule } from './financial/financial.module';
 import { ClinicsModule } from './clinics/clinics.module';
 import { PlansModule } from './plans/plans.module';
 import { PaymentsModule } from './payments/payments.module';
+import { CnesModule } from './cnes/cnes.module';
 import { AuditModule } from './audit/audit.module';
 import { SecretariesModule } from './secretaries/secretaries.module';
 import { CepModule } from './cep/cep.module';
@@ -158,6 +160,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           Certificate,
           MedicationCatalog,
           SubscriptionPayment,
+          CnesEstablishment,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -185,6 +188,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     ClinicsModule,
     PlansModule,
     PaymentsModule,
+    CnesModule,
     AuditModule,
     SecretariesModule,
     CepModule,
