@@ -4455,7 +4455,7 @@ memfs@^3.4.1:
 
 mercadopago@^3.6.1:
   version "3.6.1"
-  resolved "https://registry.yarnpkg.com/mercadopago/-/mercadopago-3.6.1.tgz#5417ec1ed16d470be3635330dc3f9bc49f106c83"
+  resolved "https://registry.npmjs.org/mercadopago/-/mercadopago-3.6.1.tgz"
   integrity sha512-JFgKCSRHMxkS1p12VMIcpI/Zki739J+5lbpl7PB0O8WHaFl4SFKQnm9paX/gqBQeh211Ozc498D49Fbe3U1jEw==
 
 merge-descriptors@1.0.3:
@@ -5739,7 +5739,7 @@ strip-json-comments@~2.0.1:
 
 stripe@^22.6.2:
   version "22.6.2"
-  resolved "https://registry.yarnpkg.com/stripe/-/stripe-22.6.2.tgz#e2acadf999b88a277e2c555d9008ac029b4f91e9"
+  resolved "https://registry.npmjs.org/stripe/-/stripe-22.6.2.tgz"
   integrity sha512-PwRE2scocvXqDKPiskMa5vRJEAEkq46W69XyUYmAwrNSLr675lQnfqLwnsndAWizwgihOWw/irLmoFRo3ez7ew==
 
 strnum@^1.0.5:

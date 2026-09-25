@@ -1,3 +1,5 @@
 node_modules
 .env
 dist
+# This project uses yarn; the npm lockfile must not be committed.
+package-lock.json
