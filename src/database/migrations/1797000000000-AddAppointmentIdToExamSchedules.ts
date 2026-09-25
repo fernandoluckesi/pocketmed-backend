@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
-export class AddAppointmentIdToExamSchedules1797000000000
-  implements MigrationInterface
-{
+export class AddAppointmentIdToExamSchedules1797000000000 implements MigrationInterface {
   name = 'AddAppointmentIdToExamSchedules1797000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

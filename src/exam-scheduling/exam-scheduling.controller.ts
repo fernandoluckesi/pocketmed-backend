@@ -49,10 +49,7 @@ export class ExamSchedulingController {
   @Get('by-appointment/:appointmentId')
   @ApiOperation({ summary: 'Get exam schedules linked to a given appointment' })
   @ApiResponse({ status: 200, description: 'Returns list of exam schedules' })
-  async findByAppointment(
-    @CurrentUser() user: any,
-    @Param('appointmentId') appointmentId: string,
-  ) {
+  async findByAppointment(@CurrentUser() user: any, @Param('appointmentId') appointmentId: string) {
     return this.examSchedulingService.findByAppointment(appointmentId, user.userId);
   }
 

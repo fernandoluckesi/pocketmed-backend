@@ -139,7 +139,8 @@ export class DependentsController {
   @Post(':id/transfer-admin')
   @Roles('patient')
   @ApiOperation({
-    summary: 'Transfer administration to another responsible already linked (admin only, no invite)',
+    summary:
+      'Transfer administration to another responsible already linked (admin only, no invite)',
   })
   @ApiResponse({ status: 201, description: 'Administration transferred successfully' })
   @ApiResponse({ status: 400, description: 'New admin is not a responsible / is already admin' })

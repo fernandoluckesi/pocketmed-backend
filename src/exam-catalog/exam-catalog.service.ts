@@ -34,10 +34,9 @@ export class ExamCatalogService {
     // Search filter: LIKE on name or synonyms (case-insensitive via LOWER())
     if (query.search) {
       const searchTerm = `%${query.search.toLowerCase()}%`;
-      qb.andWhere(
-        '(LOWER(exam.name) LIKE :search OR LOWER(exam.synonyms) LIKE :search)',
-        { search: searchTerm },
-      );
+      qb.andWhere('(LOWER(exam.name) LIKE :search OR LOWER(exam.synonyms) LIKE :search)', {
+        search: searchTerm,
+      });
     }
 
     // Category filter: match by name first, then by id

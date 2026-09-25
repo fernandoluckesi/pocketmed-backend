@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsNotEmpty, MinLength, IsDateString, IsOptional, Matches } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  IsDateString,
+  IsOptional,
+  Matches,
+} from 'class-validator';
 import { IsCpf } from '../../common/validators/is-cpf.validator';
 
 export class RegisterDoctorDto {
@@ -19,7 +27,9 @@ export class RegisterDoctorDto {
   @Matches(/[A-Z]/, { message: 'A senha deve conter pelo menos uma letra maiúscula' })
   @Matches(/[a-z]/, { message: 'A senha deve conter pelo menos uma letra minúscula' })
   @Matches(/\d/, { message: 'A senha deve conter pelo menos um número' })
-  @Matches(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, { message: 'A senha deve conter pelo menos um caractere especial' })
+  @Matches(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, {
+    message: 'A senha deve conter pelo menos um caractere especial',
+  })
   password: string;
 
   @ApiProperty({ example: 'Masculino' })

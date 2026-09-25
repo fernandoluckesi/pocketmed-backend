@@ -10,9 +10,7 @@ export class MakeDoctorIdNullableInAppointments1765400000000 implements Migratio
     );
 
     // Make doctorId nullable
-    await queryRunner.query(
-      `ALTER TABLE \`appointments\` MODIFY \`doctorId\` char(36) NULL`,
-    );
+    await queryRunner.query(`ALTER TABLE \`appointments\` MODIFY \`doctorId\` char(36) NULL`);
 
     // Re-add FK constraint allowing NULL (ON DELETE SET NULL)
     await queryRunner.query(
@@ -25,9 +23,7 @@ export class MakeDoctorIdNullableInAppointments1765400000000 implements Migratio
       `ALTER TABLE \`appointments\` DROP FOREIGN KEY \`FK_appointments_doctor\``,
     );
 
-    await queryRunner.query(
-      `ALTER TABLE \`appointments\` MODIFY \`doctorId\` char(36) NOT NULL`,
-    );
+    await queryRunner.query(`ALTER TABLE \`appointments\` MODIFY \`doctorId\` char(36) NOT NULL`);
 
     await queryRunner.query(
       `ALTER TABLE \`appointments\` ADD CONSTRAINT \`FK_appointments_doctor\` FOREIGN KEY (\`doctorId\`) REFERENCES \`doctors\`(\`id\`) ON DELETE NO ACTION ON UPDATE NO ACTION`,

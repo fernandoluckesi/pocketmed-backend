@@ -7,11 +7,7 @@ import { Dependent } from '../entities/dependent.entity';
 import { CreateExamScheduleDto } from './dto/create-exam-schedule.dto';
 import { UploadService } from '../upload/upload.service';
 
-const SCHEDULE_RELATIONS = [
-  'items',
-  'items.examCatalog',
-  'items.examCatalog.category',
-];
+const SCHEDULE_RELATIONS = ['items', 'items.examCatalog', 'items.examCatalog.category'];
 
 @Injectable()
 export class ExamSchedulingService {
@@ -36,10 +32,7 @@ export class ExamSchedulingService {
   }
 
   /** Ensure the patient is a responsible for the dependent, or throw. */
-  private async assertDependentAccess(
-    patientId: string,
-    dependentId: string,
-  ): Promise<void> {
+  private async assertDependentAccess(patientId: string, dependentId: string): Promise<void> {
     const dependentIds = await this.getDependentIds(patientId);
     if (!dependentIds.includes(dependentId)) {
       throw new ForbiddenException(
@@ -99,10 +92,7 @@ export class ExamSchedulingService {
   }
 
   /** Schedules linked to a given appointment, owned by the patient. */
-  async findByAppointment(
-    appointmentId: string,
-    patientId: string,
-  ): Promise<ExamSchedule[]> {
+  async findByAppointment(appointmentId: string, patientId: string): Promise<ExamSchedule[]> {
     const dependentIds = await this.getDependentIds(patientId);
     const where: any[] = [{ appointmentId, patientId, dependentId: IsNull() }];
     if (dependentIds.length > 0) {

@@ -195,7 +195,10 @@ describe('AuthService - deleteAccount', () => {
     selectResponses.patientProfile = [{ profileImage: 'https://x/bucket/profiles/me.png' }];
     selectResponses.examResultsById = {
       [USER_ID]: [
-        { resultFile: 'https://x/bucket/exams/a.pdf', resultFiles: ['https://x/bucket/exams/b.pdf'] },
+        {
+          resultFile: 'https://x/bucket/exams/a.pdf',
+          resultFiles: ['https://x/bucket/exams/b.pdf'],
+        },
       ],
     };
 

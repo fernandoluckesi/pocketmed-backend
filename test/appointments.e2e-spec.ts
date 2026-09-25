@@ -1,11 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import {
-  createTestApp,
-  registerPatient,
-  registerDoctor,
-  futureDate,
-} from './test-utils';
+import { createTestApp, registerPatient, registerDoctor, futureDate } from './test-utils';
 
 describe('Appointments Module (e2e)', () => {
   let app: INestApplication;
@@ -238,9 +233,7 @@ describe('Appointments Module (e2e)', () => {
     });
 
     it('should return 401 without authentication', async () => {
-      await request(app.getHttpServer())
-        .get('/appointments')
-        .expect(401);
+      await request(app.getHttpServer()).get('/appointments').expect(401);
     });
   });
 

@@ -13,7 +13,9 @@ export class FinancialCronService {
     this.logger.log('Running daily overdue check...');
     try {
       const result = await this.financialService.markOverdueItems();
-      this.logger.log(`Overdue check complete: ${result.overdueRevenues} revenues, ${result.overdueExpenses} expenses marked as VENCIDO`);
+      this.logger.log(
+        `Overdue check complete: ${result.overdueRevenues} revenues, ${result.overdueExpenses} expenses marked as VENCIDO`,
+      );
     } catch (error) {
       this.logger.error('Failed to run overdue check', error);
     }

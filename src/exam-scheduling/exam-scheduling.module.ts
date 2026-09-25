@@ -8,10 +8,7 @@ import { Dependent } from '../entities/dependent.entity';
 import { UploadModule } from '../upload/upload.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([ExamSchedule, ExamScheduleItem, Dependent]),
-    UploadModule,
-  ],
+  imports: [TypeOrmModule.forFeature([ExamSchedule, ExamScheduleItem, Dependent]), UploadModule],
   controllers: [ExamSchedulingController],
   providers: [ExamSchedulingService],
   exports: [ExamSchedulingService],

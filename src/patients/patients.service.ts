@@ -18,6 +18,9 @@ import { PatientDisease } from '../entities/patient-disease.entity';
 import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
+import { FinancialConvenio } from '../entities/financial-convenio.entity';
+import { Certificate } from '../entities/certificate.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -95,6 +98,12 @@ export class PatientsService {
     private surgeryRepository: Repository<PatientSurgery>,
     @InjectRepository(Dependent)
     private dependentRepository: Repository<Dependent>,
+    @InjectRepository(FinancialConvenio)
+    private financialConvenioRepository: Repository<FinancialConvenio>,
+    @InjectRepository(Certificate)
+    private certificateRepository: Repository<Certificate>,
+    @InjectRepository(Clinic)
+    private clinicRepository: Repository<Clinic>,
     private notificationsService: NotificationsService,
   ) {}
 
@@ -635,12 +644,24 @@ export class PatientsService {
       notes?: string;
       priority?: string;
       completed?: boolean;
+      visitType?: string;
+      paymentType?: string;
+      convenioId?: string;
     },
   ) {
     // Verify access
     const patient = await this.findOne(patientId, doctorId, userType, role, activeClinicId);
 
     await this.logAccess(patientId, doctorId, 'CREATE_CONSULTATION');
+
+    if (data.convenioId) {
+      const convenio = await this.financialConvenioRepository.findOne({
+        where: { id: data.convenioId },
+      });
+      if (!convenio) {
+        throw new BadRequestException('convenioId inválido');
+      }
+    }
 
     const isCompleted = data.completed === true;
 
@@ -666,6 +687,36 @@ export class PatientsService {
       specialty: string;
     } | null;
 
+    let location: Pick<
+      Appointment,
+      | 'locationClinicName'
+      | 'locationStreet'
+      | 'locationNumber'
+      | 'locationNeighborhood'
+      | 'locationCity'
+      | 'locationState'
+    > = {
+      locationClinicName: null,
+      locationStreet: null,
+      locationNumber: null,
+      locationNeighborhood: null,
+      locationCity: null,
+      locationState: null,
+    };
+    if (activeClinicId) {
+      const clinic = await this.clinicRepository.findOne({ where: { id: activeClinicId } });
+      if (clinic) {
+        location = {
+          locationClinicName: clinic.name,
+          locationStreet: clinic.street,
+          locationNumber: clinic.number,
+          locationNeighborhood: clinic.neighborhood,
+          locationCity: clinic.city,
+          locationState: clinic.state,
+        };
+      }
+    }
+
     const appointment = this.appointmentRepository.create({
       patientId,
       doctorId,
@@ -681,6 +732,10 @@ export class PatientsService {
       doctorCrm: doctorEntity?.crm || '',
       doctorName: doctorEntity?.name || '',
       doctorSpecialty: doctorEntity?.specialty || '',
+      visitType: data.visitType || 'consulta',
+      paymentType: data.paymentType || 'particular',
+      convenioId: data.paymentType === 'convenio' ? data.convenioId || null : null,
+      ...location,
     });
 
     const saved = await this.appointmentRepository.save(appointment);
@@ -725,6 +780,9 @@ export class PatientsService {
       prescription?: string;
       notes?: string;
       completed?: boolean;
+      visitType?: string;
+      paymentType?: string;
+      convenioId?: string;
     },
   ) {
     // Verify access
@@ -756,6 +814,23 @@ export class PatientsService {
     if (data.completed !== undefined) {
       appointment.isCompleted = data.completed;
       appointment.status = (data.completed ? 'completed' : 'approved') as any;
+    }
+    if (data.visitType !== undefined) appointment.visitType = data.visitType;
+    if (data.paymentType !== undefined) {
+      if (data.paymentType === 'convenio') {
+        if (data.convenioId) {
+          const convenio = await this.financialConvenioRepository.findOne({
+            where: { id: data.convenioId },
+          });
+          if (!convenio) {
+            throw new BadRequestException('convenioId inválido');
+          }
+        }
+        appointment.convenioId = data.convenioId || appointment.convenioId;
+      } else {
+        appointment.convenioId = null;
+      }
+      appointment.paymentType = data.paymentType;
     }
 
     // Track who modified
@@ -1714,6 +1789,21 @@ export class PatientsService {
       where: { patientId },
       order: { createdAt: 'DESC' },
       take: 100,
+    });
+  }
+
+  async getCertificates(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
+    const patient = await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const isDependent = (patient as any).isDependent === true;
+    return this.certificateRepository.find({
+      where: isDependent ? { dependentId: patientId } : { patientId },
+      order: { createdAt: 'DESC' },
     });
   }
 }

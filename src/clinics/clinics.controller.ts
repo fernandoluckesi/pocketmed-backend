@@ -20,6 +20,9 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClinicsService } from './clinics.service';
 import { CreateClinicDto } from './dto/create-clinic.dto';
 import { UpdateClinicDto } from './dto/update-clinic.dto';
+import { ConvertToClinicDto } from './dto/convert-to-clinic.dto';
+import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
+import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
 
 @ApiTags('Clinics')
 @Controller('clinics')
@@ -49,6 +52,19 @@ export class ClinicsController {
     return this.clinicsService.findMyClinic(user);
   }
 
+  @Post('convert')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('doctor', 'admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Convert the authenticated doctor account into owning a new clinic',
+  })
+  @ApiResponse({ status: 201, description: 'Clinic created and doctor set as admin' })
+  @ApiResponse({ status: 409, description: 'CNPJ already registered' })
+  async convertToClinic(@CurrentUser() user: any, @Body() dto: ConvertToClinicDto) {
+    return this.clinicsService.convertToClinic(user, dto);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('doctor', 'admin', 'secretary')
@@ -58,6 +74,90 @@ export class ClinicsController {
   @ApiResponse({ status: 404, description: 'Clinic not found or not a member' })
   async findOne(@CurrentUser() user: any, @Param('id') id: string) {
     return this.clinicsService.findOne(id, user);
+  }
+
+  @Get(':id/subscription')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('doctor', 'admin', 'secretary')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get the clinic plan and current usage vs. its limits' })
+  @ApiResponse({ status: 200, description: 'Subscription returned successfully' })
+  async getSubscription(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.getSubscription(id, user);
+  }
+
+  @Patch(':id/subscription')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Change the clinic plan and/or add-on seats (admin only)' })
+  @ApiResponse({ status: 200, description: 'Subscription updated successfully' })
+  async updateSubscription(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateSubscriptionDto,
+  ) {
+    return this.clinicsService.updateSubscription(id, dto, user);
+  }
+
+  @Post(':id/subscription/checkout')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Start a checkout (Mercado Pago or Stripe) to subscribe/change plan (admin only)',
+  })
+  @ApiResponse({ status: 201, description: 'Checkout URL returned' })
+  @ApiResponse({ status: 503, description: 'Payment gateway not configured yet' })
+  async createCheckoutSession(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Body() dto: CreateCheckoutSessionDto,
+  ) {
+    return this.clinicsService.createCheckoutSession(id, dto, user);
+  }
+
+  @Post(':id/subscription/sync')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Re-fetch subscription status directly from the gateway (admin only)',
+  })
+  @ApiResponse({ status: 201, description: 'Subscription returned' })
+  async syncSubscription(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.syncSubscription(id, user);
+  }
+
+  @Get(':id/subscription/payments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: "Clinic's subscription payment history (admin only)" })
+  @ApiResponse({ status: 200, description: 'Payments returned' })
+  async listSubscriptionPayments(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.listSubscriptionPayments(id, user);
+  }
+
+  @Post(':id/subscription/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Cancel the clinic subscription (admin only)' })
+  @ApiResponse({ status: 201, description: 'Subscription cancelled' })
+  async cancelSubscription(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.cancelSubscription(id, user);
+  }
+
+  @Post(':id/subscription/portal')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Open the Stripe billing portal for this clinic (admin only)' })
+  @ApiResponse({ status: 201, description: 'Billing portal URL returned' })
+  @ApiResponse({ status: 503, description: 'Payment gateway not configured yet' })
+  async createBillingPortalSession(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.createBillingPortalSession(id, user);
   }
 
   @Patch(':id')

@@ -5,9 +5,10 @@ import { ExamCatalogService } from './exam-catalog.service';
 import { ExamOrderParserService } from './exam-order-parser.service';
 import { ExamCatalog } from '../entities/exam-catalog.entity';
 import { ExamCategory } from '../entities/exam-category.entity';
+import { DocumentParsingModule } from '../document-parsing/document-parsing.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ExamCatalog, ExamCategory])],
+  imports: [TypeOrmModule.forFeature([ExamCatalog, ExamCategory]), DocumentParsingModule],
   controllers: [ExamCatalogController],
   providers: [ExamCatalogService, ExamOrderParserService],
   exports: [ExamCatalogService],

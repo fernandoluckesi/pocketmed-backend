@@ -281,11 +281,7 @@ export async function registerDoctor(
 /**
  * Login and return the response body (user + token).
  */
-export async function loginUser(
-  app: INestApplication,
-  email: string,
-  password: string,
-) {
+export async function loginUser(app: INestApplication, email: string, password: string) {
   const res = await request(app.getHttpServer())
     .post('/auth/login')
     .send({ email, password })

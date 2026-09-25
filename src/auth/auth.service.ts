@@ -107,12 +107,22 @@ export class AuthService {
         profileImage: profileImageUrl,
         type: 'patient',
         isShadow: false,
-        // Code/token verification disabled for the Apple review build: accounts
-        // are created already verified and no verification code is sent.
+        // TEMP (Apple review): email/code verification disabled. Accounts are
+        // created already verified and no verification code is sent. To restore,
+        // uncomment the block below and flip `emailVerified` back to `false`.
         emailVerified: true,
       });
 
       const savedPatient = await queryRunner.manager.save(patient);
+
+      // TEMP: email verification disabled (App Store review can't receive
+      // verification emails). To restore, uncomment this block and flip
+      // `emailVerified` above back to `false`.
+      // const verificationCode = this.generateVerificationCode();
+      // savedPatient.verificationCode = verificationCode;
+      // savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      // await queryRunner.manager.save(savedPatient);
+      // await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
       await queryRunner.commitTransaction();
 
@@ -358,12 +368,22 @@ export class AuthService {
         profileImage: profileImageUrl,
         type: 'doctor',
         isShadow: false,
-        // Code/token verification disabled for the Apple review build: accounts
-        // are created already verified and no verification code is sent.
+        // TEMP (Apple review): email verification disabled (App Store review
+        // can't receive verification emails — reviewers get stuck on the code
+        // screen with no way to complete it). To restore: flip this back to
+        // `false` and uncomment the generate+send block below. Also restore
+        // AuthContext.tsx's post-signup redirect guard on the web side.
         emailVerified: true,
       });
 
       const savedDoctor = await queryRunner.manager.save(doctor);
+
+      // TEMP: email verification disabled — see comment above.
+      // const verificationCode = this.generateVerificationCode();
+      // savedDoctor.verificationCode = verificationCode;
+      // savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      // await queryRunner.manager.save(savedDoctor);
+      // await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
       await queryRunner.commitTransaction();
 

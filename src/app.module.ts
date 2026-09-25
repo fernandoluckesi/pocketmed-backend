@@ -18,12 +18,15 @@ import { EmailModule } from './email/email.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { BackofficeBoundaryGuard } from './auth/guards/backoffice-boundary.guard';
+import { DoctorVerifiedGuard } from './auth/guards/doctor-verified.guard';
 import { Patient } from './entities/patient.entity';
 import { Doctor } from './entities/doctor.entity';
 import { Dependent } from './entities/dependent.entity';
 import { Appointment } from './entities/appointment.entity';
 import { Medication } from './entities/medication.entity';
 import { Exam } from './entities/exam.entity';
+import { Certificate } from './entities/certificate.entity';
+import { MedicationCatalog } from './entities/medication-catalog.entity';
 import { DoctorAccessRequest } from './entities/doctor-access-request.entity';
 import { DoctorPermission } from './entities/doctor-permission.entity';
 import { DependentResponsibleInvite } from './entities/dependent-responsible-invite.entity';
@@ -32,6 +35,7 @@ import { AvailabilityException } from './entities/availability-exception.entity'
 import { DeviceToken } from './entities/device-token.entity';
 import { Notification } from './entities/notification.entity';
 import { Clinic } from './entities/clinic.entity';
+import { SubscriptionPayment } from './entities/subscription-payment.entity';
 import { ClinicMembership } from './entities/clinic-membership.entity';
 import { ClinicAdminProfile } from './entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from './entities/secretary-profile.entity';
@@ -56,10 +60,13 @@ import { Secretary } from './entities/secretary.entity';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ClinicAdminModule } from './clinic-admin/clinic-admin.module';
 import { ExamCatalogModule } from './exam-catalog/exam-catalog.module';
+import { MedicationCatalogModule } from './medication-catalog/medication-catalog.module';
 import { ExamSchedulingModule } from './exam-scheduling/exam-scheduling.module';
 import { DoctorDocumentsModule } from './doctor-documents/doctor-documents.module';
 import { FinancialModule } from './financial/financial.module';
 import { ClinicsModule } from './clinics/clinics.module';
+import { PlansModule } from './plans/plans.module';
+import { PaymentsModule } from './payments/payments.module';
 import { AuditModule } from './audit/audit.module';
 import { SecretariesModule } from './secretaries/secretaries.module';
 import { CepModule } from './cep/cep.module';
@@ -68,6 +75,7 @@ import { BackofficeUser } from './entities/backoffice-user.entity';
 import { AuditEvent } from './audit/entities/audit-event.entity';
 import { ClinicDoctorInvite } from './clinic-doctor-association/entities/clinic-doctor-invite.entity';
 import { ClinicDoctorAssociationModule } from './clinic-doctor-association/clinic-doctor-association.module';
+import { CertificatesModule } from './certificates/certificates.module';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
 import { AuditContextInterceptor } from './audit/audit-context.interceptor';
 
@@ -147,6 +155,9 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           BackofficeUser,
           AuditEvent,
           ClinicDoctorInvite,
+          Certificate,
+          MedicationCatalog,
+          SubscriptionPayment,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
@@ -167,15 +178,19 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     NotificationsModule,
     ClinicAdminModule,
     ExamCatalogModule,
+    MedicationCatalogModule,
     ExamSchedulingModule,
     DoctorDocumentsModule,
     FinancialModule,
     ClinicsModule,
+    PlansModule,
+    PaymentsModule,
     AuditModule,
     SecretariesModule,
     CepModule,
     BackofficeModule,
     ClinicDoctorAssociationModule,
+    CertificatesModule,
   ],
   controllers: [AppController],
   providers: [
@@ -193,6 +208,13 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      // Runs after JwtAuthGuard so `request.user.verificationStatus` is
+      // populated: blocks unapproved doctors from routes marked with
+      // `@RequireDoctorVerified()` (real patient data).
+      provide: APP_GUARD,
+      useClass: DoctorVerifiedGuard,
     },
     {
       provide: APP_INTERCEPTOR,

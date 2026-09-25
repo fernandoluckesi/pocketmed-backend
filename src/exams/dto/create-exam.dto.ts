@@ -1,12 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsString,
-  IsNotEmpty,
-  IsEnum,
-  IsDateString,
-  IsOptional,
-  IsUUID,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsDateString, IsOptional, IsUUID } from 'class-validator';
 import { ExamType, ExamStatus } from '../../entities/exam.entity';
 
 export class CreateExamDto {
@@ -19,7 +12,10 @@ export class CreateExamDto {
   @IsEnum(ExamType)
   type: ExamType;
 
-  @ApiProperty({ example: 'Exame de sangue para verificar hemácias, leucócitos e plaquetas', required: false })
+  @ApiProperty({
+    example: 'Exame de sangue para verificar hemácias, leucócitos e plaquetas',
+    required: false,
+  })
   @IsString()
   @IsOptional()
   description?: string;

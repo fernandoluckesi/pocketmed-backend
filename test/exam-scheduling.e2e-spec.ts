@@ -2,13 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import request from 'supertest';
-import {
-  createTestApp,
-  registerPatient,
-  registerDoctor,
-  futureDate,
-  pastDate,
-} from './test-utils';
+import { createTestApp, registerPatient, registerDoctor, futureDate, pastDate } from './test-utils';
 import { ExamCatalog } from '../src/entities/exam-catalog.entity';
 import { ExamCategory } from '../src/entities/exam-category.entity';
 
@@ -89,10 +83,7 @@ describe('Exam Scheduling Module (e2e)', () => {
         .post('/exam-schedules')
         .set('Authorization', `Bearer ${patientToken}`)
         .send({
-          exams: [
-            { examCatalogId: catalogExamId },
-            { customExamName: 'Outro Exame' },
-          ],
+          exams: [{ examCatalogId: catalogExamId }, { customExamName: 'Outro Exame' }],
           scheduledDateTime: futureDate(10),
         })
         .expect(201);
@@ -194,9 +185,7 @@ describe('Exam Scheduling Module (e2e)', () => {
     });
 
     it('should return 401 without authentication', async () => {
-      await request(app.getHttpServer())
-        .get('/exam-schedules')
-        .expect(401);
+      await request(app.getHttpServer()).get('/exam-schedules').expect(401);
     });
   });
 });

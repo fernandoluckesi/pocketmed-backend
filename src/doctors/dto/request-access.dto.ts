@@ -12,7 +12,10 @@ export class RequestAccessDto {
   @IsOptional()
   dependentId?: string;
 
-  @ApiProperty({ example: 'Gostaria de acessar seu histórico médico para consulta', required: false })
+  @ApiProperty({
+    example: 'Gostaria de acessar seu histórico médico para consulta',
+    required: false,
+  })
   @IsString()
   @IsOptional()
   message?: string;

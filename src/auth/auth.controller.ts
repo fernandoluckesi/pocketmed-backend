@@ -31,6 +31,7 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Roles } from './decorators/roles.decorator';
 import { RolesGuard } from './guards/roles.guard';
+import { RequireDoctorVerified } from './decorators/require-doctor-verified.decorator';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -63,6 +64,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('doctor', 'admin', 'secretary')
+  @RequireDoctorVerified()
   @Post('register/patient-shadow')
   @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Register a shadow patient by a professional account' })
@@ -235,12 +237,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Confirmation code sent to the new email' })
   @ApiResponse({ status: 400, description: 'Wrong password, email in use or invalid' })
   async requestEmailChange(@CurrentUser() user: any, @Body() dto: RequestEmailChangeDto) {
-    return this.authService.requestEmailChange(
-      user.userId,
-      user.type,
-      dto.newEmail,
-      dto.password,
-    );
+    return this.authService.requestEmailChange(user.userId, user.type, dto.newEmail, dto.password);
   }
 
   @UseGuards(JwtAuthGuard)

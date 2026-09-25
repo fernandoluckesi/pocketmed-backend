@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequireDoctorVerified } from '../auth/decorators/require-doctor-verified.decorator';
 import { RequestAccessDto } from './dto/request-access.dto';
 import { RespondAccessRequestDto } from './dto/respond-access-request.dto';
 
@@ -42,6 +43,7 @@ export class DoctorsController {
 
   @Post('request-access')
   @Roles('doctor', 'admin')
+  @RequireDoctorVerified()
   @ApiOperation({ summary: 'Request access to patient or dependent data (doctors and admins)' })
   @ApiResponse({ status: 201, description: 'Access request sent' })
   @ApiResponse({ status: 400, description: 'Bad request' })
@@ -52,6 +54,7 @@ export class DoctorsController {
 
   @Get('access-requests/me')
   @Roles('doctor', 'admin')
+  @RequireDoctorVerified()
   @ApiOperation({ summary: 'Get my access requests' })
   @ApiResponse({ status: 200, description: 'Return access requests' })
   async getMyAccessRequests(@CurrentUser() user: any) {
@@ -60,6 +63,7 @@ export class DoctorsController {
 
   @Delete('access-requests/:id')
   @Roles('doctor', 'admin')
+  @RequireDoctorVerified()
   @ApiOperation({ summary: 'Cancel my own pending access request' })
   @ApiResponse({ status: 200, description: 'Access request cancelled' })
   @ApiResponse({ status: 400, description: 'Only pending requests can be cancelled' })

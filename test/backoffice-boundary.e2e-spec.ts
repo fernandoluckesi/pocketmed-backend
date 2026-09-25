@@ -306,7 +306,9 @@ describe('Backoffice product boundary (e2e)', () => {
         .set('Authorization', `Bearer ${backofficeToken}`)
         .expect(403);
 
-      expect(res.body.message).toBe('Contas de backoffice só podem acessar recursos do backoffice.');
+      expect(res.body.message).toBe(
+        'Contas de backoffice só podem acessar recursos do backoffice.',
+      );
     });
   });
 

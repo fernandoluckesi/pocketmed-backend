@@ -102,6 +102,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       type: user.type,
       role,
       activeClinicId,
+      verificationStatus: user.type === 'doctor' ? (user as Doctor).verificationStatus : undefined,
     };
   }
 }

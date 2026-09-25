@@ -27,9 +27,7 @@ export class MakeMedicationDoctorNullable1796000000000 implements MigrationInter
       await queryRunner.query(`ALTER TABLE \`medications\` DROP FOREIGN KEY \`${fkName}\`;`);
     }
 
-    await queryRunner.query(
-      'ALTER TABLE `medications` MODIFY `doctorId` varchar(36) NULL;',
-    );
+    await queryRunner.query('ALTER TABLE `medications` MODIFY `doctorId` varchar(36) NULL;');
 
     // Re-create the FK (nullable columns are allowed to reference; NULL skips it).
     await queryRunner.query(
@@ -54,9 +52,7 @@ export class MakeMedicationDoctorNullable1796000000000 implements MigrationInter
       await queryRunner.query(`ALTER TABLE \`medications\` DROP FOREIGN KEY \`${fkName}\`;`);
     }
 
-    await queryRunner.query(
-      'ALTER TABLE `medications` MODIFY `doctorId` varchar(36) NOT NULL;',
-    );
+    await queryRunner.query('ALTER TABLE `medications` MODIFY `doctorId` varchar(36) NOT NULL;');
 
     await queryRunner.query(
       'ALTER TABLE `medications` ADD CONSTRAINT `FK_medications_doctor` FOREIGN KEY (`doctorId`) REFERENCES `doctors`(`id`) ON DELETE NO ACTION ON UPDATE NO ACTION;',

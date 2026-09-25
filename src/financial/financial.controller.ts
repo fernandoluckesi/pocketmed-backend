@@ -54,11 +54,7 @@ export class FinancialController {
   }
 
   @Put('cost-centers/:id')
-  updateCostCenter(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateCostCenter(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateCostCenter(user.activeClinicId, id, dto);
   }
 
@@ -70,8 +66,20 @@ export class FinancialController {
   // ─── CONVENIOS ────────────────────────────────────────────────────────────
 
   @Get('convenios')
+  @Roles('doctor', 'admin', 'secretary')
   listConvenios(@CurrentUser() user: any) {
     return this.financialService.listConvenios(user.activeClinicId);
+  }
+
+  /**
+   * Cross-clinic search, unlike listConvenios above: a patient has no active
+   * clinic, so the insurance-plan picker in the patient app needs a global
+   * lookup by name instead of "this clinic's list".
+   */
+  @Get('convenios/search')
+  @Roles('doctor', 'admin', 'secretary', 'patient')
+  searchConvenios(@Query('q') q: string) {
+    return this.financialService.searchConvenios(q);
   }
 
   @Post('convenios')
@@ -80,11 +88,7 @@ export class FinancialController {
   }
 
   @Put('convenios/:id')
-  updateConvenio(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateConvenio(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateConvenio(user.activeClinicId, id, dto);
   }
 
@@ -134,11 +138,7 @@ export class FinancialController {
   }
 
   @Put('revenues/:id')
-  updateRevenue(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateRevenue(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateRevenue(user.activeClinicId, id, dto);
   }
 
@@ -198,11 +198,7 @@ export class FinancialController {
   }
 
   @Put('expenses/:id')
-  updateExpense(
-    @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: any,
-  ) {
+  updateExpense(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
     return this.financialService.updateExpense(user.activeClinicId, id, dto);
   }
 
@@ -240,10 +236,7 @@ export class FinancialController {
   }
 
   @Get('transfers/calculate')
-  calculateTransfers(
-    @CurrentUser() user: any,
-    @Query('month') month: string,
-  ) {
+  calculateTransfers(@CurrentUser() user: any, @Query('month') month: string) {
     return this.financialService.calculateTransfers(user.activeClinicId, month);
   }
 
@@ -303,11 +296,7 @@ export class FinancialController {
   // ─── DRE ──────────────────────────────────────────────────────────────────
 
   @Get('dre')
-  getDRE(
-    @CurrentUser() user: any,
-    @Query('year') year: string,
-    @Query('month') month: string,
-  ) {
+  getDRE(@CurrentUser() user: any, @Query('year') year: string, @Query('month') month: string) {
     return this.financialService.getDRE(
       user.activeClinicId,
       parseInt(year, 10),
@@ -318,23 +307,41 @@ export class FinancialController {
   // ─── DASHBOARD ────────────────────────────────────────────────────────────
 
   @Get('dashboard/kpis')
-  getDashboardKPIs(@CurrentUser() user: any) {
-    return this.financialService.getDashboardKPIs(user.activeClinicId);
+  getDashboardKPIs(
+    @CurrentUser() user: any,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    return this.financialService.getDashboardKPIs(
+      user.activeClinicId,
+      year ? parseInt(year, 10) : undefined,
+      month ? parseInt(month, 10) : undefined,
+    );
   }
 
   @Get('dashboard/revenue-by-specialty')
-  getRevenueBySpecialty(@CurrentUser() user: any) {
-    return this.financialService.getRevenueBySpecialty(user.activeClinicId);
+  getRevenueBySpecialty(
+    @CurrentUser() user: any,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    return this.financialService.getRevenueBySpecialty(
+      user.activeClinicId,
+      year ? parseInt(year, 10) : undefined,
+      month ? parseInt(month, 10) : undefined,
+    );
   }
 
   @Get('dashboard/recent-transactions')
   getRecentTransactions(
     @CurrentUser() user: any,
     @Query('limit') limit?: string,
+    @Query('status') status?: string,
   ) {
     return this.financialService.getRecentTransactions(
       user.activeClinicId,
       limit ? parseInt(limit, 10) : 10,
+      status,
     );
   }
 
@@ -348,7 +355,12 @@ export class FinancialController {
     @Query('doctorId') doctorId?: string,
     @Query('convenioId') convenioId?: string,
   ) {
-    return this.financialService.getRevenueReport(user.activeClinicId, { startDate, endDate, doctorId, convenioId });
+    return this.financialService.getRevenueReport(user.activeClinicId, {
+      startDate,
+      endDate,
+      doctorId,
+      convenioId,
+    });
   }
 
   @Get('reports/inadimplencia')
@@ -372,7 +384,11 @@ export class FinancialController {
     @Query('endDate') endDate: string,
     @Query('convenioId') convenioId?: string,
   ) {
-    return this.financialService.getGlosaReport(user.activeClinicId, { startDate, endDate, convenioId });
+    return this.financialService.getGlosaReport(user.activeClinicId, {
+      startDate,
+      endDate,
+      convenioId,
+    });
   }
 
   @Get('reports/expenses-by-cost-center')
@@ -382,7 +398,11 @@ export class FinancialController {
     @Query('endDate') endDate: string,
     @Query('costCenterId') costCenterId?: string,
   ) {
-    return this.financialService.getExpensesByCostCenterReport(user.activeClinicId, { startDate, endDate, costCenterId });
+    return this.financialService.getExpensesByCostCenterReport(user.activeClinicId, {
+      startDate,
+      endDate,
+      costCenterId,
+    });
   }
 
   @Get('reports/productivity')
