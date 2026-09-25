@@ -35,6 +35,7 @@ import { AvailabilityException } from './entities/availability-exception.entity'
 import { DeviceToken } from './entities/device-token.entity';
 import { Notification } from './entities/notification.entity';
 import { Clinic } from './entities/clinic.entity';
+import { SubscriptionPayment } from './entities/subscription-payment.entity';
 import { ClinicMembership } from './entities/clinic-membership.entity';
 import { ClinicAdminProfile } from './entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from './entities/secretary-profile.entity';
@@ -156,6 +157,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           ClinicDoctorInvite,
           Certificate,
           MedicationCatalog,
+          SubscriptionPayment,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,

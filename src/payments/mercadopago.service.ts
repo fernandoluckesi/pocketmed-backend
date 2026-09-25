@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
-import { MercadoPagoConfig, PreApproval } from 'mercadopago';
+import { MercadoPagoConfig, Payment, PreApproval } from 'mercadopago';
 
 @Injectable()
 export class MercadoPagoService {
@@ -27,6 +27,13 @@ export class MercadoPagoService {
       throw new Error('Mercado Pago is not configured (MERCADOPAGO_ACCESS_TOKEN missing)');
     }
     return new PreApproval(this.config);
+  }
+
+  private get payment(): Payment {
+    if (!this.config) {
+      throw new Error('Mercado Pago is not configured (MERCADOPAGO_ACCESS_TOKEN missing)');
+    }
+    return new Payment(this.config);
   }
 
   /** Creates a recurring subscription ("assinatura"). Returns the URL the
@@ -71,6 +78,23 @@ export class MercadoPagoService {
 
   async cancelSubscription(preapprovalId: string) {
     return this.preApproval.update({ id: preapprovalId, body: { status: 'cancelled' } });
+  }
+
+  /** Full details of a single charge — used both by the webhook handler
+   * (one payment at a time) and to enrich search results below. */
+  async getPayment(paymentId: string) {
+    return this.payment.get({ id: paymentId });
+  }
+
+  /** Finds every charge tied to a subscription's `external_reference` — the
+   * reconciliation cron's way of catching anything a missed/delayed webhook
+   * didn't report (Mercado Pago has no "list payments by preapproval id"
+   * filter; external_reference is the documented way to correlate them). */
+  async searchPaymentsByExternalReference(externalReference: string) {
+    const result = await this.payment.search({
+      options: { external_reference: externalReference, sort: 'date_created', criteria: 'desc' },
+    });
+    return result.results || [];
   }
 
   /**

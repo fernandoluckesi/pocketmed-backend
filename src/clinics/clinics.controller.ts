@@ -129,6 +129,16 @@ export class ClinicsController {
     return this.clinicsService.syncSubscription(id, user);
   }
 
+  @Get(':id/subscription/payments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: "Clinic's subscription payment history (admin only)" })
+  @ApiResponse({ status: 200, description: 'Payments returned' })
+  async listSubscriptionPayments(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.clinicsService.listSubscriptionPayments(id, user);
+  }
+
   @Post(':id/subscription/cancel')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')

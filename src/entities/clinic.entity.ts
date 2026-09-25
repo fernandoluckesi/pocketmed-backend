@@ -76,6 +76,12 @@ export class Clinic {
   @Column({ type: 'varchar', length: 255, nullable: true })
   mercadoPagoPreapprovalId: string | null;
 
+  /** The `external_reference` sent when creating the preapproval above —
+   * kept around because Mercado Pago's payment search filters by this
+   * value, not by preapproval id (used by the reconciliation cron). */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  mercadoPagoExternalReference: string | null;
+
   @OneToMany(() => ClinicMembership, (membership) => membership.clinic)
   memberships: ClinicMembership[];
 

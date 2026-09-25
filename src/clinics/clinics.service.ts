@@ -15,6 +15,7 @@ import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Secretary } from '../entities/secretary.entity';
 import { Appointment } from '../entities/appointment.entity';
+import { SubscriptionPayment } from '../entities/subscription-payment.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { CreateClinicDto } from './dto/create-clinic.dto';
 import { UpdateClinicDto } from './dto/update-clinic.dto';
@@ -48,6 +49,8 @@ export class ClinicsService {
     private secretaryRepository: Repository<Secretary>,
     @InjectRepository(Appointment)
     private appointmentRepository: Repository<Appointment>,
+    @InjectRepository(SubscriptionPayment)
+    private subscriptionPaymentRepository: Repository<SubscriptionPayment>,
     private dataSource: DataSource,
     private uploadService: UploadService,
     private emailService: EmailService,
@@ -569,19 +572,25 @@ export class ClinicsService {
         ? `${frontendUrl}/account?tab=subscription&checkout=success`
         : 'https://www.mercadopago.com.br';
 
+      const externalReference = buildExternalReference({
+        clinicId: clinic.id,
+        planId: plan.id,
+        additionalProfessionals,
+      });
+
       const subscription = await this.mercadoPagoService.createSubscription({
         reason: `Hispora — Plano ${plan.name}`,
         amount,
         payerEmail: doctor.email,
-        externalReference: buildExternalReference({
-          clinicId: clinic.id,
-          planId: plan.id,
-          additionalProfessionals,
-        }),
+        externalReference,
         backUrl,
       });
 
       clinic.mercadoPagoPreapprovalId = subscription.id;
+      // The reconciliation cron searches Mercado Pago's payments by this
+      // value (no "list by preapproval id" filter exists), so it must be
+      // persisted alongside the preapproval id, not just passed through.
+      clinic.mercadoPagoExternalReference = externalReference;
       await this.clinicRepository.save(clinic);
 
       return { url: subscription.initPoint };
@@ -646,6 +655,19 @@ export class ClinicsService {
     }
 
     return this.getSubscription(clinicId, user);
+  }
+
+  /** Hispora's own subscription-charge history for this clinic — "meus
+   * pagamentos" — populated by the gateway webhook (near-real-time) plus
+   * the daily reconciliation cron as a safety net. Admin-only, same as the
+   * rest of the billing surface. */
+  async listSubscriptionPayments(clinicId: string, user: any) {
+    await this.assertMembership(clinicId, user, ProfessionalRole.ADMIN);
+
+    return this.subscriptionPaymentRepository.find({
+      where: { clinicId },
+      order: { dateCreated: 'DESC' },
+    });
   }
 
   /** Opens the Stripe-hosted billing portal (invoices, payment method,

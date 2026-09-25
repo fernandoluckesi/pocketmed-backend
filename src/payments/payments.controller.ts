@@ -70,6 +70,8 @@ export class PaymentsController {
 
     if (body.type === 'preapproval') {
       await this.paymentsService.syncMercadoPagoSubscription(dataId);
+    } else if (body.type === 'payment') {
+      await this.paymentsService.upsertMercadoPagoPayment(dataId);
     }
 
     return { received: true };
