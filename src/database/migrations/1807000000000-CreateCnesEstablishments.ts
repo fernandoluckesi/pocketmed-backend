@@ -19,7 +19,9 @@ export class CreateCnesEstablishments1807000000000 implements MigrationInterface
         \`numero\` varchar(20) NULL,
         \`bairro\` varchar(100) NULL,
         \`codigoMunicipio\` int NOT NULL,
+        \`municipioNome\` varchar(120) NULL,
         \`codigoUf\` int NOT NULL,
+        \`uf\` varchar(2) NULL,
         \`telefone\` varchar(30) NULL,
         \`email\` varchar(255) NULL,
         \`latitude\` decimal(10,6) NULL,
@@ -30,7 +32,8 @@ export class CreateCnesEstablishments1807000000000 implements MigrationInterface
         PRIMARY KEY (\`id\`),
         UNIQUE KEY \`UQ_cnes_establishments_codigo_cnes\` (\`codigoCnes\`),
         KEY \`IDX_cnes_establishments_nome_fantasia\` (\`nomeFantasia\`),
-        KEY \`IDX_cnes_establishments_codigo_municipio\` (\`codigoMunicipio\`)
+        KEY \`IDX_cnes_establishments_codigo_municipio\` (\`codigoMunicipio\`),
+        KEY \`IDX_cnes_establishments_uf\` (\`uf\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
   }

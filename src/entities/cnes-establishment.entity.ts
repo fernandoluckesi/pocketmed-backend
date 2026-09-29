@@ -52,8 +52,19 @@ export class CnesEstablishment {
   @Column({ type: 'int' })
   codigoMunicipio: number;
 
+  /** Human-readable município name (e.g. "Rio Branco"), resolved from IBGE.
+   * The CNES API only returns the código, so this is filled from IBGE during
+   * sync. Kept alongside the código for display and readability. */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  municipioNome: string | null;
+
   @Column({ type: 'int' })
   codigoUf: number;
+
+  /** State abbreviation (e.g. "AC", "SP"). Filled from IBGE during sync. */
+  @Index()
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  uf: string | null;
 
   @Column({ type: 'varchar', length: 30, nullable: true })
   telefone: string | null;

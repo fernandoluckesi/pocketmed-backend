@@ -65,7 +65,7 @@ export class IbgeService {
   async resolveMunicipio(
     uf: string,
     cidadeNome: string,
-  ): Promise<{ codigoMunicipio: number; codigoUf: number } | null> {
+  ): Promise<{ codigoMunicipio: number; codigoUf: number; nome: string } | null> {
     let list: IbgeMunicipio[];
     try {
       list = await this.loadMunicipios(uf);
@@ -84,6 +84,8 @@ export class IbgeService {
     return {
       codigoMunicipio: Math.floor(match.id / 10),
       codigoUf: match.ufCode,
+      // Canonical IBGE name (not the free-text the user typed).
+      nome: match.nome,
     };
   }
 }

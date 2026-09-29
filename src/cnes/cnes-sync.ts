@@ -44,6 +44,10 @@ export interface SyncMunicipioOptions {
   delayMs?: number;
   onPage?: (info: { page: number; itemsThisPage: number; totalSoFar: number }) => void;
   onError?: (message: string, error?: unknown) => void;
+  /** Human-readable município name (from IBGE) to store on each record. */
+  municipioNome?: string | null;
+  /** State abbreviation (from IBGE), e.g. "AC", to store on each record. */
+  uf?: string | null;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -59,6 +63,11 @@ export async function syncMunicipioEstablishments(
   options: SyncMunicipioOptions = {},
 ): Promise<number> {
   const maxPages = options.maxPages ?? 25;
+  // The CNES API returns only numeric codes, never the município name or the
+  // UF abbreviation, so callers pass them in (resolved from IBGE) to be stored
+  // for display/readability alongside the codes.
+  const municipioNome = options.municipioNome ?? null;
+  const uf = options.uf ?? null;
   let offset = 0;
   let page = 0;
   let total = 0;
@@ -88,7 +97,7 @@ export async function syncMunicipioEstablishments(
     if (items.length === 0) break;
 
     for (const item of items) {
-      await upsertEstablishment(repository, item);
+      await upsertEstablishment(repository, item, { municipioNome, uf });
     }
     total += items.length;
     options.onPage?.({ page, itemsThisPage: items.length, totalSoFar: total });
@@ -106,6 +115,7 @@ export async function syncMunicipioEstablishments(
 export async function upsertEstablishment(
   repository: Repository<CnesEstablishment>,
   item: CnesApiEstablishment,
+  meta: { municipioNome?: string | null; uf?: string | null } = {},
 ): Promise<void> {
   if (!item.codigo_cnes) return;
   const codigoCnes = String(item.codigo_cnes);
@@ -123,7 +133,11 @@ export async function upsertEstablishment(
   record.numero = item.numero_estabelecimento || null;
   record.bairro = item.bairro_estabelecimento || null;
   record.codigoMunicipio = item.codigo_municipio ?? record.codigoMunicipio;
+  // Município name / UF come from IBGE (the CNES API doesn't return them).
+  // Keep any previously stored value if the caller didn't provide one.
+  record.municipioNome = meta.municipioNome ?? record.municipioNome ?? null;
   record.codigoUf = item.codigo_uf ?? record.codigoUf;
+  record.uf = meta.uf ?? record.uf ?? null;
   record.telefone = item.numero_telefone_estabelecimento || null;
   record.email = item.endereco_email_estabelecimento || null;
   record.latitude = item.latitude_estabelecimento_decimo_grau ?? null;
