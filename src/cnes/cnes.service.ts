@@ -31,7 +31,7 @@ export class CnesService {
     const resolved = await this.ibgeService.resolveMunicipio(uf, cidade);
     if (!resolved) return [];
 
-    const { codigoMunicipio, codigoUf } = resolved;
+    const { codigoMunicipio, codigoUf, nome: municipioNome } = resolved;
 
     const alreadySynced = await this.establishmentRepository.count({
       where: { codigoMunicipio },
@@ -43,6 +43,8 @@ export class CnesService {
         codigoMunicipio,
         {
           maxPages: ON_DEMAND_MAX_PAGES,
+          municipioNome,
+          uf: uf.trim().toUpperCase(),
           onError: (message, error) => this.logger.warn(message, error),
         },
       );

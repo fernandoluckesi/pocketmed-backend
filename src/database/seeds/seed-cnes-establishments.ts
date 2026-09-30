@@ -67,7 +67,9 @@ const ALL_UFS = [
 const MAX_PAGES_PER_MUNICIPIO = 2000;
 
 const DELAY_MS = Number(process.env.CNES_SYNC_DELAY_MS || 150);
-const FORCE = process.env.CNES_SYNC_FORCE === 'true';
+//const FORCE = process.env.CNES_SYNC_FORCE === 'true';
+const FORCE = true;
+
 const TARGET_UFS = process.env.CNES_SYNC_UF
   ? process.env.CNES_SYNC_UF.split(',').map((uf) => uf.trim().toUpperCase())
   : ALL_UFS;
@@ -81,6 +83,30 @@ function formatDuration(ms: number): string {
 }
 
 export async function seedCnesEstablishments() {
+  // Safety guard: this seed can write to the PRODUCTION database (it is meant to
+  // be run locally, pointing at Railway's MYSQL_PUBLIC_URL/DATABASE_URL). Writing
+  // to a remote DB is a high-impact action, so when a connection URL is present
+  // we require an explicit CNES_SYNC_CONFIRM=true to avoid accidental runs
+  // against the wrong environment.
+  const targetUrl =
+    process.env.DATABASE_URL || process.env.MYSQL_PUBLIC_URL || process.env.MYSQL_URL;
+  if (targetUrl && process.env.CNES_SYNC_CONFIRM !== 'true') {
+    const host = (() => {
+      try {
+        return new URL(targetUrl).host;
+      } catch {
+        return '(host desconhecido)';
+      }
+    })();
+    console.error(
+      '\n⚠  Este seed vai ESCREVER no banco remoto:\n' +
+        `   ${host}\n\n` +
+        '   Para confirmar que é intencional, rode novamente com CNES_SYNC_CONFIRM=true.\n' +
+        '   Ex.: DATABASE_URL="<url-prod>" CNES_SYNC_CONFIRM=true yarn seed:cnes\n',
+    );
+    process.exit(1);
+  }
+
   const shouldDestroyConnection = !AppDataSource.isInitialized;
   if (!AppDataSource.isInitialized) {
     await AppDataSource.initialize();
@@ -137,6 +163,8 @@ export async function seedCnesEstablishments() {
         const count = await syncMunicipioEstablishments(repository, m.codigoUf, m.codigoMunicipio, {
           maxPages: MAX_PAGES_PER_MUNICIPIO,
           delayMs: DELAY_MS,
+          municipioNome: m.nome,
+          uf,
           onError: (message) => console.warn(`  ⚠ ${message}`),
         });
         establishmentsSynced += count;
