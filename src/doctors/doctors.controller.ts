@@ -128,4 +128,11 @@ export class DoctorsController {
   async searchByCRM(@Query('crm') crm: string, @Query('state') state: string) {
     return this.doctorsService.findByCrm(crm, state);
   }
+
+  @Get('search/name')
+  @ApiOperation({ summary: 'Search doctors by name or CRM (cross-clinic)' })
+  @ApiResponse({ status: 200, description: 'Return matching doctors' })
+  async searchByName(@Query('q') q: string) {
+    return this.doctorsService.searchByName(q);
+  }
 }

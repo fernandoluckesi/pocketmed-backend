@@ -117,6 +117,23 @@ export class DoctorsService {
     return doctor;
   }
 
+  // Cross-clinic search by name OR CRM — used by the patient app to find a
+  // registered doctor when scheduling, without knowing the CRM upfront.
+  async searchByName(name: string) {
+    const query = String(name || '').trim();
+    if (query.length < 4) return [];
+
+    return this.doctorRepository
+      .createQueryBuilder('doctor')
+      .where('doctor.name LIKE :query OR doctor.crm LIKE :query', {
+        query: `%${query}%`,
+      })
+      .select(['doctor.id', 'doctor.name', 'doctor.specialty', 'doctor.crm'])
+      .orderBy('doctor.name', 'ASC')
+      .take(30)
+      .getMany();
+  }
+
   async requestAccess(doctorId: string, dto: RequestAccessDto) {
     if (!dto.patientId && !dto.dependentId) {
       throw new BadRequestException('Either patientId or dependentId must be provided');
