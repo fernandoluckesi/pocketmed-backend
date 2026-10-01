@@ -568,8 +568,10 @@ export class ClinicsService {
       // payment is authorized server-side regardless of where the browser
       // lands afterwards; the frontend also offers a manual "check status"
       // action for exactly this case (see Account page's subscription tab).
+      // A trailing slash in FRONTEND_URL would produce `//account` here, so
+      // it's trimmed before building the callback.
       const backUrl = frontendUrl.startsWith('https://')
-        ? `${frontendUrl}/account?tab=subscription&checkout=success`
+        ? `${frontendUrl.replace(/\/+$/, '')}/account?tab=subscription&checkout=success`
         : 'https://www.mercadopago.com.br';
 
       const externalReference = buildExternalReference({
