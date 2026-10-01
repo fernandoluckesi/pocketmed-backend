@@ -118,6 +118,16 @@ const AppDataSource = new DataSource({
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
   logging: false,
+  // Connection resiliency. Long unattended jobs (e.g. the national CNES seed)
+  // run for hours against a remote DB through Railway's public TCP proxy, which
+  // drops idle sockets — causing ECONNRESET on the next query. Keep-alive pings
+  // keep the socket warm and the pool recreates dead connections automatically.
+  extra: {
+    connectionLimit: 10,
+    enableKeepAlive: true,
+    keepAliveInitialDelay: 10000,
+    connectTimeout: 30000,
+  },
 });
 
 export default AppDataSource;

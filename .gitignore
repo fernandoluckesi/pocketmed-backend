@@ -1,3 +1,5 @@
 node_modules
 .env
 dist
+# CNES sync failure logs (generated at runtime by seed:cnes)
+cnes-sync-logs/
