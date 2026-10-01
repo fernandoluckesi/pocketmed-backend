@@ -28,6 +28,17 @@ import { ExamCategory } from '../src/entities/exam-category.entity';
 import { ExamCatalog } from '../src/entities/exam-catalog.entity';
 import { ExamSchedule } from '../src/entities/exam-schedule.entity';
 import { ExamScheduleItem } from '../src/entities/exam-schedule-item.entity';
+import { FinancialConvenio } from '../src/entities/financial-convenio.entity';
+import { Certificate } from '../src/entities/certificate.entity';
+import { PatientAccessLog } from '../src/entities/patient-access-log.entity';
+import { PatientDisease } from '../src/entities/patient-disease.entity';
+import { PatientAllergy } from '../src/entities/patient-allergy.entity';
+import { PatientVaccine } from '../src/entities/patient-vaccine.entity';
+import { PatientSurgery } from '../src/entities/patient-surgery.entity';
+import { Secretary } from '../src/entities/secretary.entity';
+import { BackofficeUser } from '../src/entities/backoffice-user.entity';
+import { DoctorDocument } from '../src/entities/doctor-document.entity';
+import { AuditEvent } from '../src/audit/entities/audit-event.entity';
 
 // Modules
 import { AuthModule } from '../src/auth/auth.module';
@@ -37,6 +48,7 @@ import { AppointmentsModule } from '../src/appointments/appointments.module';
 import { DoctorsModule } from '../src/doctors/doctors.module';
 import { PatientsModule } from '../src/patients/patients.module';
 import { NotificationsModule } from '../src/notifications/notifications.module';
+import { AuditModule } from '../src/audit/audit.module';
 
 // Guards
 import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
@@ -72,6 +84,17 @@ export const ALL_ENTITIES = [
   ExamCatalog,
   ExamSchedule,
   ExamScheduleItem,
+  FinancialConvenio,
+  Certificate,
+  PatientAccessLog,
+  PatientDisease,
+  PatientAllergy,
+  PatientVaccine,
+  PatientSurgery,
+  Secretary,
+  BackofficeUser,
+  DoctorDocument,
+  AuditEvent,
 ];
 
 /**
@@ -175,6 +198,7 @@ export async function createTestApp(): Promise<INestApplication> {
       DoctorsModule,
       PatientsModule,
       NotificationsModule,
+      AuditModule,
     ],
     providers: [
       {

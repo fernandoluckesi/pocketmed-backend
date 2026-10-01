@@ -552,6 +552,32 @@ export class AppointmentsService {
     return appointment;
   }
 
+  // Starts the consultation timer. Idempotent — calling it again once already
+  // started (e.g. a page refresh re-triggering it) never resets the clock.
+  async startConsultation(id: string, userId: string, userType: string, userRole: string | null) {
+    const appointment = await this.appointmentRepository.findOne({ where: { id } });
+
+    if (!appointment) {
+      throw new NotFoundException('Appointment not found');
+    }
+
+    const isOwnerDoctor =
+      userType === 'doctor' && userRole === ProfessionalRole.DOCTOR && appointment.doctorId === userId;
+
+    if (!isOwnerDoctor) {
+      throw new ForbiddenException('Only the doctor who created the appointment can start it');
+    }
+
+    if (!appointment.startedAt) {
+      appointment.startedAt = new Date();
+      appointment.endedAt = null;
+      appointment.durationSeconds = null;
+      await this.appointmentRepository.save(appointment);
+    }
+
+    return appointment;
+  }
+
   async update(
     id: string,
     userId: string,
@@ -654,6 +680,24 @@ export class AppointmentsService {
       // Patient finalizing → auto-approved, no approval needed
       appointment.isCompleted = true;
       appointment.status = AppointmentStatus.COMPLETED;
+    }
+
+    if (dto.isCompleted === true && !appointment.endedAt) {
+      // Stop the consultation timer at the real moment it was finished,
+      // regardless of the approval workflow above — clinic reporting cares
+      // about actual time spent, not when the patient later approves it.
+      appointment.endedAt = new Date();
+      if (appointment.startedAt) {
+        appointment.durationSeconds = Math.max(
+          0,
+          Math.round((appointment.endedAt.getTime() - appointment.startedAt.getTime()) / 1000),
+        );
+      }
+    } else if (dto.isCompleted === false) {
+      // Undoing completion resumes the consultation — clear the stopped-at
+      // snapshot so a future finish recomputes it from scratch.
+      appointment.endedAt = null;
+      appointment.durationSeconds = null;
     }
 
     const savedAppointment = await this.appointmentRepository.save(appointment);

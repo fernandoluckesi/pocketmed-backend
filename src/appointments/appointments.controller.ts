@@ -53,6 +53,16 @@ export class AppointmentsController {
     );
   }
 
+  @Post(':id/start')
+  @Roles('doctor')
+  @ApiOperation({ summary: 'Start the consultation timer (doctor who owns the appointment)' })
+  @ApiResponse({ status: 200, description: 'Consultation started' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Appointment not found' })
+  async start(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.appointmentsService.startConsultation(id, user.userId, user.type, user.role);
+  }
+
   @Put(':id')
   @ApiOperation({ summary: 'Update appointment (doctor who created it or patient who owns it)' })
   @ApiResponse({ status: 200, description: 'Appointment updated successfully' })

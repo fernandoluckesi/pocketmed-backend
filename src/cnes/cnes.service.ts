@@ -61,4 +61,15 @@ export class CnesService {
       take: 15,
     });
   }
+
+  /** Searches the local CNES cache by name alone, across every city — for
+   * when the cache has already been populated (e.g. via the national bulk
+   * import) and a live, município-scoped sync is no longer needed. */
+  async searchGlobal(nome: string): Promise<CnesEstablishment[]> {
+    return this.establishmentRepository.find({
+      where: { nomeFantasia: Like(`%${nome}%`) },
+      order: { nomeFantasia: 'ASC' },
+      take: 20,
+    });
+  }
 }

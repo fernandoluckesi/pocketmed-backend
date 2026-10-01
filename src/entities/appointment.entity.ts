@@ -46,6 +46,20 @@ export class Appointment {
   @Column({ type: 'boolean', default: false })
   isCompleted: boolean;
 
+  /**
+   * Consultation timer: when the doctor started seeing the patient, when it
+   * ended, and the resulting duration — kept for clinic-side reporting
+   * (revenue vs. time spent), not shown to the patient.
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  startedAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  endedAt: Date | null;
+
+  @Column({ type: 'int', nullable: true })
+  durationSeconds: number | null;
+
   @Column({ type: 'text', nullable: true })
   doctorFeedback: string;
 

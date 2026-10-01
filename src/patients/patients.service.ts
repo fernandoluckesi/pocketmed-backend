@@ -814,6 +814,22 @@ export class PatientsService {
     if (data.completed !== undefined) {
       appointment.isCompleted = data.completed;
       appointment.status = (data.completed ? 'completed' : 'approved') as any;
+
+      if (data.completed && !appointment.endedAt) {
+        // Stop the consultation timer at the real moment it was finished —
+        // clinic reporting cares about actual time spent (revenue vs. time).
+        appointment.endedAt = new Date();
+        if (appointment.startedAt) {
+          appointment.durationSeconds = Math.max(
+            0,
+            Math.round((appointment.endedAt.getTime() - appointment.startedAt.getTime()) / 1000),
+          );
+        }
+      } else if (!data.completed) {
+        // Undoing completion resumes the consultation.
+        appointment.endedAt = null;
+        appointment.durationSeconds = null;
+      }
     }
     if (data.visitType !== undefined) appointment.visitType = data.visitType;
     if (data.paymentType !== undefined) {

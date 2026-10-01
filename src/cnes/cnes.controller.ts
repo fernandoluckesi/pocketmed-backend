@@ -29,4 +29,16 @@ export class CnesController {
     }
     return this.cnesService.search(nome.trim(), uf.trim(), cidade.trim());
   }
+
+  @Get('search/name')
+  @Roles('patient', 'doctor', 'admin', 'secretary')
+  @ApiOperation({
+    summary:
+      'Search the locally-cached CNES establishments by name, across every city — used to autofill the clinic address (including city/state) when creating an appointment',
+  })
+  @ApiResponse({ status: 200, description: 'Matching establishments returned (possibly empty)' })
+  async searchByName(@Query('q') q?: string) {
+    if (!q || q.trim().length < 3) return [];
+    return this.cnesService.searchGlobal(q.trim());
+  }
 }

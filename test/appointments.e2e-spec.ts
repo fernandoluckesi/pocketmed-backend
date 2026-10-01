@@ -181,6 +181,111 @@ describe('Appointments Module (e2e)', () => {
     });
   });
 
+  describe('POST /appointments/:id/start (consultation timer)', () => {
+    let timerAppointmentId: string;
+
+    beforeAll(async () => {
+      const res = await request(app.getHttpServer())
+        .post('/appointments')
+        .set('Authorization', `Bearer ${patientToken}`)
+        .send({
+          doctorId,
+          reason: 'Appointment for timer test',
+          dateTime: futureDate(20),
+        })
+        .expect(201);
+      timerAppointmentId = res.body.id;
+    });
+
+    it('should return 401 without authentication', async () => {
+      await request(app.getHttpServer())
+        .post(`/appointments/${timerAppointmentId}/start`)
+        .expect(401);
+    });
+
+    it('should return 403 when a patient tries to start it', async () => {
+      await request(app.getHttpServer())
+        .post(`/appointments/${timerAppointmentId}/start`)
+        .set('Authorization', `Bearer ${patientToken}`)
+        .expect(403);
+    });
+
+    it('should return 403 when a different doctor tries to start it', async () => {
+      const otherDoctor = await registerDoctor(app, {
+        email: 'appt-other-doctor@test.com',
+        name: 'Dr. Other',
+        crm: '111222/SP',
+      });
+
+      await request(app.getHttpServer())
+        .post(`/appointments/${timerAppointmentId}/start`)
+        .set('Authorization', `Bearer ${otherDoctor.token}`)
+        .expect(403);
+    });
+
+    it('should let the owning doctor start the consultation timer', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/appointments/${timerAppointmentId}/start`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .expect(201);
+
+      expect(res.body.startedAt).toBeTruthy();
+      expect(res.body.endedAt).toBeNull();
+    });
+
+    it('should be idempotent — calling start again keeps the original startedAt', async () => {
+      const list = await request(app.getHttpServer())
+        .get('/appointments')
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .expect(200);
+      const before = list.body.find((a: any) => a.id === timerAppointmentId).startedAt;
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const res = await request(app.getHttpServer())
+        .post(`/appointments/${timerAppointmentId}/start`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .expect(201);
+
+      expect(res.body.startedAt).toBe(before);
+    });
+
+    it('should compute durationSeconds when the doctor finalizes the consultation', async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      const res = await request(app.getHttpServer())
+        .put(`/appointments/${timerAppointmentId}`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({
+          isCompleted: true,
+          doctorFeedback: 'Feedback',
+          doctorInstructions: 'Instructions',
+        })
+        .expect(200);
+
+      expect(res.body.endedAt).toBeTruthy();
+      expect(res.body.durationSeconds).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should clear endedAt/durationSeconds when completion is explicitly undone', async () => {
+      const res = await request(app.getHttpServer())
+        .put(`/appointments/${timerAppointmentId}`)
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .send({ isCompleted: false })
+        .expect(200);
+
+      expect(res.body.endedAt).toBeNull();
+      expect(res.body.durationSeconds).toBeNull();
+    });
+
+    it('should return 404 for a non-existent appointment', async () => {
+      await request(app.getHttpServer())
+        .post('/appointments/00000000-0000-0000-0000-000000000000/start')
+        .set('Authorization', `Bearer ${doctorToken}`)
+        .expect(404);
+    });
+  });
+
   describe('GET /appointments', () => {
     it('should return only the authenticated patient appointments', async () => {
       // Patient 2 creates an appointment
