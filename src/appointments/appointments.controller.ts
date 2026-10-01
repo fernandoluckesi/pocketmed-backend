@@ -54,7 +54,10 @@ export class AppointmentsController {
   }
 
   @Post(':id/start')
-  @Roles('doctor')
+  // Admins are also physicians (see `createByClinicStaff`), so an admin can own
+  // an appointment and must be able to start it. The ownership check lives in
+  // the service — this only widens the role gate.
+  @Roles('doctor', 'admin')
   @ApiOperation({ summary: 'Start the consultation timer (doctor who owns the appointment)' })
   @ApiResponse({ status: 200, description: 'Consultation started' })
   @ApiResponse({ status: 403, description: 'Forbidden' })

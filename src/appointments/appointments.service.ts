@@ -561,10 +561,21 @@ export class AppointmentsService {
       throw new NotFoundException('Appointment not found');
     }
 
+    // An admin is a physician who also manages the clinic, so they can be the
+    // appointment's own doctor — restricting this to the DOCTOR role alone
+    // locked admins out of starting their own consultations. Secretaries stay
+    // out: starting a consultation is a clinical action.
     const isOwnerDoctor =
-      userType === 'doctor' && userRole === ProfessionalRole.DOCTOR && appointment.doctorId === userId;
+      userType === 'doctor' &&
+      (userRole === ProfessionalRole.DOCTOR || userRole === ProfessionalRole.ADMIN) &&
+      appointment.doctorId === userId;
 
     if (!isOwnerDoctor) {
+      await this.auditService.recordAccessDenied(AuditResourceType.APPOINTMENT, {
+        resourceId: id,
+        patientId: appointment.patientId || undefined,
+        reason: 'INSUFFICIENT_PERMISSION',
+      });
       throw new ForbiddenException('Only the doctor who created the appointment can start it');
     }
 
