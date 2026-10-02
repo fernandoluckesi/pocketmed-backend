@@ -1,0 +1,23 @@
+[
+  {
+    "uf": "SP",
+    "codigoMunicipio": 353440,
+    "codigoUf": 35,
+    "nome": "Osasco",
+    "error": "ER_DATA_TOO_LONG"
+  },
+  {
+    "uf": "SE",
+    "codigoMunicipio": 280030,
+    "codigoUf": 28,
+    "nome": "Aracaju",
+    "error": "ER_DATA_TOO_LONG"
+  },
+  {
+    "uf": "SE",
+    "codigoMunicipio": 280740,
+    "codigoUf": 28,
+    "nome": "Tobias Barreto",
+    "error": "ER_DATA_TOO_LONG"
+  }
+]

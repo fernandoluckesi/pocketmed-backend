@@ -112,6 +112,17 @@ export async function syncMunicipioEstablishments(
   return total;
 }
 
+// The CNES source data is dirty: some records carry oversized/garbage values
+// (e.g. a "telefone" with two numbers concatenated — "11- 36811652 / CEL 11 -
+// 99961540", 32 chars). A single such row must not abort the whole sync with
+// ER_DATA_TOO_LONG, so we defensively clamp each string field to its column's
+// length before saving. Columns are also widened in a migration, but this
+// keeps the import resilient regardless of the schema.
+function truncate(value: string | null, max: number): string | null {
+  if (value == null) return null;
+  return value.length > max ? value.slice(0, max) : value;
+}
+
 export async function upsertEstablishment(
   repository: Repository<CnesEstablishment>,
   item: CnesApiEstablishment,
@@ -125,21 +136,24 @@ export async function upsertEstablishment(
     record = repository.create({ codigoCnes });
   }
 
-  record.nomeFantasia = item.nome_fantasia || item.nome_razao_social || 'Estabelecimento sem nome';
-  record.nomeRazaoSocial = item.nome_razao_social || null;
-  record.cnpj = item.numero_cnpj || null;
-  record.cep = item.codigo_cep_estabelecimento || null;
-  record.endereco = item.endereco_estabelecimento || null;
-  record.numero = item.numero_estabelecimento || null;
-  record.bairro = item.bairro_estabelecimento || null;
+  record.nomeFantasia = truncate(
+    item.nome_fantasia || item.nome_razao_social || 'Estabelecimento sem nome',
+    255,
+  ) as string;
+  record.nomeRazaoSocial = truncate(item.nome_razao_social || null, 255);
+  record.cnpj = truncate(item.numero_cnpj || null, 18);
+  record.cep = truncate(item.codigo_cep_estabelecimento || null, 9);
+  record.endereco = truncate(item.endereco_estabelecimento || null, 255);
+  record.numero = truncate(item.numero_estabelecimento || null, 20);
+  record.bairro = truncate(item.bairro_estabelecimento || null, 100);
   record.codigoMunicipio = item.codigo_municipio ?? record.codigoMunicipio;
   // Município name / UF come from IBGE (the CNES API doesn't return them).
   // Keep any previously stored value if the caller didn't provide one.
-  record.municipioNome = meta.municipioNome ?? record.municipioNome ?? null;
+  record.municipioNome = truncate(meta.municipioNome ?? record.municipioNome ?? null, 120);
   record.codigoUf = item.codigo_uf ?? record.codigoUf;
   record.uf = meta.uf ?? record.uf ?? null;
-  record.telefone = item.numero_telefone_estabelecimento || null;
-  record.email = item.endereco_email_estabelecimento || null;
+  record.telefone = truncate(item.numero_telefone_estabelecimento || null, 60);
+  record.email = truncate(item.endereco_email_estabelecimento || null, 255);
   record.latitude = item.latitude_estabelecimento_decimo_grau ?? null;
   record.longitude = item.longitude_estabelecimento_decimo_grau ?? null;
   record.syncedAt = new Date();
