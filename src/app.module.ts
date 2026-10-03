@@ -26,6 +26,8 @@ import { Appointment } from './entities/appointment.entity';
 import { Medication } from './entities/medication.entity';
 import { Exam } from './entities/exam.entity';
 import { Certificate } from './entities/certificate.entity';
+import { Prescription } from './entities/prescription.entity';
+import { Report } from './entities/report.entity';
 import { MedicationCatalog } from './entities/medication-catalog.entity';
 import { DoctorAccessRequest } from './entities/doctor-access-request.entity';
 import { DoctorPermission } from './entities/doctor-permission.entity';
@@ -78,6 +80,8 @@ import { AuditEvent } from './audit/entities/audit-event.entity';
 import { ClinicDoctorInvite } from './clinic-doctor-association/entities/clinic-doctor-invite.entity';
 import { ClinicDoctorAssociationModule } from './clinic-doctor-association/clinic-doctor-association.module';
 import { CertificatesModule } from './certificates/certificates.module';
+import { PrescriptionsModule } from './prescriptions/prescriptions.module';
+import { ReportsModule } from './reports/reports.module';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
 import { AuditContextInterceptor } from './audit/audit-context.interceptor';
 
@@ -158,6 +162,8 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           AuditEvent,
           ClinicDoctorInvite,
           Certificate,
+          Prescription,
+          Report,
           MedicationCatalog,
           SubscriptionPayment,
           CnesEstablishment,
@@ -195,6 +201,8 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     BackofficeModule,
     ClinicDoctorAssociationModule,
     CertificatesModule,
+    PrescriptionsModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [

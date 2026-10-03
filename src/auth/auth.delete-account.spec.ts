@@ -9,9 +9,12 @@ import { Doctor } from '../entities/doctor.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
+import { DoctorPermission } from '../entities/doctor-permission.entity';
+import { DoctorDocument } from '../entities/doctor-document.entity';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * Unit tests for AuthService.deleteAccount focusing on the hard-delete
@@ -107,10 +110,13 @@ describe('AuthService - deleteAccount', () => {
         { provide: getRepositoryToken(ClinicMembership), useValue: {} },
         { provide: getRepositoryToken(ClinicAdminProfile), useValue: {} },
         { provide: getRepositoryToken(Secretary), useValue: {} },
+        { provide: getRepositoryToken(DoctorPermission), useValue: {} },
+        { provide: getRepositoryToken(DoctorDocument), useValue: {} },
         { provide: JwtService, useValue: { sign: jest.fn() } },
         { provide: UploadService, useValue: { deleteFile } },
         { provide: EmailService, useValue: { sendAccountDeletionCode: jest.fn() } },
         { provide: AuditService, useValue: { recordDelete } },
+        { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();

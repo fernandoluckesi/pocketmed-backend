@@ -15,6 +15,10 @@ import { PatientAllergy } from '../entities/patient-allergy.entity';
 import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { Dependent } from '../entities/dependent.entity';
+import { FinancialConvenio } from '../entities/financial-convenio.entity';
+import { Certificate } from '../entities/certificate.entity';
+import { Report } from '../entities/report.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 
 /**
@@ -81,6 +85,10 @@ describe('PatientsService - Surgeries', () => {
         { provide: getRepositoryToken(PatientVaccine), useValue: repoMock() },
         { provide: getRepositoryToken(PatientSurgery), useValue: repoMock() },
         { provide: getRepositoryToken(Dependent), useValue: repoMock() },
+        { provide: getRepositoryToken(FinancialConvenio), useValue: repoMock() },
+        { provide: getRepositoryToken(Certificate), useValue: repoMock() },
+        { provide: getRepositoryToken(Report), useValue: repoMock() },
+        { provide: getRepositoryToken(Clinic), useValue: repoMock() },
         { provide: NotificationsService, useValue: {} },
       ],
     }).compile();

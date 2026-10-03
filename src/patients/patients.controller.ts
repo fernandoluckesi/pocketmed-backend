@@ -673,4 +673,19 @@ export class PatientsController {
       user.activeClinicId,
     );
   }
+
+  // ─── Reports ("laudos") ───────────────────────────────────────────────────
+
+  @Get(':id/reports')
+  @ApiOperation({ summary: 'Get reports ("laudos") issued for a patient' })
+  @ApiResponse({ status: 200, description: 'Return patient reports' })
+  async getReports(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.getReports(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+  }
 }

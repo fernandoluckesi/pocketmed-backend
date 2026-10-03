@@ -20,6 +20,7 @@ import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { Certificate } from '../entities/certificate.entity';
+import { Report } from '../entities/report.entity';
 import { Clinic } from '../entities/clinic.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -102,6 +103,8 @@ export class PatientsService {
     private financialConvenioRepository: Repository<FinancialConvenio>,
     @InjectRepository(Certificate)
     private certificateRepository: Repository<Certificate>,
+    @InjectRepository(Report)
+    private reportRepository: Repository<Report>,
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
     private notificationsService: NotificationsService,
@@ -1818,6 +1821,24 @@ export class PatientsService {
     const patient = await this.findOne(patientId, userId, userType, role, activeClinicId);
     const isDependent = (patient as any).isDependent === true;
     return this.certificateRepository.find({
+      where: isDependent ? { dependentId: patientId } : { patientId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getReports(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
+    // `findOne` enforces the same access rules as every other tab in the
+    // medical record (and logs the access), so the laudos list can't be a
+    // way around them.
+    const patient = await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const isDependent = (patient as any).isDependent === true;
+    return this.reportRepository.find({
       where: isDependent ? { dependentId: patientId } : { patientId },
       order: { createdAt: 'DESC' },
     });
