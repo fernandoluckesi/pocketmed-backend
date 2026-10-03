@@ -66,7 +66,10 @@ export class CnesEstablishment {
   @Column({ type: 'varchar', length: 2, nullable: true })
   uf: string | null;
 
-  @Column({ type: 'varchar', length: 30, nullable: true })
+  // Widened from 30 → 60: CNES source data has dirty phone values with two
+  // numbers concatenated (e.g. "11- 36811652 / CEL 11 - 99961540", 32 chars)
+  // that overflowed varchar(30) and aborted the national import.
+  @Column({ type: 'varchar', length: 60, nullable: true })
   telefone: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
