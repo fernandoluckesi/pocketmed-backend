@@ -8,6 +8,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { RespondAppointmentDto } from './dto/respond-appointment.dto';
+import {
+  sanitizeAppointmentForViewer,
+  sanitizeAppointmentsForViewer,
+} from '../common/sanitize-appointment';
 
 @ApiTags('Appointments')
 @Controller('appointments')
@@ -22,20 +26,27 @@ export class AppointmentsController {
   @ApiResponse({ status: 403, description: 'Forbidden - No permission' })
   @ApiResponse({ status: 404, description: 'Patient or Dependent not found' })
   async create(@CurrentUser() user: any, @Body() dto: CreateAppointmentDto) {
-    return this.appointmentsService.create(
+    const appointment = await this.appointmentsService.create(
       user.userId,
       user.type,
       user.role,
       user.activeClinicId,
       dto,
     );
+    return sanitizeAppointmentForViewer(appointment, user.type);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all appointments for current user' })
   @ApiResponse({ status: 200, description: 'Return appointments' })
   async findAll(@CurrentUser() user: any) {
-    return this.appointmentsService.findAll(user.userId, user.type, user.role, user.activeClinicId);
+    const appointments = await this.appointmentsService.findAll(
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+    return sanitizeAppointmentsForViewer(appointments, user.type);
   }
 
   @Get(':id')
@@ -44,13 +55,14 @@ export class AppointmentsController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 404, description: 'Appointment not found' })
   async findOne(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.appointmentsService.findOne(
+    const appointment = await this.appointmentsService.findOne(
       id,
       user.userId,
       user.type,
       user.role,
       user.activeClinicId,
     );
+    return sanitizeAppointmentForViewer(appointment, user.type);
   }
 
   @Post(':id/start')
@@ -76,7 +88,7 @@ export class AppointmentsController {
     @CurrentUser() user: any,
     @Body() dto: UpdateAppointmentDto,
   ) {
-    return this.appointmentsService.update(
+    const updated = await this.appointmentsService.update(
       id,
       user.userId,
       user.type,
@@ -84,6 +96,7 @@ export class AppointmentsController {
       dto,
       user.activeClinicId,
     );
+    return sanitizeAppointmentForViewer(updated, user.type);
   }
 
   @Post(':id/respond')
@@ -97,7 +110,16 @@ export class AppointmentsController {
     @Body() dto: RespondAppointmentDto,
     @CurrentUser() user: any,
   ) {
-    return this.appointmentsService.respondToAppointment(id, dto.status, user.userId, user.type);
+    const result = await this.appointmentsService.respondToAppointment(
+      id,
+      dto.status,
+      user.userId,
+      user.type,
+    );
+    return {
+      ...result,
+      appointment: sanitizeAppointmentForViewer(result.appointment, user.type),
+    };
   }
 
   @Delete(':id')

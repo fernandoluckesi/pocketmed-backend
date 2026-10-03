@@ -4,6 +4,10 @@ import { PatientsService, SurgeryData } from './patients.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequireDoctorVerified } from '../auth/decorators/require-doctor-verified.decorator';
+import {
+  sanitizeAppointmentForViewer,
+  sanitizeAppointmentsForViewer,
+} from '../common/sanitize-appointment';
 
 @ApiTags('Patients')
 @Controller('patients')
@@ -92,7 +96,7 @@ export class PatientsController {
     @Query('endDate') endDate: string,
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.getConsultations(
+    const consultations = await this.patientsService.getConsultations(
       id,
       user.userId,
       user.type,
@@ -101,6 +105,7 @@ export class PatientsController {
       startDate,
       endDate,
     );
+    return sanitizeAppointmentsForViewer(consultations, user.type);
   }
 
   @Get(':id/medications')
@@ -149,7 +154,7 @@ export class PatientsController {
     },
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.createConsultation(
+    const consultation = await this.patientsService.createConsultation(
       id,
       user.userId,
       user.type,
@@ -157,6 +162,7 @@ export class PatientsController {
       user.activeClinicId,
       body,
     );
+    return sanitizeAppointmentForViewer(consultation, user.type);
   }
 
   @Put(':id/consultations/:consultationId')
@@ -179,7 +185,7 @@ export class PatientsController {
     },
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.updateConsultation(
+    const consultation = await this.patientsService.updateConsultation(
       id,
       consultationId,
       user.userId,
@@ -188,6 +194,7 @@ export class PatientsController {
       user.activeClinicId,
       body,
     );
+    return sanitizeAppointmentForViewer(consultation, user.type);
   }
 
   @Post(':id/consultations/:consultationId/approve')
@@ -199,7 +206,13 @@ export class PatientsController {
     @Body() body: { approved: boolean },
     @CurrentUser() user: any,
   ) {
-    return this.patientsService.approveConsultation(id, consultationId, user.userId, body.approved);
+    const consultation = await this.patientsService.approveConsultation(
+      id,
+      consultationId,
+      user.userId,
+      body.approved,
+    );
+    return sanitizeAppointmentForViewer(consultation, user.type);
   }
 
   @Post(':id/consultations/:consultationId/resend')
