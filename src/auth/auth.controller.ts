@@ -26,6 +26,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
 import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
+import { RequestDataDeletionDto } from './dto/request-data-deletion.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -330,5 +331,23 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Verification code sent to email' })
   async requestAccountDeletion(@CurrentUser() user: any) {
     return this.authService.requestAccountDeletion(user.userId, user.type);
+  }
+
+  /**
+   * Public deletion request, backing the web form linked in Google Play's
+   * Data Safety section — Google requires that URL to work without signing
+   * in. It records and acknowledges the request; it does not delete anything
+   * on its own (a public endpoint can't prove who the requester is).
+   */
+  @Public()
+  @Post('request-data-deletion')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Public account/data deletion request (Google Play Data Safety URL)',
+  })
+  @ApiResponse({ status: 200, description: 'Request recorded; receipt emailed' })
+  @ApiResponse({ status: 400, description: 'Invalid payload' })
+  async requestDataDeletion(@Body() dto: RequestDataDeletionDto) {
+    return this.authService.requestDataDeletion(dto);
   }
 }
