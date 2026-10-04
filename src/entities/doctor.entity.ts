@@ -77,8 +77,30 @@ export class Doctor {
   @Column({ type: 'varchar', length: 100 })
   specialty: string;
 
+  /**
+   * Canonical "number/UF" form (e.g. "123456/SP"), derived from
+   * `crmNumber`/`crmUf` on every write.
+   *
+   * @deprecated as a source of truth — read `crmNumber`/`crmUf` instead.
+   * Kept and kept-in-sync because mobile and backoffice are deployed
+   * independently and still read this column; dropping it would break them
+   * mid-rollout. Historically it held several incompatible shapes
+   * ("123456/SP", "SP-123456", "CRM-SP-00001"), which made uniqueness checks
+   * and search unreliable — see `common/crm.util.ts`.
+   */
   @Column({ type: 'varchar', length: 20 })
   crm: string;
+
+  /** Registration number, digits only (leading zeros preserved). Source of
+   * truth, together with `crmUf`. Nullable because synthetic accounts
+   * (secretaries) have no real CRM. */
+  @Column({ type: 'varchar', length: 15, nullable: true })
+  crmNumber: string | null;
+
+  /** Issuing state (2-letter UF, uppercase). The CFM web service queries by
+   * number + UF, so these must be separately addressable. */
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  crmUf: string | null;
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   rqe: string;

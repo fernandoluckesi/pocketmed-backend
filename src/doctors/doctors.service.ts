@@ -13,6 +13,7 @@ import { DoctorAccessRequest, AccessRequestStatus } from '../entities/doctor-acc
 import { DoctorPermission } from '../entities/doctor-permission.entity';
 import { RequestAccessDto } from './dto/request-access.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { parseCrm } from '../common/crm.util';
 
 @Injectable()
 export class DoctorsService {
@@ -39,6 +40,8 @@ export class DoctorsService {
         'gender',
         'specialty',
         'crm',
+        'crmNumber',
+        'crmUf',
         'phone',
         'birthDate',
         'profileImage',
@@ -58,6 +61,8 @@ export class DoctorsService {
         'gender',
         'specialty',
         'crm',
+        'crmNumber',
+        'crmUf',
         'phone',
         'birthDate',
         'profileImage',
@@ -74,26 +79,25 @@ export class DoctorsService {
   }
 
   async findByCrm(crm: string, state: string) {
-    const normalizedCrm = String(crm || '').trim();
-    const normalizedState = String(state || '')
-      .trim()
-      .toUpperCase();
+    // Normalizes through the shared parser so callers can pass the number
+    // alone ("123456") or an already-combined string ("SP-123456") — both
+    // resolve to the same structured pair.
+    const parsed = parseCrm(crm);
+    const normalizedCrm = parsed.number || String(crm || '').trim();
+    const normalizedState = (parsed.uf || String(state || '').trim()).toUpperCase();
 
     if (!normalizedCrm || !normalizedState) {
       throw new BadRequestException('Both crm and state are required');
     }
 
-    // Support both formats: "STATE-CRM" (mobile format) and "CRM/STATE" (legacy format)
-    const formatDash = `${normalizedState}-${normalizedCrm}`;
-    const formatSlash = `${normalizedCrm}/${normalizedState}`;
-
-    console.log(`Searching for doctor with CRM: ${formatDash} or ${formatSlash}`);
-
+    // Matched on the structured columns — no more guessing between the
+    // "SP-123456" and "123456/SP" shapes, which is what the old double-OR
+    // query existed to work around.
     const doctor = await this.doctorRepository
       .createQueryBuilder('doctor')
-      .where('doctor.crm = :formatDash OR doctor.crm = :formatSlash', {
-        formatDash,
-        formatSlash,
+      .where('doctor.crmNumber = :crmNumber AND doctor.crmUf = :crmUf', {
+        crmNumber: normalizedCrm,
+        crmUf: normalizedState,
       })
       .select([
         'doctor.id',
@@ -102,6 +106,8 @@ export class DoctorsService {
         'doctor.gender',
         'doctor.specialty',
         'doctor.crm',
+        'doctor.crmNumber',
+        'doctor.crmUf',
         'doctor.phone',
         'doctor.birthDate',
         'doctor.profileImage',
@@ -123,12 +129,21 @@ export class DoctorsService {
     const query = String(name || '').trim();
     if (query.length < 4) return [];
 
+    // Also matches `crmNumber` directly, so typing just the digits finds the
+    // doctor regardless of how the full CRM happens to be formatted.
     return this.doctorRepository
       .createQueryBuilder('doctor')
-      .where('doctor.name LIKE :query OR doctor.crm LIKE :query', {
+      .where('doctor.name LIKE :query OR doctor.crm LIKE :query OR doctor.crmNumber LIKE :query', {
         query: `%${query}%`,
       })
-      .select(['doctor.id', 'doctor.name', 'doctor.specialty', 'doctor.crm'])
+      .select([
+        'doctor.id',
+        'doctor.name',
+        'doctor.specialty',
+        'doctor.crm',
+        'doctor.crmNumber',
+        'doctor.crmUf',
+      ])
       .orderBy('doctor.name', 'ASC')
       .take(30)
       .getMany();

@@ -11,6 +11,7 @@ import {
   Matches,
   ValidateIf,
 } from 'class-validator';
+import { IsBrazilianUf } from '../../common/validators/is-brazilian-uf.validator';
 
 export class CreateClinicDto {
   // ── Dados da Clínica ──────────────────────────────────────────────────────
@@ -131,10 +132,28 @@ export class CreateClinicDto {
   @IsDateString()
   birthDate: string;
 
-  @ApiProperty({ example: '198850/SP' })
+  /** @deprecated Prefer `crmNumber` + `crmUf`. Still accepted for clients
+   * that haven't migrated (see `common/crm.util.ts`). */
+  @ApiProperty({
+    example: '198850/SP',
+    required: false,
+    description: 'Formato legado. Prefira crmNumber + crmUf.',
+  })
   @IsString()
-  @IsNotEmpty()
-  crm: string;
+  @IsOptional()
+  crm?: string;
+
+  @ApiProperty({ example: '198850', required: false })
+  @IsString()
+  @IsOptional()
+  @Matches(/^\d{1,15}$/, { message: 'crmNumber deve conter apenas dígitos' })
+  crmNumber?: string;
+
+  @ApiProperty({ example: 'SP', required: false })
+  @IsString()
+  @IsOptional()
+  @IsBrazilianUf()
+  crmUf?: string;
 
   @ApiProperty({ example: '12345', required: false })
   @IsString()
