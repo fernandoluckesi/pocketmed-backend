@@ -19,12 +19,16 @@ import { ProfessionalRole } from '../auth/professional-role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import { RespondInviteDto } from './dto/respond-invite.dto';
+import { parseCrm } from '../common/crm.util';
 
 export interface DoctorSearchResult {
   id: string;
   name: string;
   specialty: string;
+  /** Canonical "number/UF" string, for clients still reading a single field. */
   crm: string;
+  crmNumber: string | null;
+  crmUf: string | null;
   profileImage: string | null;
   /** True when the doctor already has an active membership in the requesting clinic. */
   isClinicMember: boolean;
@@ -294,14 +298,16 @@ export class ClinicDoctorAssociationService {
       throw new BadRequestException('CRM e Estado são obrigatórios');
     }
 
-    // Normalize: build both possible stored formats
-    const upperState = state.toUpperCase();
-    const formatDash = `${upperState}-${crm}`; // "SP-123456"
-    const formatSlash = `${crm}/${upperState}`; // "123456/SP"
+    // Matched on the structured columns. This used to build both legacy
+    // shapes ("SP-123456" and "123456/SP") and query for either, because the
+    // stored format depended on which client created the account.
+    const parsed = parseCrm(crm);
+    const crmNumber = parsed.number || String(crm).trim();
+    const crmUf = (parsed.uf || state).toUpperCase();
 
     const doctor = await this.doctorRepository.findOne({
-      where: [{ crm: formatDash }, { crm: formatSlash }],
-      select: ['id', 'name', 'specialty', 'crm', 'profileImage'],
+      where: { crmNumber, crmUf },
+      select: ['id', 'name', 'specialty', 'crm', 'crmNumber', 'crmUf', 'profileImage'],
     });
 
     if (!doctor) {
@@ -327,6 +333,8 @@ export class ClinicDoctorAssociationService {
       name: doctor.name,
       specialty: doctor.specialty,
       crm: doctor.crm,
+      crmNumber: doctor.crmNumber,
+      crmUf: doctor.crmUf,
       profileImage: doctor.profileImage,
       isClinicMember,
     };

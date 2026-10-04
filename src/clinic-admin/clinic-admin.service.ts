@@ -22,6 +22,7 @@ import { EmailService } from '../email/email.service';
 import { ListClinicMembersQueryDto } from './dto/list-clinic-members.query.dto';
 import { UpdateClinicMemberRoleDto } from './dto/update-clinic-member-role.dto';
 import { UpdateRoleProfileDto } from './dto/update-role-profile.dto';
+import { resolveCrmInput } from '../common/crm.util';
 
 @Injectable()
 export class ClinicAdminService {
@@ -537,7 +538,12 @@ export class ClinicAdminService {
         gender: 'not_informed',
         birthDate: new Date('1990-01-01'),
         specialty: 'Secretaria',
+        // Synthetic placeholder: a secretary has no CRM. The structured
+        // columns stay NULL so this never looks like a real registration to
+        // a lookup or to a future CFM validation.
         crm: `SEC${suffix}`,
+        crmNumber: null,
+        crmUf: null,
         cpf: `000.000.${suffix.slice(0, 3)}-${suffix.slice(3, 5)}`,
         profileImage: null,
         type: 'doctor',
@@ -641,6 +647,13 @@ export class ClinicAdminService {
     const verificationCode = this.generateVerificationCode();
     const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
+    const resolvedCrm = resolveCrmInput(dto);
+    if (!resolvedCrm.crmNumber || !resolvedCrm.crmUf) {
+      throw new BadRequestException(
+        'Informe o CRM do médico: crmNumber + crmUf (ou crm no formato "123456/SP").',
+      );
+    }
+
     const doctor = this.doctorRepository.create({
       name: dto.name,
       email: normalizedEmail,
@@ -649,7 +662,9 @@ export class ClinicAdminService {
       cpf: dto.cpf,
       phone: dto.phone,
       birthDate: new Date(dto.birthDate),
-      crm: dto.crm,
+      crm: resolvedCrm.crm,
+      crmNumber: resolvedCrm.crmNumber,
+      crmUf: resolvedCrm.crmUf,
       profileImage: dto.profileImage || null,
       type: 'doctor',
       isShadow: true,

@@ -298,7 +298,10 @@ export class AuthController {
       gender?: string;
       birthDate?: string;
       specialty?: string;
+      /** @deprecated Prefer `crmNumber` + `crmUf`. */
       crm?: string;
+      crmNumber?: string;
+      crmUf?: string;
       rqe?: string;
       cpf?: string;
       verificationCode?: string;

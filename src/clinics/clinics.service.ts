@@ -30,6 +30,7 @@ import { StripeService } from '../payments/stripe.service';
 import { MercadoPagoService } from '../payments/mercadopago.service';
 import { PaymentsService } from '../payments/payments.service';
 import { buildExternalReference } from '../payments/mercadopago-reference';
+import { resolveCrmInput } from '../common/crm.util';
 
 /** "Active" patient: had an appointment (created or last touched) with the
  * clinic in the last 12 months — matches the plan's definition, so a clinic
@@ -79,8 +80,21 @@ export class ClinicsService {
     });
     if (existingPhone) conflicts.push('phone');
 
+    // Resolved first so the uniqueness check compares the structured pair,
+    // not the raw string — otherwise the same CRM sent in a different shape
+    // reads as a different doctor.
+    const resolvedCrm = resolveCrmInput(dto);
+    if (!resolvedCrm.crmNumber) {
+      throw new BadRequestException(
+        'Informe o CRM do responsável: crmNumber + crmUf (ou crm no formato "123456/SP").',
+      );
+    }
+    if (!resolvedCrm.crmUf) {
+      throw new BadRequestException('Informe a UF do CRM (crmUf), ex: SP.');
+    }
+
     const existingCrm = await this.doctorRepository.findOne({
-      where: { crm: dto.crm },
+      where: { crmNumber: resolvedCrm.crmNumber, crmUf: resolvedCrm.crmUf },
     });
     if (existingCrm) conflicts.push('crm');
 
@@ -134,7 +148,9 @@ export class ClinicsService {
         cpf: dto.cpf,
         phone: dto.phone,
         birthDate: new Date(dto.birthDate),
-        crm: dto.crm,
+        crm: resolvedCrm.crm,
+        crmNumber: resolvedCrm.crmNumber,
+        crmUf: resolvedCrm.crmUf,
         rqe: dto.rqe || null,
         profileImage: profileImageUrl,
         type: 'doctor',

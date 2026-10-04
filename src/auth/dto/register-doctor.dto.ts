@@ -9,6 +9,7 @@ import {
   Matches,
 } from 'class-validator';
 import { IsCpf } from '../../common/validators/is-cpf.validator';
+import { IsBrazilianUf } from '../../common/validators/is-brazilian-uf.validator';
 
 export class RegisterDoctorDto {
   @ApiProperty({ example: 'Dr. Fernando Luckesi' })
@@ -56,10 +57,31 @@ export class RegisterDoctorDto {
   @IsDateString()
   birthDate: string;
 
-  @ApiProperty({ example: '198850/SP' })
+  /**
+   * @deprecated Prefer `crmNumber` + `crmUf`. Still accepted (and parsed
+   * server-side) because mobile and the legacy web register screen deploy
+   * independently and keep sending the combined string.
+   */
+  @ApiProperty({
+    example: '198850/SP',
+    required: false,
+    description: 'Formato legado. Prefira crmNumber + crmUf.',
+  })
   @IsString()
-  @IsNotEmpty()
-  crm: string;
+  @IsOptional()
+  crm?: string;
+
+  @ApiProperty({ example: '198850', required: false })
+  @IsString()
+  @IsOptional()
+  @Matches(/^\d{1,15}$/, { message: 'crmNumber deve conter apenas dígitos' })
+  crmNumber?: string;
+
+  @ApiProperty({ example: 'SP', required: false })
+  @IsString()
+  @IsOptional()
+  @IsBrazilianUf()
+  crmUf?: string;
 
   @ApiProperty({ example: '12345', required: false })
   @IsString()

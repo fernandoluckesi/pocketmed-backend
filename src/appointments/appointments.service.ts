@@ -14,6 +14,7 @@ import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { Clinic } from '../entities/clinic.entity';
 import { DoctorsService } from '../doctors/doctors.service';
+import { canonicalizeCrm, parseCrm } from '../common/crm.util';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import { PatientsService } from 'src/patients/patients.service';
@@ -369,9 +370,19 @@ export class AppointmentsService {
         );
       }
 
-      const doctor = await this.doctorRepository.findOne({
-        where: { crm: dto.doctorCrm },
-      });
+      // Resolved through the shared parser so an appointment created with
+      // "SP-123456" still matches a doctor stored as "123456/SP" — these were
+      // previously treated as different doctors, silently producing an
+      // appointment with no `doctorId` link.
+      const parsedCrm = parseCrm(dto.doctorCrm);
+      const doctor = parsedCrm.number
+        ? await this.doctorRepository.findOne({
+            where: {
+              crmNumber: parsedCrm.number,
+              ...(parsedCrm.uf ? { crmUf: parsedCrm.uf } : {}),
+            },
+          })
+        : null;
 
       if (doctor) {
         doctorId = doctor.id;
@@ -379,9 +390,11 @@ export class AppointmentsService {
         doctorName = doctor.name;
         doctorSpecialty = doctor.specialty;
       } else {
-        // Doctor not in the database — save external doctor data without doctorId
+        // Doctor not in the database — save external doctor data without
+        // doctorId, but store the CRM in canonical form so the snapshot is
+        // consistent with everything else.
         doctorId = null;
-        doctorCrm = dto.doctorCrm;
+        doctorCrm = canonicalizeCrm(dto.doctorCrm);
         doctorName = dto.doctorName;
         doctorSpecialty = dto.doctorSpecialty;
       }

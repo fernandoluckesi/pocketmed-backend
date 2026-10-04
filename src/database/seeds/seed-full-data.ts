@@ -45,7 +45,8 @@ async function main() {
       cpf: '12345678901',
       phone: '11987654321',
       birthDate: '1980-05-15',
-      crm: '123456/SP',
+      crmNumber: '123456',
+      crmUf: 'SP',
     },
   });
   const doctorToken = doctorRes.token;

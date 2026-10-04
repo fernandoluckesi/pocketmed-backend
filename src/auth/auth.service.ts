@@ -28,6 +28,7 @@ import { DoctorDocument } from '../entities/doctor-document.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProfessionalRole } from './professional-role.enum';
 import { normalizeCpf, isValidCpf } from '../common/validators/cpf.util';
+import { resolveCrmInput } from '../common/crm.util';
 
 type AuthUser = Patient | Doctor;
 
@@ -307,8 +308,23 @@ export class AuthService {
       conflicts.push('phone');
     }
 
+    // Accepts either the new separate fields or the legacy combined string,
+    // and resolves both into the canonical triple before any comparison.
+    const resolvedCrm = resolveCrmInput(dto);
+    if (!resolvedCrm.crmNumber) {
+      throw new BadRequestException(
+        'Informe o CRM: crmNumber + crmUf (ou o campo crm no formato "123456/SP").',
+      );
+    }
+    if (!resolvedCrm.crmUf) {
+      throw new BadRequestException('Informe a UF do CRM (crmUf), ex: SP.');
+    }
+
+    // Matched on the structured pair, not on the raw string. Previously
+    // "123456/SP" and "SP-123456" compared as different values, so the same
+    // doctor could register twice under two formats.
     const existingCrm = await this.doctorRepository.findOne({
-      where: { crm: dto.crm },
+      where: { crmNumber: resolvedCrm.crmNumber, crmUf: resolvedCrm.crmUf },
     });
     if (existingCrm) {
       conflicts.push('crm');
@@ -362,7 +378,9 @@ export class AuthService {
         cpf: doctorCpf,
         phone: dto.phone,
         birthDate: new Date(dto.birthDate),
-        crm: dto.crm,
+        crm: resolvedCrm.crm,
+        crmNumber: resolvedCrm.crmNumber,
+        crmUf: resolvedCrm.crmUf,
         rqe: dto.rqe || null,
         profileImage: profileImageUrl,
         type: 'doctor',
@@ -1676,6 +1694,8 @@ export class AuthService {
       birthDate?: string;
       specialty?: string;
       crm?: string;
+      crmNumber?: string;
+      crmUf?: string;
       rqe?: string;
       cpf?: string;
       verificationCode?: string;
@@ -1692,6 +1712,8 @@ export class AuthService {
       data.birthDate ||
       data.specialty ||
       data.crm ||
+      data.crmNumber ||
+      data.crmUf ||
       data.cpf !== undefined ||
       data.rqe !== undefined;
 
@@ -1751,9 +1773,33 @@ export class AuthService {
        * review instead of silently keeping an "approved" badge for data nobody
        * checked. Only applied when the value actually changes.
        */
+      // Resolve the incoming CRM (separate fields or legacy string) before
+      // comparing, so re-sending the same registration in a different shape
+      // isn't mistaken for a credential change — that would needlessly send
+      // an approved doctor back to manual review.
+      const crmProvided = !!(data.crmNumber || data.crmUf || data.crm);
+      const nextCrm = crmProvided
+        ? resolveCrmInput({
+            crm: data.crm,
+            // Fall back to the stored values so a partial update (only the UF,
+            // say) doesn't wipe the other half.
+            crmNumber: data.crmNumber ?? doctor.crmNumber,
+            crmUf: data.crmUf ?? doctor.crmUf,
+          })
+        : null;
+
+      if (nextCrm && crmProvided) {
+        if (!nextCrm.crmNumber) {
+          throw new BadRequestException('CRM inválido: informe crmNumber + crmUf.');
+        }
+        if (!nextCrm.crmUf) {
+          throw new BadRequestException('Informe a UF do CRM (crmUf), ex: SP.');
+        }
+      }
+
       const credentialChanges: Record<string, { before?: unknown; after?: unknown }> = {};
-      if (data.crm && data.crm !== doctor.crm) {
-        credentialChanges.crm = { before: doctor.crm, after: data.crm };
+      if (nextCrm && (nextCrm.crmNumber !== doctor.crmNumber || nextCrm.crmUf !== doctor.crmUf)) {
+        credentialChanges.crm = { before: doctor.crm, after: nextCrm.crm };
       }
       if (data.rqe !== undefined && (data.rqe || null) !== (doctor.rqe || null)) {
         credentialChanges.rqe = { before: doctor.rqe, after: data.rqe || null };
@@ -1768,7 +1814,11 @@ export class AuthService {
       if (data.gender) doctor.gender = data.gender;
       if (data.birthDate) doctor.birthDate = new Date(data.birthDate);
       if (data.specialty) doctor.specialty = data.specialty;
-      if (data.crm) doctor.crm = data.crm;
+      if (nextCrm) {
+        doctor.crm = nextCrm.crm;
+        doctor.crmNumber = nextCrm.crmNumber;
+        doctor.crmUf = nextCrm.crmUf;
+      }
       if (data.rqe !== undefined) doctor.rqe = data.rqe || null;
       if (normalizedCpf) doctor.cpf = normalizedCpf;
       if (profileImageUrl) doctor.profileImage = profileImageUrl;

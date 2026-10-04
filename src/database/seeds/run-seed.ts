@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
 import AppDataSource from '../data-source';
+import { resolveCrmInput } from '../../common/crm.util';
 
 /**
  * Seed completo — replica exatamente o seed-full-data.sql em TypeScript.
@@ -234,8 +235,11 @@ async function run() {
   const doctorIds: string[] = [];
 
   for (const doc of DOCTORS) {
+    // Seeds go through the same resolver as the API so seeded data can never
+    // reintroduce the format drift the split was meant to fix.
+    const crm = resolveCrmInput({ crm: doc.crm });
     await qr.query(
-      `INSERT INTO doctors (id, name, email, password, gender, phone, birthDate, specialty, crm, cpf, type, isShadow, emailVerified, verificationStatus, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, 'doctor', 0, 1, 'APPROVED', NOW(), NOW())`,
+      `INSERT INTO doctors (id, name, email, password, gender, phone, birthDate, specialty, crm, crmNumber, crmUf, cpf, type, isShadow, emailVerified, verificationStatus, createdAt, updatedAt) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'doctor', 0, 1, 'APPROVED', NOW(), NOW())`,
       [
         doc.name,
         doc.email,
@@ -244,7 +248,9 @@ async function run() {
         doc.phone,
         doc.birthDate,
         doc.specialty,
-        doc.crm,
+        crm.crm,
+        crm.crmNumber,
+        crm.crmUf,
         doc.cpf,
       ],
     );
