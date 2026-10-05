@@ -9,6 +9,7 @@ import { SignatureStatus } from './signature/signature.types';
 export const DOCUMENT_FOLDERS = {
   prescriptions: 'prescriptions',
   reports: 'reports',
+  examRequests: 'exam-requests',
   medicalDocuments: 'medical-documents',
 } as const;
 
@@ -57,7 +58,7 @@ export type DocumentSection =
     };
 
 export interface MedicalDocumentSpec {
-  documentType: 'prescription' | 'report';
+  documentType: 'prescription' | 'report' | 'exam';
   title: string;
   doctor: {
     name: string;

@@ -28,6 +28,7 @@ import { Exam } from './entities/exam.entity';
 import { Certificate } from './entities/certificate.entity';
 import { Prescription } from './entities/prescription.entity';
 import { Report } from './entities/report.entity';
+import { ExamRequest } from './entities/exam-request.entity';
 import { MedicationCatalog } from './entities/medication-catalog.entity';
 import { DoctorAccessRequest } from './entities/doctor-access-request.entity';
 import { DoctorPermission } from './entities/doctor-permission.entity';
@@ -82,6 +83,7 @@ import { ClinicDoctorAssociationModule } from './clinic-doctor-association/clini
 import { CertificatesModule } from './certificates/certificates.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { ReportsModule } from './reports/reports.module';
+import { ExamRequestsModule } from './exam-requests/exam-requests.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { throttlerConfig } from './common/throttler.config';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
@@ -166,6 +168,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           Certificate,
           Prescription,
           Report,
+          ExamRequest,
           MedicationCatalog,
           SubscriptionPayment,
           CnesEstablishment,
@@ -205,6 +208,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     CertificatesModule,
     PrescriptionsModule,
     ReportsModule,
+    ExamRequestsModule,
     // Registered module-wide but deliberately NOT as a global guard: routes
     // opt in with `@UseGuards(ThrottlerGuard)` + `@Throttle(...)`. See
     // `common/throttler.config.ts` for why.

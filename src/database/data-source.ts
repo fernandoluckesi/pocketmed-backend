@@ -41,6 +41,7 @@ import { CnesEstablishment } from '../entities/cnes-establishment.entity';
 import { Certificate } from '../entities/certificate.entity';
 import { Prescription } from '../entities/prescription.entity';
 import { Report } from '../entities/report.entity';
+import { ExamRequest } from '../entities/exam-request.entity';
 
 /**
  * Railway exposes a ready-to-use connection string (MYSQL_URL / MYSQL_PUBLIC_URL).
@@ -120,6 +121,7 @@ const AppDataSource = new DataSource({
     Certificate,
     Prescription,
     Report,
+    ExamRequest,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,
