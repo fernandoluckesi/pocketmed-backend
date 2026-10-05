@@ -30,7 +30,7 @@ export class ExamsController {
   constructor(private examsService: ExamsService) {}
 
   @Post()
-  @Roles('doctor', 'patient')
+  @Roles('doctor', 'admin', 'patient')
   @UseInterceptors(FileInterceptor('resultFile'))
   @ApiOperation({ summary: 'Create exam (doctor or patient owner)' })
   @ApiConsumes('multipart/form-data')
@@ -62,7 +62,7 @@ export class ExamsController {
   }
 
   @Put(':id')
-  @Roles('doctor', 'patient')
+  @Roles('doctor', 'admin', 'patient')
   @UseInterceptors(FileInterceptor('resultFile'))
   @ApiOperation({ summary: 'Update exam (doctor creator or patient owner)' })
   @ApiConsumes('multipart/form-data')
@@ -79,7 +79,7 @@ export class ExamsController {
   }
 
   @Put(':id/result')
-  @Roles('doctor', 'patient')
+  @Roles('doctor', 'admin', 'patient')
   @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Submit exam result with files' })
   @ApiConsumes('multipart/form-data')
@@ -94,7 +94,7 @@ export class ExamsController {
   }
 
   @Delete(':id')
-  @Roles('doctor', 'patient')
+  @Roles('doctor', 'admin', 'patient')
   @ApiOperation({ summary: 'Delete exam (doctor creator or patient owner)' })
   @ApiResponse({ status: 200, description: 'Exam deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })

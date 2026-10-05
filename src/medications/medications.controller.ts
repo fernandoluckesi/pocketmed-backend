@@ -16,7 +16,7 @@ export class MedicationsController {
   constructor(private medicationsService: MedicationsService) {}
 
   @Post()
-  @Roles('doctor', 'patient')
+  @Roles('doctor', 'admin', 'patient')
   @ApiOperation({ summary: 'Create medication (doctor or patient owner)' })
   @ApiResponse({ status: 201, description: 'Medication created successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - No permission' })
@@ -42,7 +42,7 @@ export class MedicationsController {
   }
 
   @Put(':id')
-  @Roles('doctor', 'patient')
+  @Roles('doctor', 'admin', 'patient')
   @ApiOperation({ summary: 'Update medication (doctor creator or patient owner)' })
   @ApiResponse({ status: 200, description: 'Medication updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
@@ -56,7 +56,7 @@ export class MedicationsController {
   }
 
   @Delete(':id')
-  @Roles('doctor', 'patient')
+  @Roles('doctor', 'admin', 'patient')
   @ApiOperation({ summary: 'Delete medication (doctor creator or patient owner)' })
   @ApiResponse({ status: 200, description: 'Medication deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
