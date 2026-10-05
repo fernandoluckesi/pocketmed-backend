@@ -105,6 +105,41 @@ export class PrescriptionsController {
     return this.prescriptionsService.cancel(id, user.userId);
   }
 
+  @Post(':id/send')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Send the generated PDF to the patient without a digital signature' })
+  @ApiResponse({ status: 201, description: 'Prescription sent' })
+  @ApiResponse({ status: 409, description: 'No PDF generated yet' })
+  async send(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.prescriptionsService.send(id, user.userId);
+  }
+
+  @Post(':id/request-signature')
+  @Roles('doctor', 'admin')
+  @ApiOperation({
+    summary:
+      'Start a digital-signature request — returns the URL to open (new tab) for the doctor to sign',
+  })
+  @ApiResponse({ status: 201, description: 'Signature request created' })
+  async requestSignature(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.prescriptionsService.requestSignature(id, user.userId);
+  }
+
+  @Post(':id/confirm-signature')
+  @Roles('doctor', 'admin')
+  @ApiOperation({
+    summary:
+      'Called once the signer finishes on the signing page — marks the prescription signed and sends it to the patient',
+  })
+  @ApiResponse({ status: 201, description: 'Prescription signed and sent' })
+  async confirmSignature(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: { externalSignatureId: string },
+  ) {
+    return this.prescriptionsService.confirmSignature(id, user.userId, body.externalSignatureId);
+  }
+
   @Get(':id/pdf')
   @Roles('doctor', 'admin')
   @Redirect()

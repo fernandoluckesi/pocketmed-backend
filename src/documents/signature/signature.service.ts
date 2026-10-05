@@ -1,6 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { SIGNATURE_PROVIDER, SignatureProvider } from './signature-provider.interface';
-import { ProviderStatus, SignDocumentInput, SignatureResult } from './signature.types';
+import {
+  PendingSignatureInfo,
+  ProviderStatus,
+  RequestSignatureInput,
+  SignatureRequestResult,
+  SignatureResult,
+  SignDocumentInput,
+} from './signature.types';
 
 /**
  * Facade in front of whichever `SignatureProvider` is bound in
@@ -22,5 +29,17 @@ export class SignatureService {
 
   getSignatureStatus(externalSignatureId: string): Promise<SignatureResult> {
     return this.provider.getSignatureStatus(externalSignatureId);
+  }
+
+  requestSignature(input: RequestSignatureInput): Promise<SignatureRequestResult> {
+    return this.provider.requestSignature(input);
+  }
+
+  completeSignature(externalSignatureId: string): Promise<SignatureResult> {
+    return this.provider.completeSignature(externalSignatureId);
+  }
+
+  getPendingSignatureInfo(externalSignatureId: string): Promise<PendingSignatureInfo | null> {
+    return this.provider.getPendingSignatureInfo(externalSignatureId);
   }
 }

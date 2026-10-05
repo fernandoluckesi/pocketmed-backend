@@ -16,8 +16,10 @@ import { DoctorsService } from '../doctors/doctors.service';
 import { DocumentGenerationService } from '../documents/document-generation.service';
 import { SignatureService } from '../documents/signature/signature.service';
 import { DOCUMENT_FOLDERS, DocumentStatus, MedicalDocumentSpec } from '../documents/document.types';
+import { SignatureStatus } from '../documents/signature/signature.types';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
 
@@ -38,6 +40,7 @@ export class PrescriptionsService {
     private documentGenerationService: DocumentGenerationService,
     private signatureService: SignatureService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(doctorId: string, dto: CreatePrescriptionDto) {
@@ -327,6 +330,198 @@ export class PrescriptionsService {
     );
 
     return saved;
+  }
+
+  /** "Enviar sem assinatura digital" — delivers the already-generated PDF to
+   * the patient as-is. Only reachable from GENERATED: a draft has no PDF
+   * yet, and a signed/sent/canceled document doesn't get re-sent this way. */
+  async send(id: string, userId: string) {
+    const prescription = await this.findOwnedByDoctor(id, userId);
+
+    if (prescription.status !== DocumentStatus.GENERATED) {
+      throw new ConflictException(
+        'Only a generated prescription (with a PDF already produced) can be sent',
+      );
+    }
+
+    const statusBefore = prescription.status;
+    prescription.status = DocumentStatus.SENT;
+    const saved = await this.prescriptionRepository.save(prescription);
+
+    await this.notifyPatient(
+      saved,
+      'Nova receita disponível',
+      'Seu médico enviou uma nova receita. Acesse o app para visualizá-la.',
+      'PRESCRIPTION_SENT',
+    );
+
+    await this.auditService.recordUpdate(
+      AuditResourceType.PRESCRIPTION,
+      id,
+      { status: { before: statusBefore, after: saved.status } },
+      { patientId: prescription.patientId || undefined, metadata: { operation: 'send' } },
+    );
+
+    return saved;
+  }
+
+  /** "Assinar digitalmente e enviar" (step 1 of 2) — starts an async
+   * signature request and returns the URL the doctor is sent to in a new tab
+   * to actually sign (today, `web/src/pages/SignatureSimulator.tsx`; a real
+   * DocuSign envelope's hosted signing page once a real provider is wired
+   * in). Delivery to the patient happens once `confirmSignature` runs. */
+  async requestSignature(
+    id: string,
+    userId: string,
+  ): Promise<{ prescription: Prescription; signingUrl: string }> {
+    const prescription = await this.findOwnedByDoctor(id, userId);
+
+    if (prescription.status !== DocumentStatus.GENERATED) {
+      throw new ConflictException(
+        'Only a generated prescription (with a PDF already produced) can be signed',
+      );
+    }
+    if (prescription.signatureStatus !== SignatureStatus.NONE) {
+      throw new ConflictException('A signature has already been requested for this prescription');
+    }
+    if (!prescription.documentUrl || !prescription.documentHash) {
+      throw new ConflictException('No PDF available to sign');
+    }
+
+    const spec = await this.buildSpec(prescription);
+    const response = await fetch(prescription.documentUrl);
+    if (!response.ok) {
+      throw new ConflictException('Could not fetch the stored PDF to start the signature request');
+    }
+    const pdfBuffer = Buffer.from(await response.arrayBuffer());
+
+    const requestResult = await this.signatureService.requestSignature({
+      documentId: prescription.id,
+      documentType: 'prescription',
+      documentHash: prescription.documentHash,
+      pdfBuffer,
+      signerName: spec.doctor.name,
+    });
+
+    prescription.signatureStatus = requestResult.status;
+    prescription.signatureProvider = requestResult.provider;
+    prescription.externalSignatureId = requestResult.externalSignatureId;
+    const saved = await this.prescriptionRepository.save(prescription);
+
+    await this.auditService.recordUpdate(
+      AuditResourceType.PRESCRIPTION,
+      id,
+      { signatureStatus: { before: SignatureStatus.NONE, after: saved.signatureStatus } },
+      {
+        patientId: prescription.patientId || undefined,
+        metadata: { operation: 'request-signature' },
+      },
+    );
+
+    return { prescription: saved, signingUrl: requestResult.signingUrl };
+  }
+
+  /** "Assinar digitalmente e enviar" (step 2 of 2) — called by the signature-
+   * simulator page once the doctor "signs" there (a real provider would call
+   * an equivalent endpoint from its webhook instead). Marks the prescription
+   * signed and delivers it to the patient in the same step: in this flow,
+   * signing implies sending. */
+  async confirmSignature(id: string, userId: string, externalSignatureId: string) {
+    const prescription = await this.findOwnedByDoctor(id, userId);
+
+    if (prescription.signatureStatus !== SignatureStatus.PENDING) {
+      throw new ConflictException('No pending signature request for this prescription');
+    }
+    if (prescription.externalSignatureId !== externalSignatureId) {
+      throw new ForbiddenException('This signature request does not belong to this prescription');
+    }
+
+    const result = await this.signatureService.completeSignature(externalSignatureId);
+    if (result.status !== SignatureStatus.SIGNED) {
+      prescription.signatureStatus = SignatureStatus.FAILED;
+      await this.prescriptionRepository.save(prescription);
+      throw new ConflictException('The signature request could not be completed');
+    }
+
+    const statusBefore = prescription.status;
+    prescription.signatureStatus = result.status;
+    prescription.signedAt = result.signedAt;
+    prescription.status = DocumentStatus.SIGNED;
+    const saved = await this.prescriptionRepository.save(prescription);
+
+    await this.notifyPatient(
+      saved,
+      'Nova receita disponível',
+      'Seu médico assinou digitalmente uma nova receita. Acesse o app para visualizá-la.',
+      'PRESCRIPTION_SIGNED',
+    );
+
+    await this.auditService.recordUpdate(
+      AuditResourceType.PRESCRIPTION,
+      id,
+      { status: { before: statusBefore, after: saved.status } },
+      {
+        patientId: prescription.patientId || undefined,
+        metadata: { operation: 'confirm-signature' },
+      },
+    );
+
+    return saved;
+  }
+
+  /** Best-effort patient notification — a patient without a push token or a
+   * dependent with no reachable responsible simply gets nothing, same as the
+   * existing access-request notifications this mirrors. Never blocks the
+   * caller on failure. */
+  private async notifyPatient(
+    prescription: Prescription,
+    title: string,
+    body: string,
+    type: string,
+  ): Promise<void> {
+    if (prescription.patientId) {
+      this.notificationsService
+        .createNotification(
+          prescription.patientId,
+          'patient',
+          title,
+          body,
+          type,
+          {
+            prescriptionId: prescription.id,
+          },
+          prescription.id,
+        )
+        .catch(() => {
+          /* notification is best-effort */
+        });
+      return;
+    }
+
+    if (prescription.dependentId) {
+      const dependent = await this.dependentRepository.findOne({
+        where: { id: prescription.dependentId },
+        relations: ['responsibles'],
+      });
+      for (const responsible of dependent?.responsibles ?? []) {
+        this.notificationsService
+          .createNotification(
+            responsible.id,
+            'patient',
+            title,
+            body,
+            type,
+            {
+              prescriptionId: prescription.id,
+              dependentId: prescription.dependentId,
+            },
+            prescription.id,
+          )
+          .catch(() => {
+            /* notification is best-effort */
+          });
+      }
+    }
   }
 
   /** Resolves the stored PDF URL for an authorized viewer, recording a

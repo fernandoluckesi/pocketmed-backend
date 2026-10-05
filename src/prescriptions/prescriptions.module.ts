@@ -9,12 +9,14 @@ import { Dependent } from '../entities/dependent.entity';
 import { Appointment } from '../entities/appointment.entity';
 import { DoctorsModule } from '../doctors/doctors.module';
 import { DocumentsModule } from '../documents/documents.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Prescription, Doctor, Patient, Dependent, Appointment]),
     DoctorsModule,
     DocumentsModule,
+    NotificationsModule,
   ],
   controllers: [PrescriptionsController],
   providers: [PrescriptionsService],

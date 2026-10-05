@@ -18,6 +18,10 @@ export const DOCUMENT_FOLDERS = {
 export enum DocumentStatus {
   DRAFT = 'draft',
   GENERATED = 'generated',
+  /** Delivered to the patient without a digital signature. Only reachable
+   * from GENERATED — a document that was signed goes straight to SIGNED
+   * instead (signing implies delivery in this flow). */
+  SENT = 'sent',
   SIGNED = 'signed',
   CANCELED = 'canceled',
 }

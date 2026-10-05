@@ -29,7 +29,11 @@ function drawDivider(doc: PDFKit.PDFDocument, color = '#e2e8f0'): void {
 }
 
 export function drawHeader(doc: PDFKit.PDFDocument, spec: MedicalDocumentSpec): void {
-  doc.font('Helvetica-Bold').fontSize(16).fillColor('#1a1a2e').text(spec.title, { align: 'center' });
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(16)
+    .fillColor('#1a1a2e')
+    .text(spec.title, { align: 'center' });
   doc.moveDown(0.3);
   doc
     .font('Helvetica')

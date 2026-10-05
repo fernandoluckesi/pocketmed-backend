@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, ArrayMinSize, ValidateNested, IsString, IsOptional, IsDateString } from 'class-validator';
+import {
+  IsArray,
+  ArrayMinSize,
+  ValidateNested,
+  IsString,
+  IsOptional,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { PrescriptionItemDto } from './create-prescription.dto';
 
