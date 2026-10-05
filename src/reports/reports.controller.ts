@@ -178,6 +178,41 @@ export class ReportsController {
     return this.reportsService.cancel(id, user.userId);
   }
 
+  @Post(':id/send')
+  @Roles('doctor', 'admin')
+  @ApiOperation({ summary: 'Send the generated PDF to the patient without a digital signature' })
+  @ApiResponse({ status: 201, description: 'Report sent' })
+  @ApiResponse({ status: 409, description: 'No PDF generated yet' })
+  async send(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.reportsService.send(id, user.userId);
+  }
+
+  @Post(':id/request-signature')
+  @Roles('doctor', 'admin')
+  @ApiOperation({
+    summary:
+      'Start a digital-signature request — returns the URL to open (new tab) for the doctor to sign',
+  })
+  @ApiResponse({ status: 201, description: 'Signature request created' })
+  async requestSignature(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.reportsService.requestSignature(id, user.userId);
+  }
+
+  @Post(':id/confirm-signature')
+  @Roles('doctor', 'admin')
+  @ApiOperation({
+    summary:
+      'Called once the signer finishes on the signing page — marks the report signed and sends it to the patient',
+  })
+  @ApiResponse({ status: 201, description: 'Report signed and sent' })
+  async confirmSignature(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: { externalSignatureId: string },
+  ) {
+    return this.reportsService.confirmSignature(id, user.userId, body.externalSignatureId);
+  }
+
   @Get(':id/pdf')
   @Roles('doctor', 'admin')
   @Redirect()

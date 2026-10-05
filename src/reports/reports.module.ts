@@ -10,6 +10,7 @@ import { Appointment } from '../entities/appointment.entity';
 import { DoctorsModule } from '../doctors/doctors.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { UploadModule } from '../upload/upload.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UploadModule } from '../upload/upload.module';
     DoctorsModule,
     DocumentsModule,
     UploadModule,
+    NotificationsModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService],

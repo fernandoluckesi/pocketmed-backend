@@ -23,8 +23,10 @@ import {
   MedicalDocumentSpec,
   DocumentSection,
 } from '../documents/document.types';
+import { SignatureStatus } from '../documents/signature/signature.types';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 
@@ -58,6 +60,7 @@ export class ReportsService {
     private documentGenerationService: DocumentGenerationService,
     private signatureService: SignatureService,
     private auditService: AuditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(doctorId: string, dto: CreateReportDto) {
@@ -413,6 +416,179 @@ export class ReportsService {
     );
 
     return saved;
+  }
+
+  /** "Enviar sem assinatura digital" — delivers the already-generated PDF to
+   * the patient as-is. */
+  async send(id: string, userId: string) {
+    const report = await this.findOwnedByDoctor(id, userId);
+
+    if (report.status !== DocumentStatus.GENERATED) {
+      throw new ConflictException(
+        'Only a generated report (with a PDF already produced) can be sent',
+      );
+    }
+
+    const statusBefore = report.status;
+    report.status = DocumentStatus.SENT;
+    const saved = await this.reportRepository.save(report);
+
+    await this.notifyPatient(
+      saved,
+      'Novo laudo disponível',
+      'Seu médico enviou um novo laudo. Acesse o app para visualizá-lo.',
+      'REPORT_SENT',
+    );
+
+    await this.auditService.recordUpdate(
+      AuditResourceType.REPORT,
+      id,
+      { status: { before: statusBefore, after: saved.status } },
+      { patientId: report.patientId || undefined, metadata: { operation: 'send' } },
+    );
+
+    return saved;
+  }
+
+  /** "Assinar digitalmente e enviar" (step 1 of 2) — starts an async
+   * signature request and returns the URL the doctor is sent to in a new tab
+   * to actually sign. Delivery to the patient happens once
+   * `confirmSignature` runs. */
+  async requestSignature(
+    id: string,
+    userId: string,
+  ): Promise<{ report: Report; signingUrl: string }> {
+    const report = await this.findOwnedByDoctor(id, userId);
+
+    if (report.status !== DocumentStatus.GENERATED) {
+      throw new ConflictException(
+        'Only a generated report (with a PDF already produced) can be signed',
+      );
+    }
+    if (report.signatureStatus !== SignatureStatus.NONE) {
+      throw new ConflictException('A signature has already been requested for this report');
+    }
+    if (!report.documentUrl || !report.documentHash) {
+      throw new ConflictException('No PDF available to sign');
+    }
+
+    const response = await fetch(report.documentUrl);
+    if (!response.ok) {
+      throw new ConflictException('Could not fetch the stored PDF to start the signature request');
+    }
+    const pdfBuffer = Buffer.from(await response.arrayBuffer());
+
+    const requestResult = await this.signatureService.requestSignature({
+      documentId: report.id,
+      documentType: 'report',
+      documentHash: report.documentHash,
+      pdfBuffer,
+      signerName: report.doctorNameSnapshot,
+    });
+
+    report.signatureStatus = requestResult.status;
+    report.signatureProvider = requestResult.provider;
+    report.externalSignatureId = requestResult.externalSignatureId;
+    const saved = await this.reportRepository.save(report);
+
+    await this.auditService.recordUpdate(
+      AuditResourceType.REPORT,
+      id,
+      { signatureStatus: { before: SignatureStatus.NONE, after: saved.signatureStatus } },
+      { patientId: report.patientId || undefined, metadata: { operation: 'request-signature' } },
+    );
+
+    return { report: saved, signingUrl: requestResult.signingUrl };
+  }
+
+  /** "Assinar digitalmente e enviar" (step 2 of 2) — called by the signature-
+   * simulator page once the doctor "signs" there. Marks the report signed
+   * and delivers it to the patient in the same step. */
+  async confirmSignature(id: string, userId: string, externalSignatureId: string) {
+    const report = await this.findOwnedByDoctor(id, userId);
+
+    if (report.signatureStatus !== SignatureStatus.PENDING) {
+      throw new ConflictException('No pending signature request for this report');
+    }
+    if (report.externalSignatureId !== externalSignatureId) {
+      throw new ForbiddenException('This signature request does not belong to this report');
+    }
+
+    const result = await this.signatureService.completeSignature(externalSignatureId);
+    if (result.status !== SignatureStatus.SIGNED) {
+      report.signatureStatus = SignatureStatus.FAILED;
+      await this.reportRepository.save(report);
+      throw new ConflictException('The signature request could not be completed');
+    }
+
+    const statusBefore = report.status;
+    report.signatureStatus = result.status;
+    report.signedAt = result.signedAt;
+    report.status = DocumentStatus.SIGNED;
+    const saved = await this.reportRepository.save(report);
+
+    await this.notifyPatient(
+      saved,
+      'Novo laudo disponível',
+      'Seu médico assinou digitalmente um novo laudo. Acesse o app para visualizá-lo.',
+      'REPORT_SIGNED',
+    );
+
+    await this.auditService.recordUpdate(
+      AuditResourceType.REPORT,
+      id,
+      { status: { before: statusBefore, after: saved.status } },
+      { patientId: report.patientId || undefined, metadata: { operation: 'confirm-signature' } },
+    );
+
+    return saved;
+  }
+
+  /** Best-effort patient notification — never blocks the caller on failure. */
+  private async notifyPatient(
+    report: Report,
+    title: string,
+    body: string,
+    type: string,
+  ): Promise<void> {
+    if (report.patientId) {
+      this.notificationsService
+        .createNotification(
+          report.patientId,
+          'patient',
+          title,
+          body,
+          type,
+          { reportId: report.id },
+          report.id,
+        )
+        .catch(() => {
+          /* notification is best-effort */
+        });
+      return;
+    }
+
+    if (report.dependentId) {
+      const dependent = await this.dependentRepository.findOne({
+        where: { id: report.dependentId },
+        relations: ['responsibles'],
+      });
+      for (const responsible of dependent?.responsibles ?? []) {
+        this.notificationsService
+          .createNotification(
+            responsible.id,
+            'patient',
+            title,
+            body,
+            type,
+            { reportId: report.id, dependentId: report.dependentId },
+            report.id,
+          )
+          .catch(() => {
+            /* notification is best-effort */
+          });
+      }
+    }
   }
 
   /**
