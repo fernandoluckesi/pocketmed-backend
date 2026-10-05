@@ -9,6 +9,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { randomInt } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
@@ -29,6 +31,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ProfessionalRole } from './professional-role.enum';
 import { normalizeCpf, isValidCpf } from '../common/validators/cpf.util';
 import { resolveCrmInput } from '../common/crm.util';
+import { DeletionRequestType, RequestDataDeletionDto } from './dto/request-data-deletion.dto';
 
 type AuthUser = Patient | Doctor;
 
@@ -62,6 +65,7 @@ export class AuthService {
     private auditService: AuditService,
     private notificationsService: NotificationsService,
     private dataSource: DataSource,
+    private configService: ConfigService,
   ) {}
 
   async registerPatient(dto: RegisterPatientDto, file?: Express.Multer.File) {
@@ -1435,6 +1439,80 @@ export class AuthService {
     return {
       message: 'Verification code sent to email',
     };
+  }
+
+  /**
+   * Public (unauthenticated) deletion request, submitted from the web form
+   * linked in Google Play's Data Safety section. Google requires that URL to
+   * be reachable without installing or signing into the app.
+   *
+   * This records and acknowledges the request; it does NOT delete anything.
+   * The actual deletion still runs through the authenticated,
+   * email-code-confirmed flow (`requestAccountDeletion` → `deleteAccount`),
+   * because a public endpoint cannot prove who the requester is.
+   *
+   * Always returns the same response whether or not an account exists for the
+   * email. Confirming existence here would turn the form into an account
+   * enumeration oracle for a health app — i.e. it would leak who is a patient.
+   */
+  async requestDataDeletion(dto: RequestDataDeletionDto) {
+    const email = dto.email.trim().toLowerCase();
+    const protocol = this.generateDeletionProtocol();
+
+    const requestTypeLabel =
+      dto.requestType === DeletionRequestType.DATA_ONLY
+        ? 'exclusão de dados (mantendo a conta)'
+        : 'exclusão de conta e dados';
+
+    // Looked up only to tag the audit trail — never reflected in the response.
+    const [patient, doctor] = await Promise.all([
+      this.patientRepository.findOne({ where: { email }, select: ['id'] }),
+      this.doctorRepository.findOne({ where: { email }, select: ['id'] }),
+    ]);
+    const matchedUserId = patient?.id || doctor?.id || null;
+
+    await this.auditService.recordSecurityEvent(AuditAction.CONSENT_REVOKED, {
+      resourceType: AuditResourceType.USER,
+      resourceId: matchedUserId || undefined,
+      success: true,
+      reason: 'PUBLIC_DELETION_REQUEST',
+      metadata: {
+        protocol,
+        requestType: dto.requestType,
+        // The email is the subject of the request, so it belongs in the trail.
+        // Name/phone/reason are kept as submitted for the operator to act on.
+        email,
+        fullName: dto.fullName.trim(),
+        phone: dto.phone?.trim() || null,
+        reason: dto.reason?.trim() || null,
+        accountFound: !!matchedUserId,
+      },
+    });
+
+    await this.emailService.sendDeletionRequestReceipt({
+      email,
+      fullName: dto.fullName.trim(),
+      protocol,
+      requestTypeLabel,
+      privacyInbox: this.configService.get<string>('PRIVACY_INBOX_EMAIL'),
+    });
+
+    return {
+      protocol,
+      message:
+        'Solicitação registrada. Enviamos uma confirmação para o email informado e responderemos em até 15 dias, conforme a LGPD.',
+    };
+  }
+
+  /** Human-quotable protocol, e.g. "HIS-20260404-7X3K9A". */
+  private generateDeletionProtocol(): string {
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
+    let suffix = '';
+    for (let i = 0; i < 6; i++) {
+      suffix += alphabet[randomInt(alphabet.length)];
+    }
+    return `HIS-${date}-${suffix}`;
   }
 
   async deleteAccount(userId: string, userType: string, verificationCode?: string) {

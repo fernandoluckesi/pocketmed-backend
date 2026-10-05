@@ -114,7 +114,9 @@ export class EmailService {
     userName: string;
     title: string;
     message: string;
-    code: string;
+    /** Omit for notices that carry no verification code (the code box and the
+     * "expires in 15 minutes" line are then left out entirely). */
+    code?: string;
     footer: string;
     actionUrl?: string;
     actionLabel?: string;
@@ -143,6 +145,9 @@ export class EmailService {
             <td style="padding:36px 40px 24px;">
               <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1a1a2e;">Olá, ${options.userName}!</h1>
               <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6;">${options.message}</p>
+              ${
+                options.code
+                  ? `
               <!-- Code box -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
@@ -152,7 +157,9 @@ export class EmailService {
                   </td>
                 </tr>
               </table>
-              <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">⏱ Este código expira em <strong>15 minutos</strong>.</p>
+              <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;">⏱ Este código expira em <strong>15 minutos</strong>.</p>`
+                  : ''
+              }
               ${
                 options.actionUrl
                   ? `
@@ -569,6 +576,67 @@ export class EmailService {
       // Non-critical: never block the email change because the notice failed.
       this.logger.warn(
         `Could not send email-changed notice to ${oldEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Acknowledges a public deletion request (the form linked in Google Play's
+   * Data Safety section) and notifies the privacy inbox so the team can act
+   * within the LGPD response window.
+   *
+   * Sent to the address the requester typed, which is NOT proven to be theirs
+   * — so this message must never reveal whether an account exists for it, nor
+   * carry any account data. It only confirms that a request was received.
+   */
+  async sendDeletionRequestReceipt(input: {
+    email: string;
+    fullName: string;
+    protocol: string;
+    requestTypeLabel: string;
+    privacyInbox?: string;
+  }) {
+    const { email, fullName, protocol, requestTypeLabel, privacyInbox } = input;
+
+    try {
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Deletion-request receipt for ${email} (protocol ${protocol}) not sent because EMAIL_ENABLED=false.`,
+        );
+        return;
+      }
+
+      const html = this.buildEmailHtml({
+        userName: fullName,
+        title: 'Solicitação recebida',
+        message:
+          `Recebemos sua solicitação de <strong>${requestTypeLabel}</strong>. ` +
+          `O número de protocolo é <strong>${protocol}</strong>. ` +
+          'Nossa equipe responderá em até 15 dias, conforme a LGPD. ' +
+          'Por segurança, poderemos solicitar uma confirmação adicional antes de executar a exclusão.',
+        footer:
+          'Se você não fez esta solicitação, ignore este email — nenhuma alteração é feita sem confirmação.',
+      });
+
+      const recipients = privacyInbox ? [email, privacyInbox] : [email];
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: recipients,
+        subject: `Solicitação de exclusão recebida (${protocol}) - Hispora`,
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Deletion-request receipt sent for protocol ${protocol}`);
+    } catch (error) {
+      // Non-critical: the request is already persisted and audited, so a mail
+      // failure must not make the user think their request was lost.
+      this.logger.warn(
+        `Could not send deletion-request receipt for protocol ${protocol}: ${(error as Error).message}`,
       );
     }
   }

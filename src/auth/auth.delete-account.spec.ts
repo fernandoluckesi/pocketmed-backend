@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
@@ -118,6 +119,7 @@ describe('AuthService - deleteAccount', () => {
         { provide: AuditService, useValue: { recordDelete } },
         { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
         { provide: DataSource, useValue: dataSource },
+        { provide: ConfigService, useValue: { get: jest.fn(() => undefined) } },
       ],
     }).compile();
 

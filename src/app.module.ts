@@ -82,6 +82,8 @@ import { ClinicDoctorAssociationModule } from './clinic-doctor-association/clini
 import { CertificatesModule } from './certificates/certificates.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { ReportsModule } from './reports/reports.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { throttlerConfig } from './common/throttler.config';
 import { RequestContextMiddleware } from './audit/request-context.middleware';
 import { AuditContextInterceptor } from './audit/audit-context.interceptor';
 
@@ -203,6 +205,10 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     CertificatesModule,
     PrescriptionsModule,
     ReportsModule,
+    // Registered module-wide but deliberately NOT as a global guard: routes
+    // opt in with `@UseGuards(ThrottlerGuard)` + `@Throttle(...)`. See
+    // `common/throttler.config.ts` for why.
+    ThrottlerModule.forRoot(throttlerConfig),
   ],
   controllers: [AppController],
   providers: [

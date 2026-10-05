@@ -11,6 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -26,6 +27,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
 import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
+import { RequestDataDeletionDto } from './dto/request-data-deletion.dto';
+import { THROTTLE_EMAIL } from '../common/throttler.config';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -330,5 +333,31 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Verification code sent to email' })
   async requestAccountDeletion(@CurrentUser() user: any) {
     return this.authService.requestAccountDeletion(user.userId, user.type);
+  }
+
+  /**
+   * Public deletion request, backing the web form linked in Google Play's
+   * Data Safety section — Google requires that URL to work without signing
+   * in. It records and acknowledges the request; it does not delete anything
+   * on its own (a public endpoint can't prove who the requester is).
+   */
+  @Public()
+  @Post('request-data-deletion')
+  // Unauthenticated and it sends email, so it's abusable as a way to spray
+  // mail at arbitrary addresses — which burns the sending domain's
+  // reputation even though no data leaks. 5 requests/hour per IP is well
+  // above what a real person needs (they submit once) and low enough to make
+  // bulk abuse pointless.
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_EMAIL]: { ttl: 60 * 60_000, limit: 5 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Public account/data deletion request (Google Play Data Safety URL)',
+  })
+  @ApiResponse({ status: 200, description: 'Request recorded; receipt emailed' })
+  @ApiResponse({ status: 400, description: 'Invalid payload' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async requestDataDeletion(@Body() dto: RequestDataDeletionDto) {
+    return this.authService.requestDataDeletion(dto);
   }
 }
