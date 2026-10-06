@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   ConflictException,
   UnauthorizedException,
   NotFoundException,
@@ -44,6 +45,8 @@ type LoginUser = AuthUser | ClinicAdminProfile | Secretary;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(Patient)
     private patientRepository: Repository<Patient>,
@@ -115,16 +118,28 @@ export class AuthService {
         emailVerified: false,
       });
 
+      // Persist the verification code as part of the registration transaction
+      // (so it's always stored), but DON'T send the email here: email delivery
+      // is an external call that can fail (Resend down, unverified sender
+      // domain, timeout) and must NEVER roll back a successfully created
+      // account. The send happens after commit, best-effort — the user can
+      // always trigger "resend code" on the verification screen.
+      const verificationCode = this.generateVerificationCode();
+      patient.verificationCode = verificationCode;
+      patient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
       const savedPatient = await queryRunner.manager.save(patient);
 
-      // Send email verification code
-      const verificationCode = this.generateVerificationCode();
-      savedPatient.verificationCode = verificationCode;
-      savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-      await queryRunner.manager.save(savedPatient);
-      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
-
       await queryRunner.commitTransaction();
+
+      // Best-effort verification email — a mail failure must not break signup.
+      await this.emailService
+        .sendEmailVerificationCode(dto.email, verificationCode, dto.name)
+        .catch((err) =>
+          this.logger.warn(
+            `Falha ao enviar código de verificação para ${dto.email} (conta já criada): ${err?.message || err}`,
+          ),
+        );
 
       // Merge any existing shadow accounts with the same email so the freshly
       // registered (auto-logged-in) patient immediately owns all prior data,
@@ -388,16 +403,25 @@ export class AuthService {
         emailVerified: false,
       });
 
+      // Persist the code inside the transaction, but send the email only AFTER
+      // commit and best-effort: an email delivery failure must never roll back
+      // a created account (the user can resend the code later). See
+      // registerPatient for the full rationale.
+      const verificationCode = this.generateVerificationCode();
+      doctor.verificationCode = verificationCode;
+      doctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
       const savedDoctor = await queryRunner.manager.save(doctor);
 
-      // Send email verification code
-      const verificationCode = this.generateVerificationCode();
-      savedDoctor.verificationCode = verificationCode;
-      savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-      await queryRunner.manager.save(savedDoctor);
-      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
-
       await queryRunner.commitTransaction();
+
+      await this.emailService
+        .sendEmailVerificationCode(dto.email, verificationCode, dto.name)
+        .catch((err) =>
+          this.logger.warn(
+            `Falha ao enviar código de verificação para ${dto.email} (conta já criada): ${err?.message || err}`,
+          ),
+        );
 
       const token = await this.generateToken(savedDoctor);
       const doctorContext = await this.getDoctorAuthContext(savedDoctor.id);

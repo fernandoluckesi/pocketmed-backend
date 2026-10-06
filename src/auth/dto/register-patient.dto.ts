@@ -38,9 +38,13 @@ export class RegisterPatientDto {
   })
   password: string;
 
+  // Required at signup. Accepts masked "(11) 99999-1234" or raw digits; must
+  // contain a valid Brazilian 10- (landline) or 11-digit (mobile) number once
+  // non-digits are stripped.
   @ApiProperty({ example: '(11) 99999-1234' })
-  @IsOptional()
   @IsString()
+  @IsNotEmpty({ message: 'O número de celular é obrigatório' })
+  @Matches(/^\D*(\d\D*){10,11}$/, { message: 'Número de celular inválido' })
   phone: string;
 
   @ApiProperty({ example: '1950-09-25' })
