@@ -112,21 +112,17 @@ export class AuthService {
         profileImage: profileImageUrl,
         type: 'patient',
         isShadow: false,
-        // TEMP: email verification disabled — see registerDoctor() below for
-        // why and how to restore. Was `false`.
-        emailVerified: true,
+        emailVerified: false,
       });
 
       const savedPatient = await queryRunner.manager.save(patient);
 
-      // TEMP: email verification disabled (App Store review can't receive
-      // verification emails). To restore, uncomment this block and flip
-      // `emailVerified` above back to `false`.
-      // const verificationCode = this.generateVerificationCode();
-      // savedPatient.verificationCode = verificationCode;
-      // savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-      // await queryRunner.manager.save(savedPatient);
-      // await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
+      // Send email verification code
+      const verificationCode = this.generateVerificationCode();
+      savedPatient.verificationCode = verificationCode;
+      savedPatient.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      await queryRunner.manager.save(savedPatient);
+      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
       await queryRunner.commitTransaction();
 
@@ -389,22 +385,17 @@ export class AuthService {
         profileImage: profileImageUrl,
         type: 'doctor',
         isShadow: false,
-        // TEMP: email verification disabled (App Store review can't receive
-        // verification emails — reviewers get stuck on the code screen with
-        // no way to complete it). To restore: flip this back to `false` and
-        // uncomment the generate+send block below. Also restore
-        // AuthContext.tsx's post-signup redirect guard on the web side.
-        emailVerified: true,
+        emailVerified: false,
       });
 
       const savedDoctor = await queryRunner.manager.save(doctor);
 
-      // TEMP: email verification disabled — see comment above.
-      // const verificationCode = this.generateVerificationCode();
-      // savedDoctor.verificationCode = verificationCode;
-      // savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-      // await queryRunner.manager.save(savedDoctor);
-      // await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
+      // Send email verification code
+      const verificationCode = this.generateVerificationCode();
+      savedDoctor.verificationCode = verificationCode;
+      savedDoctor.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      await queryRunner.manager.save(savedDoctor);
+      await this.emailService.sendEmailVerificationCode(dto.email, verificationCode, dto.name);
 
       await queryRunner.commitTransaction();
 
@@ -548,11 +539,38 @@ export class AuthService {
     if (!isPasswordValid) {
       await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
         resourceType: AuditResourceType.USER,
-        resourceId: user.id,
         success: false,
+        resourceId: user.id,
         reason: 'AUTHENTICATION_FAILED',
       });
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Email-verification gate: a self-registered patient/doctor who hasn't
+    // confirmed their email still gets a (valid) token here so the client can
+    // call the authenticated verify/resend endpoints — but that token is
+    // useless for real work, because `EmailVerifiedGuard` blocks every
+    // protected business endpoint until `emailVerified` is true (the actual
+    // gate). On a blocked login we also resend a fresh code so the user has
+    // one waiting on the verification screen. Role profiles and shadow
+    // accounts never go through email verification, so this only affects the
+    // regular patient/doctor path.
+    if (user.emailVerified === false) {
+      const verificationCode = this.generateVerificationCode();
+      user.verificationCode = verificationCode;
+      user.verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+      await this.saveUser(user);
+      // Best-effort resend — a mail hiccup must not break issuing the token.
+      await this.emailService
+        .sendEmailVerificationCode(user.email, verificationCode, user.name)
+        .catch(() => undefined);
+
+      await this.auditService.recordSecurityEvent(AuditAction.LOGIN_FAILURE, {
+        resourceType: AuditResourceType.USER,
+        resourceId: user.id,
+        success: false,
+        reason: 'EMAIL_NOT_VERIFIED',
+      });
     }
 
     const token = await this.generateToken(user);

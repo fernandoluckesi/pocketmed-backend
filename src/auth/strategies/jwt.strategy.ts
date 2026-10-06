@@ -102,6 +102,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       type: user.type,
       role,
       activeClinicId,
+      // Drives EmailVerifiedGuard — a self-registered patient/doctor who
+      // hasn't confirmed their email is blocked from protected business
+      // routes until they do (the verify/resend endpoints stay reachable).
+      emailVerified: (user as Patient | Doctor).emailVerified,
       verificationStatus: user.type === 'doctor' ? (user as Doctor).verificationStatus : undefined,
     };
   }

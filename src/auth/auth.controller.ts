@@ -30,6 +30,7 @@ import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
 import { RequestDataDeletionDto } from './dto/request-data-deletion.dto';
 import { THROTTLE_EMAIL } from '../common/throttler.config';
 import { Public } from './decorators/public.decorator';
+import { AllowUnverified } from './decorators/allow-unverified.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Roles } from './decorators/roles.decorator';
@@ -255,6 +256,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowUnverified()
   @Post('send-email-verification')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
@@ -265,6 +267,7 @@ export class AuthController {
     return this.authService.sendEmailVerification(user.userId, user.type);
   }
 
+  @AllowUnverified()
   @UseGuards(JwtAuthGuard)
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
@@ -314,6 +317,7 @@ export class AuthController {
     return this.authService.updateProfile(user.userId, user.type, body, file);
   }
 
+  @AllowUnverified()
   @Delete('account')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -325,6 +329,7 @@ export class AuthController {
     return this.authService.deleteAccount(user.userId, user.type, body.verificationCode);
   }
 
+  @AllowUnverified()
   @Post('request-account-deletion')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)

@@ -19,6 +19,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { BackofficeBoundaryGuard } from './auth/guards/backoffice-boundary.guard';
 import { DoctorVerifiedGuard } from './auth/guards/doctor-verified.guard';
+import { EmailVerifiedGuard } from './auth/guards/email-verified.guard';
 import { Patient } from './entities/patient.entity';
 import { Doctor } from './entities/doctor.entity';
 import { Dependent } from './entities/dependent.entity';
@@ -237,6 +238,14 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
       // `@RequireDoctorVerified()` (real patient data).
       provide: APP_GUARD,
       useClass: DoctorVerifiedGuard,
+    },
+    {
+      // Runs after JwtAuthGuard so `request.user.emailVerified` is populated:
+      // blocks self-registered users who haven't confirmed their email from
+      // every protected route except those marked `@AllowUnverified()`
+      // (verify-email, resend code, logout, delete account).
+      provide: APP_GUARD,
+      useClass: EmailVerifiedGuard,
     },
     {
       provide: APP_INTERCEPTOR,
