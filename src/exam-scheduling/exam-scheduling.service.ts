@@ -7,7 +7,12 @@ import { Dependent } from '../entities/dependent.entity';
 import { CreateExamScheduleDto } from './dto/create-exam-schedule.dto';
 import { UploadService } from '../upload/upload.service';
 
-const SCHEDULE_RELATIONS = ['items', 'items.examCatalog', 'items.examCatalog.category'];
+const SCHEDULE_RELATIONS = [
+  'items',
+  'items.examCatalog',
+  'items.examCatalog.category',
+  'attachment',
+];
 
 @Injectable()
 export class ExamSchedulingService {
@@ -71,6 +76,7 @@ export class ExamSchedulingService {
       appointmentId: dto.appointmentId ?? null,
       scheduledDateTime,
       status: ExamScheduleStatus.PENDING,
+      attachmentId: dto.attachmentId ?? null,
     });
 
     const savedSchedule = await this.examScheduleRepository.save(schedule);

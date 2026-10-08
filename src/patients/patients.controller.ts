@@ -1,6 +1,22 @@
-import { Controller, Get, Put, Post, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Delete,
+  Param,
+  Query,
+  Body,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PatientsService, SurgeryData } from './patients.service';
+import { MedicalAttachmentKind } from '../entities/medical-attachment.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequireDoctorVerified } from '../auth/decorators/require-doctor-verified.decorator';
@@ -686,6 +702,94 @@ export class PatientsController {
       user.type,
       user.role,
       user.activeClinicId,
+    );
+  }
+
+  @Post(':id/reports')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @ApiOperation({
+    summary:
+      'Patient files a laudo by uploading an external document (PDF/image); its text is read via OCR',
+  })
+  @ApiResponse({ status: 201, description: 'Report created from the uploaded file' })
+  @ApiResponse({ status: 400, description: 'Missing or unsupported file' })
+  async createReport(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: { title?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+    return this.patientsService.createPatientReport(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      file,
+      { title: body?.title },
+    );
+  }
+
+  @Delete(':id/reports/:reportId')
+  @ApiOperation({ summary: 'Remove a patient-filed laudo' })
+  @ApiResponse({ status: 200, description: 'Report removed' })
+  @ApiResponse({ status: 403, description: 'Not a patient-filed report' })
+  @ApiResponse({ status: 404, description: 'Report not found' })
+  async deleteReport(
+    @Param('id') id: string,
+    @Param('reportId') reportId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.patientsService.deletePatientReport(
+      id,
+      reportId,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+    );
+  }
+
+  // ─── Attachments (shared "receita"/"guia" files) ──────────────────────────
+
+  @Post(':id/attachments')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @ApiOperation({
+    summary:
+      'Patient uploads a prescription ("receita") or exam order ("guia") file; its text is read via OCR. Returns the attachment to link medications/exams to.',
+  })
+  @ApiResponse({ status: 201, description: 'Attachment created from the uploaded file' })
+  @ApiResponse({ status: 400, description: 'Missing or unsupported file / invalid kind' })
+  async createAttachment(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body() body: { kind?: string; appointmentId?: string },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+    const kind =
+      body?.kind === MedicalAttachmentKind.GUIA
+        ? MedicalAttachmentKind.GUIA
+        : body?.kind === MedicalAttachmentKind.RECEITA
+          ? MedicalAttachmentKind.RECEITA
+          : null;
+    if (!kind) {
+      throw new BadRequestException('kind deve ser "receita" ou "guia".');
+    }
+    return this.patientsService.createAttachment(
+      id,
+      user.userId,
+      user.type,
+      user.role,
+      user.activeClinicId,
+      file,
+      kind,
+      body?.appointmentId,
     );
   }
 }

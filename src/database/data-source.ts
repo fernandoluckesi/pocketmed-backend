@@ -40,6 +40,7 @@ import { SubscriptionPayment } from '../entities/subscription-payment.entity';
 import { CnesEstablishment } from '../entities/cnes-establishment.entity';
 import { Certificate } from '../entities/certificate.entity';
 import { Prescription } from '../entities/prescription.entity';
+import { MedicalAttachment } from '../entities/medical-attachment.entity';
 import { Report } from '../entities/report.entity';
 import { ExamRequest } from '../entities/exam-request.entity';
 
@@ -122,6 +123,7 @@ const AppDataSource = new DataSource({
     Prescription,
     Report,
     ExamRequest,
+    MedicalAttachment,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

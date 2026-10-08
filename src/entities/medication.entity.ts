@@ -11,6 +11,7 @@ import { Doctor } from './doctor.entity';
 import { Patient } from './patient.entity';
 import { Dependent } from './dependent.entity';
 import { Appointment } from './appointment.entity';
+import { MedicalAttachment } from './medical-attachment.entity';
 
 export enum MedicationFrequency {
   ONCE_DAILY = 'once_daily',
@@ -94,6 +95,16 @@ export class Medication {
   /** When true, patient cannot edit/delete (only modify times) */
   @Column({ type: 'boolean', default: false })
   lockedByDoctor: boolean;
+
+  /** Optional link to the uploaded "receita" file this medication came from.
+   * Several medications can share the same attachment (one prescription lists
+   * many drugs). */
+  @Column({ type: 'uuid', nullable: true })
+  attachmentId: string | null;
+
+  @ManyToOne(() => MedicalAttachment, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'attachmentId' })
+  attachment: MedicalAttachment | null;
 
   @CreateDateColumn()
   createdAt: Date;

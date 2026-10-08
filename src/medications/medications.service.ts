@@ -101,34 +101,69 @@ export class MedicationsService {
   }
 
   private async createByPatient(patientUserId: string, dto: CreateMedicationDto) {
-    if (!dto.appointmentId) {
-      throw new BadRequestException('appointmentId is required when patient creates medication');
+    // Two patient paths:
+    //  (a) From a consultation: appointmentId is given → derive owner/doctor
+    //      from the appointment (as before).
+    //  (b) Standalone (e.g. "adicionar por receita"): no appointment — the
+    //      patient logs a medication they received outside Hispora, for
+    //      themselves or for a dependent they are responsible for.
+    if (dto.appointmentId) {
+      const appointment = await this.appointmentRepository.findOne({
+        where: { id: dto.appointmentId },
+        relations: ['dependent', 'dependent.responsibles'],
+      });
+
+      if (!appointment) {
+        throw new NotFoundException('Appointment not found');
+      }
+
+      const isOwnerPatient = appointment.patientId === patientUserId;
+      const isResponsibleDependent =
+        Boolean(appointment.dependentId) &&
+        Boolean(appointment.dependent?.responsibles?.some((r) => r.id === patientUserId));
+
+      if (!isOwnerPatient && !isResponsibleDependent) {
+        throw new ForbiddenException(
+          'You can only create medication linked to your own appointment',
+        );
+      }
+
+      const medication = this.medicationRepository.create({
+        ...dto,
+        doctorId: appointment.doctorId,
+        patientId: appointment.patientId,
+        dependentId: appointment.dependentId,
+        appointmentId: appointment.id,
+        startDate: new Date(dto.startDate),
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+      });
+
+      return await this.medicationRepository.save(medication);
     }
 
-    const appointment = await this.appointmentRepository.findOne({
-      where: { id: dto.appointmentId },
-      relations: ['dependent', 'dependent.responsibles'],
-    });
-
-    if (!appointment) {
-      throw new NotFoundException('Appointment not found');
-    }
-
-    const isOwnerPatient = appointment.patientId === patientUserId;
-    const isResponsibleDependent =
-      Boolean(appointment.dependentId) &&
-      Boolean(appointment.dependent?.responsibles?.some((r) => r.id === patientUserId));
-
-    if (!isOwnerPatient && !isResponsibleDependent) {
-      throw new ForbiddenException('You can only create medication linked to your own appointment');
+    // Standalone: for a dependent, the caller must be one of its responsibles;
+    // otherwise it belongs to the patient themselves.
+    if (dto.dependentId) {
+      const dependent = await this.dependentRepository.findOne({
+        where: { id: dto.dependentId },
+        relations: ['responsibles'],
+      });
+      if (!dependent) {
+        throw new NotFoundException('Dependent not found');
+      }
+      const isResponsible = dependent.responsibles?.some((r) => r.id === patientUserId);
+      if (!isResponsible) {
+        throw new ForbiddenException('You are not responsible for this dependent');
+      }
     }
 
     const medication = this.medicationRepository.create({
       ...dto,
-      doctorId: appointment.doctorId,
-      patientId: appointment.patientId,
-      dependentId: appointment.dependentId,
-      appointmentId: appointment.id,
+      // No doctor for a patient-logged medication (external prescription).
+      doctorId: null,
+      patientId: dto.dependentId ? null : patientUserId,
+      dependentId: dto.dependentId ?? null,
+      appointmentId: null,
       startDate: new Date(dto.startDate),
       endDate: dto.endDate ? new Date(dto.endDate) : null,
     });
@@ -140,14 +175,14 @@ export class MedicationsService {
     if (userType === 'doctor') {
       return await this.medicationRepository.find({
         where: { doctorId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'appointment'],
+        relations: ['doctor', 'patient', 'dependent', 'appointment', 'attachment'],
       });
     }
 
     if (userType === 'patient') {
       const patientMedications = await this.medicationRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'appointment'],
+        relations: ['doctor', 'patient', 'dependent', 'appointment', 'attachment'],
       });
 
       const dependents = await this.dependentRepository
@@ -166,6 +201,7 @@ export class MedicationsService {
           .leftJoinAndSelect('medication.patient', 'patient')
           .leftJoinAndSelect('medication.dependent', 'dependent')
           .leftJoinAndSelect('medication.appointment', 'appointment')
+          .leftJoinAndSelect('medication.attachment', 'attachment')
           .where('medication.dependentId IN (:...dependentIds)', { dependentIds })
           .getMany();
       }
@@ -179,7 +215,14 @@ export class MedicationsService {
   async findOne(id: string, userId: string, userType: string) {
     const medication = await this.medicationRepository.findOne({
       where: { id },
-      relations: ['doctor', 'patient', 'dependent', 'dependent.responsibles', 'appointment'],
+      relations: [
+        'doctor',
+        'patient',
+        'dependent',
+        'dependent.responsibles',
+        'appointment',
+        'attachment',
+      ],
     });
 
     if (!medication) {

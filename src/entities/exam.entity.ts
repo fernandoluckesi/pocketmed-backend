@@ -11,6 +11,7 @@ import { Doctor } from './doctor.entity';
 import { Patient } from './patient.entity';
 import { Dependent } from './dependent.entity';
 import { Appointment } from './appointment.entity';
+import { MedicalAttachment } from './medical-attachment.entity';
 
 export enum ExamType {
   BLOOD_TEST = 'blood_test',
@@ -114,6 +115,16 @@ export class Exam {
   /** Array of result file URLs (uploaded to MinIO) */
   @Column({ type: 'json', nullable: true })
   resultFiles: string[] | null;
+
+  /** Optional link to the uploaded "guia" (exam order) file this exam came
+   * from. Several exams can share the same attachment (one order lists many
+   * exams). Distinct from resultFile/resultFiles, which are exam RESULTS. */
+  @Column({ type: 'uuid', nullable: true })
+  attachmentId: string | null;
+
+  @ManyToOne(() => MedicalAttachment, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'attachmentId' })
+  attachment: MedicalAttachment | null;
 
   @CreateDateColumn()
   createdAt: Date;

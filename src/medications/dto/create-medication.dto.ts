@@ -75,4 +75,11 @@ export class CreateMedicationDto {
   @IsUUID()
   @IsOptional()
   appointmentId?: string;
+
+  /** Links this medication to an uploaded prescription ("receita") attachment.
+   * Many medications from the same prescription share one attachmentId. */
+  @ApiProperty({ example: 'b555dc1b-0cdb-4a4f-810b-65d33a7e50aa', required: false })
+  @IsUUID()
+  @IsOptional()
+  attachmentId?: string;
 }

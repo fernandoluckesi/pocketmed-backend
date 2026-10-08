@@ -3,9 +3,18 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, In, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import {
+  Repository,
+  Like,
+  In,
+  Between,
+  MoreThanOrEqual,
+  LessThanOrEqual,
+  DeepPartial,
+} from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { Dependent } from '../entities/dependent.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
@@ -20,9 +29,16 @@ import { PatientVaccine } from '../entities/patient-vaccine.entity';
 import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { Certificate } from '../entities/certificate.entity';
-import { Report } from '../entities/report.entity';
+import { Report, ReportType } from '../entities/report.entity';
+import {
+  MedicalAttachment,
+  MedicalAttachmentKind,
+} from '../entities/medical-attachment.entity';
 import { Clinic } from '../entities/clinic.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
+import { UploadService } from '../upload/upload.service';
+import { DocumentTextExtractorService } from '../document-parsing/document-text-extractor.service';
+import { DOCUMENT_FOLDERS, DocumentStatus } from '../documents/document.types';
 import { NotificationsService } from '../notifications/notifications.service';
 
 /** Shape accepted by create/update surgery (all optional except handled in code). */
@@ -105,9 +121,13 @@ export class PatientsService {
     private certificateRepository: Repository<Certificate>,
     @InjectRepository(Report)
     private reportRepository: Repository<Report>,
+    @InjectRepository(MedicalAttachment)
+    private medicalAttachmentRepository: Repository<MedicalAttachment>,
     @InjectRepository(Clinic)
     private clinicRepository: Repository<Clinic>,
     private notificationsService: NotificationsService,
+    private uploadService: UploadService,
+    private documentTextExtractorService: DocumentTextExtractorService,
   ) {}
 
   private async getAccessiblePatientIdsForDoctor(doctorId: string): Promise<string[]> {
@@ -1842,5 +1862,164 @@ export class PatientsService {
       where: isDependent ? { dependentId: patientId } : { patientId },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  /**
+   * Patient-filed laudo: the patient uploads an external document (PDF/image)
+   * and we store the file plus the text we can read from it (PDF text layer or
+   * OCR for images), so the app shows both the file and its content. Patients
+   * can only CREATE this flavor of laudo — they never author the structured
+   * clinical fields a doctor fills in. `findOne` enforces the same access
+   * rules (and logging) as every other medical-record write.
+   */
+  async createPatientReport(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    file: Express.Multer.File,
+    data: { title?: string },
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+    if (!this.uploadService.isAvailable) {
+      throw new ServiceUnavailableException(
+        'Armazenamento de arquivos indisponível. Tente novamente mais tarde.',
+      );
+    }
+
+    const patient = await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const isDependent = (patient as any).isDependent === true;
+
+    // Read the document's text before storing anything. OCR/parse failures must
+    // not block filing the laudo — the file is still valuable on its own — so a
+    // read error degrades gracefully to "no extracted text".
+    let extractedText: string | null = null;
+    try {
+      const text = await this.documentTextExtractorService.extractText(file);
+      extractedText = text?.trim() ? text.trim() : null;
+    } catch {
+      extractedText = null;
+    }
+
+    const fileUrl = await this.uploadService.uploadFile(file, DOCUMENT_FOLDERS.medicalDocuments);
+    if (!fileUrl) {
+      throw new ServiceUnavailableException('Não foi possível armazenar o arquivo.');
+    }
+
+    const report = this.reportRepository.create({
+      patientId: isDependent ? null : patientId,
+      dependentId: isDependent ? patientId : null,
+      // Patient-filed laudos aren't typed/authored like a doctor's; store a
+      // sensible title and leave the structured clinical fields empty.
+      reportType: ReportType.OUTRO,
+      reportTypeOther: 'Laudo enviado pelo paciente',
+      title: data.title?.trim() || 'Laudo',
+      issueDate: new Date(),
+      fileUrl,
+      extractedText,
+      createdByPatient: true,
+      status: DocumentStatus.GENERATED,
+    } as DeepPartial<Report>);
+
+    const saved = await this.reportRepository.save(report);
+    return saved;
+  }
+
+  /** Removes a patient-filed laudo (and its stored file). Patients may only
+   * delete laudos they filed themselves — never a doctor-authored one. */
+  async deletePatientReport(
+    patientId: string,
+    reportId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+  ) {
+    const patient = await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const isDependent = (patient as any).isDependent === true;
+
+    const report = await this.reportRepository.findOne({
+      where: isDependent
+        ? { id: reportId, dependentId: patientId }
+        : { id: reportId, patientId },
+    });
+    if (!report) {
+      throw new NotFoundException('Laudo não encontrado');
+    }
+    if (!report.createdByPatient) {
+      throw new ForbiddenException('Apenas laudos enviados pelo paciente podem ser removidos aqui');
+    }
+
+    const fileUrl = report.fileUrl;
+    await this.reportRepository.remove(report);
+    if (fileUrl) {
+      await this.uploadService.deleteFile(fileUrl).catch(() => {
+        // Best-effort — the DB row is already gone.
+      });
+    }
+
+    return { message: 'Laudo removido' };
+  }
+
+  /**
+   * Patient uploads a shared "receita"/"guia" file. The file is stored, its
+   * text is read (OCR for images, text layer for PDFs), and a single
+   * MedicalAttachment row is returned. The caller then creates N medications
+   * (receita) or exams (guia), each referencing the returned `id` via
+   * `attachmentId` — so one file is shared by many items.
+   *
+   * Access is enforced the same way as every other medical-record write
+   * (`findOne` on the target patient/dependent).
+   */
+  async createAttachment(
+    patientId: string,
+    userId: string,
+    userType: string,
+    role: string,
+    activeClinicId: string,
+    file: Express.Multer.File,
+    kind: MedicalAttachmentKind,
+    appointmentId?: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Nenhum arquivo enviado.');
+    }
+    if (!this.uploadService.isAvailable) {
+      throw new ServiceUnavailableException(
+        'Armazenamento de arquivos indisponível. Tente novamente mais tarde.',
+      );
+    }
+
+    const patient = await this.findOne(patientId, userId, userType, role, activeClinicId);
+    const isDependent = (patient as any).isDependent === true;
+
+    // Read the text first; a parse failure must not block storing the file.
+    let extractedText: string | null = null;
+    try {
+      const text = await this.documentTextExtractorService.extractText(file);
+      extractedText = text?.trim() ? text.trim() : null;
+    } catch {
+      extractedText = null;
+    }
+
+    const fileUrl = await this.uploadService.uploadFile(file, DOCUMENT_FOLDERS.medicalDocuments);
+    if (!fileUrl) {
+      throw new ServiceUnavailableException('Não foi possível armazenar o arquivo.');
+    }
+
+    const attachment = this.medicalAttachmentRepository.create({
+      kind,
+      fileUrl,
+      extractedText,
+      patientId: isDependent ? null : patientId,
+      dependentId: isDependent ? patientId : null,
+      appointmentId: appointmentId || null,
+      createdByPatient: true,
+    });
+
+    return this.medicalAttachmentRepository.save(attachment);
   }
 }

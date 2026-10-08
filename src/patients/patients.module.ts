@@ -17,8 +17,11 @@ import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { Certificate } from '../entities/certificate.entity';
 import { Report } from '../entities/report.entity';
+import { MedicalAttachment } from '../entities/medical-attachment.entity';
 import { Clinic } from '../entities/clinic.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { UploadModule } from '../upload/upload.module';
+import { DocumentParsingModule } from '../document-parsing/document-parsing.module';
 
 @Module({
   imports: [
@@ -38,9 +41,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
       FinancialConvenio,
       Certificate,
       Report,
+      MedicalAttachment,
       Clinic,
     ]),
     NotificationsModule,
+    UploadModule,
+    DocumentParsingModule,
   ],
   controllers: [PatientsController],
   providers: [PatientsService],

@@ -178,6 +178,20 @@ export class Report {
   @Column({ type: 'varchar', length: 500, nullable: true })
   fileUrl: string | null;
 
+  /** Plain text extracted (via OCR for images, text layer for PDFs) from a
+   * patient-uploaded laudo file, so the app can show the laudo's content on
+   * screen in addition to the file itself. Only populated for laudos the
+   * patient filed from an external document — doctor-authored laudos carry
+   * their content in the structured ProseMirror fields instead. */
+  @Column({ type: 'text', nullable: true })
+  extractedText: string | null;
+
+  /** True when the patient filed this laudo themselves by uploading an
+   * external file (OCR-read), as opposed to a doctor authoring it in Hispora.
+   * Patients may only read/manage laudos flagged this way. */
+  @Column({ type: 'boolean', default: false })
+  createdByPatient: boolean;
+
   @Column({ type: 'varchar', length: 64, nullable: true })
   documentHash: string | null;
 

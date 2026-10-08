@@ -76,4 +76,15 @@ export class CreateExamScheduleDto {
   @IsOptional()
   @IsUUID()
   appointmentId?: string | null;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description:
+      'Links the schedule to an uploaded exam-order ("guia") attachment; shared by all exam items in this schedule.',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID()
+  attachmentId?: string | null;
 }

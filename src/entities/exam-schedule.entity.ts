@@ -11,6 +11,7 @@ import {
 import { Patient } from './patient.entity';
 import { Dependent } from './dependent.entity';
 import { ExamScheduleItem } from './exam-schedule-item.entity';
+import { MedicalAttachment } from './medical-attachment.entity';
 
 export enum ExamScheduleStatus {
   PENDING = 'pending',
@@ -61,6 +62,16 @@ export class ExamSchedule {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   resultFileUrl: string | null;
+
+  /** Optional link to the uploaded exam-order ("guia") file this schedule came
+   * from. One guia is shared by all the exam items in the schedule. Distinct
+   * from `resultFileUrl`, which is the exam RESULT uploaded afterwards. */
+  @Column({ type: 'uuid', nullable: true })
+  attachmentId: string | null;
+
+  @ManyToOne(() => MedicalAttachment, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'attachmentId' })
+  attachment: MedicalAttachment | null;
 
   @OneToMany(() => ExamScheduleItem, (item) => item.examSchedule)
   items: ExamScheduleItem[];

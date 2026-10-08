@@ -41,6 +41,7 @@ import { Notification } from './entities/notification.entity';
 import { Clinic } from './entities/clinic.entity';
 import { SubscriptionPayment } from './entities/subscription-payment.entity';
 import { CnesEstablishment } from './entities/cnes-establishment.entity';
+import { MedicalAttachment } from './entities/medical-attachment.entity';
 import { ClinicMembership } from './entities/clinic-membership.entity';
 import { ClinicAdminProfile } from './entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from './entities/secretary-profile.entity';
@@ -173,6 +174,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           MedicationCatalog,
           SubscriptionPayment,
           CnesEstablishment,
+          MedicalAttachment,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,
