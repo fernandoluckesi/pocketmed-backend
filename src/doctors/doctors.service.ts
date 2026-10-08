@@ -31,44 +31,33 @@ export class DoctorsService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
+  // Public professional-directory shape: no email/phone/birthDate. Any
+  // authenticated user can reach these two (no @Roles on the routes), so
+  // only data meant to identify a doctor publicly belongs here — the same
+  // set `searchByName` already used.
+  private readonly publicDoctorFields: (keyof Doctor)[] = [
+    'id',
+    'name',
+    'gender',
+    'specialty',
+    'crm',
+    'crmNumber',
+    'crmUf',
+    'profileImage',
+    'createdAt',
+    'updatedAt',
+  ];
+
   async findAll() {
     return await this.doctorRepository.find({
-      select: [
-        'id',
-        'name',
-        'email',
-        'gender',
-        'specialty',
-        'crm',
-        'crmNumber',
-        'crmUf',
-        'phone',
-        'birthDate',
-        'profileImage',
-        'createdAt',
-        'updatedAt',
-      ],
+      select: this.publicDoctorFields,
     });
   }
 
   async findOne(id: string) {
     const doctor = await this.doctorRepository.findOne({
       where: { id },
-      select: [
-        'id',
-        'name',
-        'email',
-        'gender',
-        'specialty',
-        'crm',
-        'crmNumber',
-        'crmUf',
-        'phone',
-        'birthDate',
-        'profileImage',
-        'createdAt',
-        'updatedAt',
-      ],
+      select: this.publicDoctorFields,
     });
 
     if (!doctor) {
@@ -99,21 +88,7 @@ export class DoctorsService {
         crmNumber: normalizedCrm,
         crmUf: normalizedState,
       })
-      .select([
-        'doctor.id',
-        'doctor.name',
-        'doctor.email',
-        'doctor.gender',
-        'doctor.specialty',
-        'doctor.crm',
-        'doctor.crmNumber',
-        'doctor.crmUf',
-        'doctor.phone',
-        'doctor.birthDate',
-        'doctor.profileImage',
-        'doctor.createdAt',
-        'doctor.updatedAt',
-      ])
+      .select(this.publicDoctorFields.map((field) => `doctor.${field}`))
       .getOne();
 
     if (!doctor) {

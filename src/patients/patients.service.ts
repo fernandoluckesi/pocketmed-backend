@@ -40,6 +40,7 @@ import { UploadService } from '../upload/upload.service';
 import { DocumentTextExtractorService } from '../document-parsing/document-text-extractor.service';
 import { DOCUMENT_FOLDERS, DocumentStatus } from '../documents/document.types';
 import { NotificationsService } from '../notifications/notifications.service';
+import { normalizeCpf } from '../common/validators/cpf.util';
 
 /** Shape accepted by create/update surgery (all optional except handled in code). */
 export interface SurgeryData {
@@ -462,13 +463,24 @@ export class PatientsService {
       throw new ForbiddenException('Search query must be at least 3 characters');
     }
 
-    // Secretary: busca em toda a plataforma mas retorna somente dados básicos (nome, email, telefone)
+    // Shared across roles: name/email match the raw query; a query that looks
+    // like a CPF (once normalized) also matches by CPF. This only shapes the
+    // WHERE clause — it never widens which fields come back in the response.
+    const normalizedCpfQuery = normalizeCpf(query);
+    const searchConditions: Array<Record<string, unknown>> = [
+      { name: Like(`%${query}%`), isShadow: false },
+      { email: Like(`%${query}%`), isShadow: false },
+    ];
+    if (normalizedCpfQuery.length >= 3) {
+      searchConditions.push({ cpf: Like(`%${normalizedCpfQuery}%`), isShadow: false });
+    }
+
+    // Secretary: busca em toda a plataforma, mas sem vínculo de permissão por
+    // paciente — por isso retorna só o essencial pra localizar o cadastro
+    // correto (nome/email/telefone), nunca CPF ou data de nascimento.
     if (userRole === ProfessionalRole.SECRETARY) {
       const patients = await this.patientRepository.find({
-        where: [
-          { name: Like(`%${query}%`), isShadow: false },
-          { email: Like(`%${query}%`), isShadow: false },
-        ],
+        where: searchConditions,
         select: ['id', 'name', 'email', 'phone'],
       });
 
@@ -485,20 +497,25 @@ export class PatientsService {
     }
 
     const patients = await this.patientRepository.find({
-      where: [
-        { name: Like(`%${query}%`), isShadow: false },
-        { email: Like(`%${query}%`), isShadow: false },
-      ],
+      where: searchConditions,
       select: this.patientSelectFields,
     });
 
+    // LGPD: a busca serve para localizar o paciente certo, não para expor os
+    // dados dele antes de haver vínculo. Sem permissão ativa (ou acesso ainda
+    // não verificado), a resposta não deve carregar email/telefone/nascimento/
+    // CPF/foto — só o necessário para decidir se é a pessoa certa e solicitar
+    // acesso.
+    const toRestrictedResult = (patient: Patient) => ({
+      id: patient.id,
+      name: patient.name,
+      createdByDoctorId: patient.doctorCreatorId,
+      hasPermission: false,
+      hasAccess: false,
+    });
+
     if (!userId || patients.length === 0) {
-      return patients.map((patient) => ({
-        ...patient,
-        createdByDoctorId: patient.doctorCreatorId,
-        hasPermission: false,
-        hasAccess: false,
-      }));
+      return patients.map(toRestrictedResult);
     }
 
     const patientIds = patients.map((patient) => patient.id);
@@ -515,6 +532,11 @@ export class PatientsService {
     return patients.map((patient) => {
       const isCreator = patient.doctorCreatorId === userId;
       const hasPermission = isCreator || patientIdsWithPermission.has(patient.id);
+
+      if (!hasPermission) {
+        return toRestrictedResult(patient);
+      }
+
       return {
         ...patient,
         createdByDoctorId: patient.doctorCreatorId,
