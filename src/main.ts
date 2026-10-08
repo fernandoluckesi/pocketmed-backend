@@ -1,5 +1,5 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { NestFactory, Reflector } from '@nestjs/core';
+import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
@@ -23,6 +23,14 @@ async function bootstrap() {
   app.set('trust proxy', 1);
 
   app.enableCors();
+
+  // Last line of defense against password hashes / verification codes
+  // leaking through an entity loaded via an un-`select`ed relation (e.g.
+  // `relations: ['doctor', 'patient']` on a certificate/exam/appointment):
+  // `@Exclude()` on those columns (see entities/*.entity.ts) is honored on
+  // every response, nested relations included, regardless of which service
+  // method loaded them.
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   app.useGlobalPipes(
     new ValidationPipe({

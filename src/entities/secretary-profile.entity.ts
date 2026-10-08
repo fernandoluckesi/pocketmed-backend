@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Unique,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { Doctor } from './doctor.entity';
 import { Clinic } from './clinic.entity';
 
@@ -27,6 +28,7 @@ export class SecretaryProfile {
   @Column({ type: 'varchar', length: 255, nullable: true })
   email: string | null;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 255, nullable: true })
   password: string | null;
 

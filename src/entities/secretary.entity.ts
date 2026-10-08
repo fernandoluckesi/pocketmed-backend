@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { Clinic } from './clinic.entity';
 
 @Entity('secretaries')
@@ -20,6 +21,7 @@ export class Secretary {
   @Column({ type: 'varchar', length: 255 })
   email: string;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 255, nullable: true })
   password: string | null;
 
@@ -42,6 +44,7 @@ export class Secretary {
   @Column({ type: 'boolean', default: false })
   isShadow: boolean;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   verificationCode: string | null;
 
@@ -51,6 +54,7 @@ export class Secretary {
   @Column({ type: 'boolean', default: false })
   emailVerified: boolean;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   passwordResetCode: string | null;
 

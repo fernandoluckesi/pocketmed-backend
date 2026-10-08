@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 
 /**
  * Internal Hispora staff account (platform back office).
@@ -33,6 +34,7 @@ export class BackofficeUser {
   @Column({ type: 'varchar', length: 255, unique: true })
   email: string;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 255 })
   password: string;
 
@@ -49,6 +51,7 @@ export class BackofficeUser {
   @Column({ type: 'timestamp', nullable: true })
   lastLoginAt: Date | null;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   passwordResetCode: string | null;
 

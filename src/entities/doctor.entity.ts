@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { Appointment } from './appointment.entity';
 import { Medication } from './medication.entity';
 import { Exam } from './exam.entity';
@@ -26,6 +27,7 @@ export class Doctor {
   @Column({ type: 'varchar', length: 255, unique: true })
   email: string;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 255, nullable: true })
   password: string;
 
@@ -47,12 +49,14 @@ export class Doctor {
   @Column({ type: 'boolean', default: false })
   isShadow: boolean;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   verificationCode: string;
 
   @Column({ type: 'timestamp', nullable: true })
   verificationCodeExpiry: Date;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   passwordResetCode: string;
 
@@ -65,6 +69,7 @@ export class Doctor {
   @Column({ type: 'varchar', length: 255, nullable: true })
   pendingEmail: string | null;
 
+  @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   emailChangeCode: string | null;
 
