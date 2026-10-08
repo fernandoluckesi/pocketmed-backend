@@ -349,9 +349,32 @@ export class ClinicDoctorAssociationService {
   }
 
   async getSentInvites(clinicId: string): Promise<ClinicDoctorInvite[]> {
+    // An invite being pending/sent isn't an established relationship yet —
+    // the nested doctor only needs enough fields to display who was
+    // invited, not their cpf/phone/birthDate (same boundary as the
+    // clinic-admin doctor search).
     return this.inviteRepository.find({
       where: { clinicId },
-      relations: ['doctor'],
+      relations: { doctor: true },
+      select: {
+        id: true,
+        clinicId: true,
+        doctorId: true,
+        invitedBy: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        doctor: {
+          id: true,
+          name: true,
+          email: true,
+          specialty: true,
+          crm: true,
+          crmNumber: true,
+          crmUf: true,
+          profileImage: true,
+        },
+      },
       order: { createdAt: 'DESC' },
     });
   }

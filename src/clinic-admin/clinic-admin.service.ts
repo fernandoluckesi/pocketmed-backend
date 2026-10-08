@@ -177,6 +177,18 @@ export class ClinicAdminService {
     return safeDoctor;
   }
 
+  // Same LGPD boundary as the platform-wide patient/doctor search: cpf,
+  // phone and birthDate are only meant to be visible once the doctor has an
+  // established relationship with this clinic (active membership). Without
+  // that, the admin gets just enough to recognize/invite the right person.
+  private sanitizeDoctorForNonMember(doctor: Doctor) {
+    const sanitized = this.sanitizeDoctor(doctor) as Record<string, unknown>;
+    delete sanitized.cpf;
+    delete sanitized.phone;
+    delete sanitized.birthDate;
+    return sanitized;
+  }
+
   private generateVerificationCode(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
@@ -894,10 +906,15 @@ export class ClinicAdminService {
       activeMemberships.map((membership) => membership.professionalId),
     );
 
-    return doctors.map((doctor) => ({
-      ...this.sanitizeDoctor(doctor),
-      isClinicMember: clinicMemberIds.has(doctor.id),
-    }));
+    return doctors.map((doctor) => {
+      const isClinicMember = clinicMemberIds.has(doctor.id);
+      return {
+        ...(isClinicMember
+          ? this.sanitizeDoctor(doctor)
+          : this.sanitizeDoctorForNonMember(doctor)),
+        isClinicMember,
+      };
+    });
   }
 
   async findDoctorByEmail(user: any, email: string) {
@@ -940,9 +957,12 @@ export class ClinicAdminService {
       select: ['id'],
     });
 
+    const isClinicMember = Boolean(membership);
     return {
-      ...this.sanitizeDoctor(doctor),
-      isClinicMember: Boolean(membership),
+      ...(isClinicMember
+        ? this.sanitizeDoctor(doctor)
+        : this.sanitizeDoctorForNonMember(doctor)),
+      isClinicMember,
     };
   }
 
