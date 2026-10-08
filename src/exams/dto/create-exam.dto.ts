@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum, IsDateString, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEnum,
+  IsDateString,
+  IsOptional,
+  IsUUID,
+  IsBoolean,
+} from 'class-validator';
 import { ExamType, ExamStatus } from '../../entities/exam.entity';
 
 export class CreateExamDto {
@@ -64,4 +72,14 @@ export class CreateExamDto {
   @IsUUID()
   @IsOptional()
   batchId?: string;
+
+  @ApiProperty({
+    example: true,
+    required: false,
+    description:
+      'Sent by doctor-facing clients; the server always decides the real value based on who is authenticated (see ExamsService.create), never trusting this field directly.',
+  })
+  @IsBoolean()
+  @IsOptional()
+  lockedByDoctor?: boolean;
 }

@@ -111,6 +111,7 @@ export class ExamsService {
       doctorId,
       scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : null,
       resultFile: resultFileUrl,
+      lockedByDoctor: true,
     });
 
     return await this.examRepository.save(exam);
@@ -156,6 +157,7 @@ export class ExamsService {
       appointmentId: appointment.id,
       scheduledDate: dto.scheduledDate ? new Date(dto.scheduledDate) : null,
       resultFile: resultFileUrl,
+      lockedByDoctor: false,
     });
 
     return await this.examRepository.save(exam);
