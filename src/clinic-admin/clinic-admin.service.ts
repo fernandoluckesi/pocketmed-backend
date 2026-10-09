@@ -709,7 +709,7 @@ export class ClinicAdminService {
   }
 
   async listClinicPatients(user: any) {
-    const { clinicId, role } = this.getClinicContext(user, [
+    const { clinicId, role, userId } = this.getClinicContext(user, [
       ProfessionalRole.ADMIN,
       ProfessionalRole.SECRETARY,
     ]);
@@ -802,7 +802,14 @@ export class ClinicAdminService {
           crm: doctor.crm,
         }));
 
-      if (role === ProfessionalRole.SECRETARY) {
+      // Being in scope for the clinic (another doctor there treats this
+      // patient) isn't the same as THIS admin having an actual relationship
+      // to them — clinic-wide oversight shouldn't hand over full PII for a
+      // colleague's patient the admin has no individual permission for.
+      const adminHasIndividualAccess =
+        patient.doctorCreatorId === userId || linkedDoctorIds.has(userId);
+
+      if (role === ProfessionalRole.SECRETARY || !adminHasIndividualAccess) {
         return {
           id: patient.id,
           name: patient.name,
