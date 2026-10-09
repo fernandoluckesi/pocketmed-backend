@@ -18,8 +18,8 @@ export class FinancialExpense {
   @Column({ type: 'varchar', length: 36 })
   clinicId: string;
 
-  @Column({ type: 'varchar', length: 36 })
-  costCenterId: string;
+  @Column({ type: 'varchar', length: 36, nullable: true })
+  costCenterId: string | null;
 
   @Column({ type: 'varchar', length: 50 })
   category: string;
@@ -73,9 +73,9 @@ export class FinancialExpense {
   @JoinColumn({ name: 'clinicId' })
   clinic: Clinic;
 
-  @ManyToOne(() => FinancialCostCenter)
+  @ManyToOne(() => FinancialCostCenter, { nullable: true })
   @JoinColumn({ name: 'costCenterId' })
-  costCenter: FinancialCostCenter;
+  costCenter: FinancialCostCenter | null;
 
   @CreateDateColumn()
   createdAt: Date;
