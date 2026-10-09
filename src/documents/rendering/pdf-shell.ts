@@ -86,14 +86,17 @@ export function drawSignatureArea(doc: PDFKit.PDFDocument, signatureStatus: Sign
   doc.moveDown(0.5);
 
   // Only ever renders a "signed" claim once a real signature actually exists
-  // (signatureStatus === SIGNED) — MockSignatureProvider never produces that
-  // status, so this branch is dead code until a real provider is wired in.
+  // (signatureStatus === SIGNED). Deliberately generic: naming a specific
+  // standard (e.g. "ICP-Brasil") here would be a false claim about *how* it
+  // was signed as long as the only provider wired in is MockSignatureProvider
+  // (a UX simulation, not a real ICP-Brasil integration) — say only what's
+  // actually true regardless of which provider produced the signature.
   if (signatureStatus === SignatureStatus.SIGNED) {
     doc
       .font('Helvetica-Bold')
       .fontSize(9)
       .fillColor('#166534')
-      .text('Documento assinado digitalmente (ICP-Brasil).', { align: 'center' });
+      .text('Documento assinado digitalmente.', { align: 'center' });
   } else {
     doc
       .font('Helvetica-Oblique')
