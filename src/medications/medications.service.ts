@@ -95,6 +95,10 @@ export class MedicationsService {
       doctorId,
       startDate: new Date(dto.startDate),
       endDate: dto.endDate ? new Date(dto.endDate) : null,
+      // The server decides this, not the client (see update()/delete()'s
+      // enforcement of the same flag) — every medication a doctor creates
+      // is locked, regardless of what the request body happened to send.
+      lockedByDoctor: true,
     });
 
     return await this.medicationRepository.save(medication);
@@ -136,6 +140,10 @@ export class MedicationsService {
         appointmentId: appointment.id,
         startDate: new Date(dto.startDate),
         endDate: dto.endDate ? new Date(dto.endDate) : null,
+        // The patient is the one logging this (self-reported during their
+        // own appointment) — carrying the appointment's doctorId is just
+        // for linking, not a prescription, so it's never locked.
+        lockedByDoctor: false,
       });
 
       return await this.medicationRepository.save(medication);
@@ -166,6 +174,7 @@ export class MedicationsService {
       appointmentId: null,
       startDate: new Date(dto.startDate),
       endDate: dto.endDate ? new Date(dto.endDate) : null,
+      lockedByDoctor: false,
     });
 
     return await this.medicationRepository.save(medication);
