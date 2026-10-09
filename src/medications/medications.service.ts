@@ -271,6 +271,31 @@ export class MedicationsService {
       );
     }
 
+    // Mirrors the mobile app's own UI for a doctor-prescribed medication: the
+    // patient only gets an "Editar Horários" screen (times/startDate/endDate),
+    // never a field to rename, redose, or reinstruct it. That was UI-only —
+    // nothing stopped a direct API call from changing the rest, which is
+    // exactly the data integrity this lock exists to protect.
+    if (isOwnerPatient && medication.lockedByDoctor) {
+      const doctorOnlyFields: (keyof UpdateMedicationDto)[] = [
+        'name',
+        'dosage',
+        'frequency',
+        'duration',
+        'instructions',
+        'isActive',
+        'isFinished',
+      ];
+      const attemptedDoctorOnlyChange = doctorOnlyFields.some(
+        (field) => dto[field] !== undefined,
+      );
+      if (attemptedDoctorOnlyChange) {
+        throw new ForbiddenException(
+          'This medication was prescribed by a doctor — you can only adjust its times and start/end dates',
+        );
+      }
+    }
+
     Object.assign(medication, dto);
 
     if (dto.startDate) {
@@ -314,6 +339,15 @@ export class MedicationsService {
     if (!isOwnerDoctor && !isOwnerPatient) {
       throw new ForbiddenException(
         'Only the doctor who created the medication or the patient who owns it can delete it',
+      );
+    }
+
+    // Mirrors the mobile app, which hides "Excluir" entirely for a
+    // doctor-prescribed medication — the patient was never offered this,
+    // so a direct API call shouldn't be able to do it either.
+    if (isOwnerPatient && medication.lockedByDoctor) {
+      throw new ForbiddenException(
+        'This medication was prescribed by a doctor and cannot be deleted',
       );
     }
 

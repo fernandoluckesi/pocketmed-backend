@@ -260,6 +260,17 @@ export class ExamsService {
       );
     }
 
+    // Mirrors the mobile app: a doctor-requested exam hides "Editar" entirely
+    // for the patient — the only thing they can do is submit a result (a
+    // separate endpoint, submitResult(), unaffected by this). That was
+    // UI-only; nothing stopped a direct call to this endpoint from renaming
+    // or redescribing the exam the doctor ordered.
+    if (isOwnerPatient && exam.lockedByDoctor) {
+      throw new ForbiddenException(
+        'This exam was requested by a doctor and cannot be edited here — submit a result instead',
+      );
+    }
+
     Object.assign(exam, dto);
 
     if (dto.scheduledDate) {
@@ -342,6 +353,14 @@ export class ExamsService {
     if (!isOwnerDoctor && !isOwnerPatient) {
       throw new ForbiddenException(
         'Only the doctor who created the exam or the patient who owns it can delete it',
+      );
+    }
+
+    // Mirrors the mobile app, which hides "Excluir" entirely for a
+    // doctor-requested exam.
+    if (isOwnerPatient && exam.lockedByDoctor) {
+      throw new ForbiddenException(
+        'This exam was requested by a doctor and cannot be deleted',
       );
     }
 
