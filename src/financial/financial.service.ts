@@ -738,10 +738,12 @@ export class FinancialService {
     const totalRevenues = revenues.length;
     const ticketMedio = totalRevenues > 0 ? faturamento / totalRevenues : 0;
 
-    // Inadimplência
-    const pendentes = revenues.filter((r) => r.status === 'PENDENTE');
-    const valorPendente = pendentes.reduce((sum, r) => sum + (Number(r.netValue) || 0), 0);
-    const inadimplencia = faturamento > 0 ? (valorPendente / faturamento) * 100 : 0;
+    // Inadimplência: only revenues actually past their dueDate (status
+    // VENCIDO, flipped daily by the overdue cron) count as delinquent — a
+    // PENDENTE revenue due later this month, or due today, isn't overdue yet.
+    const vencidas = revenues.filter((r) => r.status === 'VENCIDO');
+    const valorVencido = vencidas.reduce((sum, r) => sum + (Number(r.netValue) || 0), 0);
+    const inadimplencia = faturamento > 0 ? (valorVencido / faturamento) * 100 : 0;
 
     // Expenses this month
     const expenses = await this.expenseRepo.find({
