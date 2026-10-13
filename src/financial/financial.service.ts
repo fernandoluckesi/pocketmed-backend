@@ -196,6 +196,8 @@ export class FinancialService {
       convenioId?: string;
       startDate?: string;
       endDate?: string;
+      minValue?: number;
+      maxValue?: number;
       page?: number;
       limit?: number;
     },
@@ -213,6 +215,13 @@ export class FinancialService {
       where.dueDate = MoreThanOrEqual(new Date(filters.startDate)) as any;
     } else if (filters.endDate) {
       where.dueDate = LessThanOrEqual(new Date(filters.endDate)) as any;
+    }
+    if (filters.minValue !== undefined && filters.maxValue !== undefined) {
+      where.netValue = Between(filters.minValue, filters.maxValue) as any;
+    } else if (filters.minValue !== undefined) {
+      where.netValue = MoreThanOrEqual(filters.minValue) as any;
+    } else if (filters.maxValue !== undefined) {
+      where.netValue = LessThanOrEqual(filters.maxValue) as any;
     }
 
     const [data, total] = await this.revenueRepo.findAndCount({
@@ -357,6 +366,8 @@ export class FinancialService {
       costCenterId?: string;
       startDate?: string;
       endDate?: string;
+      minValue?: number;
+      maxValue?: number;
       page?: number;
       limit?: number;
     },
@@ -374,6 +385,13 @@ export class FinancialService {
       where.dueDate = MoreThanOrEqual(new Date(filters.startDate)) as any;
     } else if (filters.endDate) {
       where.dueDate = LessThanOrEqual(new Date(filters.endDate)) as any;
+    }
+    if (filters.minValue !== undefined && filters.maxValue !== undefined) {
+      where.netValue = Between(filters.minValue, filters.maxValue) as any;
+    } else if (filters.minValue !== undefined) {
+      where.netValue = MoreThanOrEqual(filters.minValue) as any;
+    } else if (filters.maxValue !== undefined) {
+      where.netValue = LessThanOrEqual(filters.maxValue) as any;
     }
 
     const [data, total] = await this.expenseRepo.findAndCount({

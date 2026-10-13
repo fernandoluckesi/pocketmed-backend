@@ -113,6 +113,8 @@ export class FinancialController {
     @Query('convenioId') convenioId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('minValue') minValue?: string,
+    @Query('maxValue') maxValue?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -122,6 +124,8 @@ export class FinancialController {
       convenioId,
       startDate,
       endDate,
+      minValue: minValue ? parseFloat(minValue) : undefined,
+      maxValue: maxValue ? parseFloat(maxValue) : undefined,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });
@@ -173,6 +177,8 @@ export class FinancialController {
     @Query('costCenterId') costCenterId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('minValue') minValue?: string,
+    @Query('maxValue') maxValue?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -182,6 +188,8 @@ export class FinancialController {
       costCenterId,
       startDate,
       endDate,
+      minValue: minValue ? parseFloat(minValue) : undefined,
+      maxValue: maxValue ? parseFloat(maxValue) : undefined,
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
     });
