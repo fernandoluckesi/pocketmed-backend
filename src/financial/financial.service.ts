@@ -244,6 +244,39 @@ export class FinancialService {
     return summary;
   }
 
+  // A revenue/expense created directly with status PAGO (the quick-create
+  // forms allow picking this up front, not just via a later "Receber"/"Pagar"
+  // action) must leave the cash flow just as consistent as if it had gone
+  // through updateRevenueStatus()/payExpense() — otherwise a retroactively
+  // logged, already-settled entry silently never shows up as cash in/out.
+  private async createRevenueCashflowEntry(clinicId: string, revenue: FinancialRevenue) {
+    const entry = this.cashflowRepo.create({
+      clinicId,
+      type: 'ENTRADA',
+      sourceType: 'RECEITA',
+      sourceId: revenue.id,
+      description: `Receita: ${revenue.procedure}`,
+      value: Number(revenue.netValue),
+      date: new Date(),
+      category: revenue.specialty,
+    });
+    await this.cashflowRepo.save(entry);
+  }
+
+  private async createExpenseCashflowEntry(clinicId: string, expense: FinancialExpense) {
+    const entry = this.cashflowRepo.create({
+      clinicId,
+      type: 'SAIDA',
+      sourceType: 'DESPESA',
+      sourceId: expense.id,
+      description: `Despesa: ${expense.provider} - ${expense.category}`,
+      value: Number(expense.netValue),
+      date: new Date(),
+      category: expense.category,
+    });
+    await this.cashflowRepo.save(entry);
+  }
+
   async createRevenue(clinicId: string, dto: any) {
     const grossValue = Number(dto.grossValue) || 0;
     const discountValue = Number(dto.discountValue) || 0;
@@ -255,8 +288,15 @@ export class FinancialService {
       discountValue,
       netValue,
       status: dto.status || 'PENDENTE',
-    });
-    return this.revenueRepo.save(revenue);
+    }) as unknown as FinancialRevenue;
+    if (revenue.status === 'PAGO') {
+      revenue.paidAt = new Date();
+    }
+    const saved = await this.revenueRepo.save(revenue);
+    if (saved.status === 'PAGO') {
+      await this.createRevenueCashflowEntry(clinicId, saved);
+    }
+    return saved;
   }
 
   async updateRevenue(clinicId: string, id: string, dto: any) {
@@ -291,18 +331,7 @@ export class FinancialService {
     }
     if (status === 'PAGO') {
       revenue.paidAt = new Date();
-      // Create cashflow ENTRADA entry
-      const entry = this.cashflowRepo.create({
-        clinicId,
-        type: 'ENTRADA',
-        sourceType: 'RECEITA',
-        sourceId: revenue.id,
-        description: `Receita: ${revenue.procedure}`,
-        value: Number(revenue.netValue),
-        date: new Date(),
-        category: revenue.specialty,
-      });
-      await this.cashflowRepo.save(entry);
+      await this.createRevenueCashflowEntry(clinicId, revenue);
     }
     return this.revenueRepo.save(revenue);
   }
@@ -385,8 +414,15 @@ export class FinancialService {
       taxValue,
       netValue,
       status: dto.status || 'PENDENTE',
-    });
-    return this.expenseRepo.save(expense);
+    }) as unknown as FinancialExpense;
+    if (expense.status === 'PAGO') {
+      expense.paidAt = new Date();
+    }
+    const saved = await this.expenseRepo.save(expense);
+    if (saved.status === 'PAGO') {
+      await this.createExpenseCashflowEntry(clinicId, saved);
+    }
+    return saved;
   }
 
   async updateExpense(clinicId: string, id: string, dto: any) {
@@ -410,19 +446,7 @@ export class FinancialService {
     }
     expense.status = 'PAGO';
     expense.paidAt = new Date();
-
-    // Create cashflow SAIDA entry
-    const entry = this.cashflowRepo.create({
-      clinicId,
-      type: 'SAIDA',
-      sourceType: 'DESPESA',
-      sourceId: expense.id,
-      description: `Despesa: ${expense.provider} - ${expense.category}`,
-      value: Number(expense.netValue),
-      date: new Date(),
-      category: expense.category,
-    });
-    await this.cashflowRepo.save(entry);
+    await this.createExpenseCashflowEntry(clinicId, expense);
 
     return this.expenseRepo.save(expense);
   }
