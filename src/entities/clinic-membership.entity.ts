@@ -33,6 +33,11 @@ export class ClinicMembership {
   @Column({ type: 'uuid', nullable: true })
   invitedBy: string | null;
 
+  // Overrides the clinic's defaultDoctorTransferPercentage (FinancialSettings)
+  // for this specific doctor. Null means "use the clinic default".
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  transferPercentage: number | null;
+
   @ManyToOne(() => Clinic, (clinic) => clinic.memberships, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'clinicId' })
   clinic: Clinic;

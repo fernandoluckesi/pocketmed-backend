@@ -19,6 +19,7 @@ import { AddClinicMemberDto } from './dto/add-clinic-member.dto';
 import { CreateShadowDoctorByAdminDto } from './dto/create-shadow-doctor-by-admin.dto';
 import { ListClinicMembersQueryDto } from './dto/list-clinic-members.query.dto';
 import { UpdateClinicMemberRoleDto } from './dto/update-clinic-member-role.dto';
+import { UpdateClinicMemberTransferPercentageDto } from './dto/update-clinic-member-transfer-percentage.dto';
 import { UpdateRoleProfileDto } from './dto/update-role-profile.dto';
 
 @ApiTags('Clinic Admin')
@@ -52,6 +53,19 @@ export class ClinicAdminController {
     @Body() dto: UpdateClinicMemberRoleDto,
   ) {
     return this.clinicAdminService.updateMemberRole(user, membershipId, dto);
+  }
+
+  @Patch('members/:membershipId/transfer-percentage')
+  @ApiOperation({
+    summary: "Set a doctor's repasse percentage override for the active clinic (admins only)",
+  })
+  @ApiResponse({ status: 200, description: 'Transfer percentage updated successfully' })
+  async updateMemberTransferPercentage(
+    @CurrentUser() user: any,
+    @Param('membershipId') membershipId: string,
+    @Body() dto: UpdateClinicMemberTransferPercentageDto,
+  ) {
+    return this.clinicAdminService.updateMemberTransferPercentage(user, membershipId, dto);
   }
 
   @Post('members')

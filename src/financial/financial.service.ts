@@ -12,6 +12,7 @@ import {
   LessThanOrEqual,
   FindOptionsWhere,
   Like,
+  In,
 } from 'typeorm';
 import { FinancialSettings } from '../entities/financial-settings.entity';
 import { FinancialCostCenter } from '../entities/financial-cost-center.entity';
@@ -20,6 +21,7 @@ import { FinancialRevenue } from '../entities/financial-revenue.entity';
 import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
 import { FinancialCashflowEntry } from '../entities/financial-cashflow-entry.entity';
+import { ClinicMembership } from '../entities/clinic-membership.entity';
 
 @Injectable()
 export class FinancialService {
@@ -38,6 +40,8 @@ export class FinancialService {
     private readonly transferRepo: Repository<FinancialDoctorTransfer>,
     @InjectRepository(FinancialCashflowEntry)
     private readonly cashflowRepo: Repository<FinancialCashflowEntry>,
+    @InjectRepository(ClinicMembership)
+    private readonly clinicMembershipRepo: Repository<ClinicMembership>,
   ) {}
 
   // ─── SETTINGS ───────────────────────────────────────────────────────────────
@@ -522,8 +526,23 @@ export class FinancialService {
       doctorMap[rev.doctorId].count += 1;
     }
 
-    const percentage = Number(settings.defaultDoctorTransferPercentage) || 50;
+    const defaultPercentage = Number(settings.defaultDoctorTransferPercentage) || 50;
+
+    const doctorIds = Object.keys(doctorMap);
+    const memberships = doctorIds.length
+      ? await this.clinicMembershipRepo.find({
+          where: { clinicId, professionalId: In(doctorIds) },
+          select: ['professionalId', 'transferPercentage'],
+        })
+      : [];
+    const overrideByDoctorId = new Map(
+      memberships
+        .filter((m) => m.transferPercentage !== null && m.transferPercentage !== undefined)
+        .map((m) => [m.professionalId, Number(m.transferPercentage)]),
+    );
+
     const results = Object.entries(doctorMap).map(([doctorId, data]) => {
+      const percentage = overrideByDoctorId.get(doctorId) ?? defaultPercentage;
       const transferAmount = (data.total * percentage) / 100;
       return {
         doctorId,

@@ -21,6 +21,7 @@ import { CreateShadowDoctorByAdminDto } from './dto/create-shadow-doctor-by-admi
 import { EmailService } from '../email/email.service';
 import { ListClinicMembersQueryDto } from './dto/list-clinic-members.query.dto';
 import { UpdateClinicMemberRoleDto } from './dto/update-clinic-member-role.dto';
+import { UpdateClinicMemberTransferPercentageDto } from './dto/update-clinic-member-transfer-percentage.dto';
 import { UpdateRoleProfileDto } from './dto/update-role-profile.dto';
 import { resolveCrmInput } from '../common/crm.util';
 
@@ -441,6 +442,34 @@ export class ClinicAdminService {
     };
   }
 
+  async updateMemberTransferPercentage(
+    user: any,
+    membershipId: string,
+    dto: UpdateClinicMemberTransferPercentageDto,
+  ) {
+    const { clinicId } = this.getAdminContext(user);
+
+    const membership = await this.clinicMembershipRepository.findOne({
+      where: { id: membershipId, clinicId, isActive: true },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Membership not found in active clinic');
+    }
+
+    membership.transferPercentage =
+      dto.transferPercentage === null || dto.transferPercentage === undefined
+        ? null
+        : dto.transferPercentage;
+    const updated = await this.clinicMembershipRepository.save(membership);
+
+    return {
+      id: updated.id,
+      professionalId: updated.professionalId,
+      transferPercentage: updated.transferPercentage,
+    };
+  }
+
   async addMember(user: any, dto: AddClinicMemberDto) {
     const { clinicId, adminId } = this.getAdminContext(user);
 
@@ -841,10 +870,13 @@ export class ClinicAdminService {
         isActive: true,
         role: In([ProfessionalRole.DOCTOR, ProfessionalRole.ADMIN]),
       },
-      select: ['professionalId'],
+      select: ['id', 'professionalId', 'transferPercentage'],
     });
 
-    const doctorIds = [...new Set(memberships.map((membership) => membership.professionalId))];
+    const membershipByDoctorId = new Map(
+      memberships.map((membership) => [membership.professionalId, membership]),
+    );
+    const doctorIds = [...membershipByDoctorId.keys()];
     if (doctorIds.length === 0) {
       return [];
     }
@@ -855,7 +887,14 @@ export class ClinicAdminService {
       order: { name: 'ASC' },
     });
 
-    return doctors;
+    return doctors.map((doctor) => {
+      const membership = membershipByDoctorId.get(doctor.id);
+      return {
+        ...doctor,
+        membershipId: membership?.id ?? null,
+        transferPercentage: membership?.transferPercentage ?? null,
+      };
+    });
   }
 
   async searchDoctors(user: any, query: string) {
