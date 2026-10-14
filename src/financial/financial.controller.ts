@@ -147,6 +147,14 @@ export class FinancialController {
     return this.financialService.deleteConvenioProcedure(user.activeClinicId, convenioId, id);
   }
 
+  // ─── TUSS PROCEDURES (official ANS code lookup for autocomplete) ──────────
+
+  @Get('tuss-procedures/search')
+  @Roles('doctor', 'admin', 'secretary')
+  searchTussProcedures(@Query('q') q: string) {
+    return this.financialService.searchTussProcedures(q);
+  }
+
   // ─── REVENUES ─────────────────────────────────────────────────────────────
 
   @Get('revenues')

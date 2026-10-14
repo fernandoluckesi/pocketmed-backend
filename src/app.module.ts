@@ -30,6 +30,7 @@ import { Certificate } from './entities/certificate.entity';
 import { Prescription } from './entities/prescription.entity';
 import { Report } from './entities/report.entity';
 import { ExamRequest } from './entities/exam-request.entity';
+import { TussProcedure } from './entities/tuss-procedure.entity';
 import { MedicationCatalog } from './entities/medication-catalog.entity';
 import { DoctorAccessRequest } from './entities/doctor-access-request.entity';
 import { DoctorPermission } from './entities/doctor-permission.entity';
@@ -177,6 +178,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           SubscriptionPayment,
           CnesEstablishment,
           MedicalAttachment,
+          TussProcedure,
         ],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false,

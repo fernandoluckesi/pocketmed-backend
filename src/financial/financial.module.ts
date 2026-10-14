@@ -12,6 +12,7 @@ import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
 import { FinancialCashflowEntry } from '../entities/financial-cashflow-entry.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
+import { TussProcedure } from '../entities/tuss-procedure.entity';
 import { UploadModule } from '../upload/upload.module';
 
 @Module({
@@ -26,6 +27,7 @@ import { UploadModule } from '../upload/upload.module';
       FinancialDoctorTransfer,
       FinancialCashflowEntry,
       ClinicMembership,
+      TussProcedure,
     ]),
     UploadModule,
   ],

@@ -44,6 +44,7 @@ import { Prescription } from '../entities/prescription.entity';
 import { MedicalAttachment } from '../entities/medical-attachment.entity';
 import { Report } from '../entities/report.entity';
 import { ExamRequest } from '../entities/exam-request.entity';
+import { TussProcedure } from '../entities/tuss-procedure.entity';
 
 /**
  * Railway exposes a ready-to-use connection string (MYSQL_URL / MYSQL_PUBLIC_URL).
@@ -126,6 +127,7 @@ const AppDataSource = new DataSource({
     Report,
     ExamRequest,
     MedicalAttachment,
+    TussProcedure,
   ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   synchronize: false,

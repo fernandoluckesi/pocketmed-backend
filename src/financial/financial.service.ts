@@ -23,6 +23,7 @@ import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
 import { FinancialCashflowEntry } from '../entities/financial-cashflow-entry.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
+import { TussProcedure } from '../entities/tuss-procedure.entity';
 
 @Injectable()
 export class FinancialService {
@@ -45,6 +46,8 @@ export class FinancialService {
     private readonly cashflowRepo: Repository<FinancialCashflowEntry>,
     @InjectRepository(ClinicMembership)
     private readonly clinicMembershipRepo: Repository<ClinicMembership>,
+    @InjectRepository(TussProcedure)
+    private readonly tussProcedureRepo: Repository<TussProcedure>,
   ) {}
 
   // ─── SETTINGS ───────────────────────────────────────────────────────────────
@@ -245,6 +248,26 @@ export class FinancialService {
       throw new NotFoundException('Convenio procedure not found');
     }
     await this.convenioProcedureRepo.remove(procedure);
+  }
+
+  // ─── TUSS PROCEDURES (official ANS code lookup for autocomplete) ───────────
+
+  async searchTussProcedures(query: string) {
+    const term = (query || '').trim();
+    if (term.length < 2) {
+      return [];
+    }
+    const qb = this.tussProcedureRepo
+      .createQueryBuilder('t')
+      .where('(t.validUntil IS NULL OR t.validUntil >= CURDATE())')
+      .andWhere('(t.code LIKE :prefix OR t.name LIKE :contains)', {
+        prefix: `${term}%`,
+        contains: `%${term}%`,
+      })
+      .orderBy('CASE WHEN t.code LIKE :prefix THEN 0 ELSE 1 END', 'ASC')
+      .addOrderBy('t.name', 'ASC')
+      .take(20);
+    return qb.getMany();
   }
 
   // ─── REVENUES ──────────────────────────────────────────────────────────────
