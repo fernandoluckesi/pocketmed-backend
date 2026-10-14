@@ -22,6 +22,7 @@ import { Clinic } from '../entities/clinic.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UploadModule } from '../upload/upload.module';
 import { DocumentParsingModule } from '../document-parsing/document-parsing.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { DocumentParsingModule } from '../document-parsing/document-parsing.modu
     NotificationsModule,
     UploadModule,
     DocumentParsingModule,
+    EmailModule,
   ],
   controllers: [PatientsController],
   providers: [PatientsService],

@@ -41,6 +41,7 @@ import { DocumentTextExtractorService } from '../document-parsing/document-text-
 import { DOCUMENT_FOLDERS, DocumentStatus } from '../documents/document.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { normalizeCpf } from '../common/validators/cpf.util';
+import { EmailService } from '../email/email.service';
 
 /** Shape accepted by create/update surgery (all optional except handled in code). */
 export interface SurgeryData {
@@ -87,6 +88,8 @@ export class PatientsService {
     'type',
     'isShadow',
     'doctorCreatorId',
+    'inviteEmailStatus',
+    'inviteEmailSentAt',
     'createdAt',
     'updatedAt',
   ];
@@ -129,6 +132,7 @@ export class PatientsService {
     private notificationsService: NotificationsService,
     private uploadService: UploadService,
     private documentTextExtractorService: DocumentTextExtractorService,
+    private emailService: EmailService,
   ) {}
 
   private async getAccessiblePatientIdsForDoctor(doctorId: string): Promise<string[]> {
@@ -204,6 +208,71 @@ export class PatientsService {
     }
 
     return Array.from(ids);
+  }
+
+  /**
+   * Retries the welcome/invite email for a shadow patient whose previous
+   * attempt failed (see registerPatientShadow in auth.service.ts, which no
+   * longer rolls back patient creation when the email send fails). Uses the
+   * same access rules as findMyPatients so a doctor/admin/secretary can only
+   * resend for a patient they can already see.
+   */
+  async resendInviteEmail(
+    patientId: string,
+    userType: string,
+    userId?: string,
+    userRole?: string | null,
+    activeClinicId?: string | null,
+  ) {
+    if (userType !== 'doctor') {
+      throw new ForbiddenException('Only professionals can resend invites');
+    }
+
+    const patient = await this.patientRepository.findOne({
+      where: { id: patientId },
+      relations: ['doctorCreator'],
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Patient not found');
+    }
+
+    if (!patient.isShadow) {
+      throw new BadRequestException('Only shadow patients can receive an invite email');
+    }
+
+    let accessibleIds: string[];
+    if (userRole === ProfessionalRole.ADMIN || userRole === ProfessionalRole.SECRETARY) {
+      if (!activeClinicId) {
+        throw new ForbiddenException('Active clinic context is required for this operation');
+      }
+      accessibleIds = await this.getClinicPatientIds(activeClinicId);
+    } else {
+      if (!userId) {
+        throw new ForbiddenException('You do not have access to this patient');
+      }
+      accessibleIds = await this.getAccessiblePatientIdsForDoctor(userId);
+    }
+
+    if (!accessibleIds.includes(patient.id)) {
+      throw new ForbiddenException('You do not have access to this patient');
+    }
+
+    const doctorName = patient.doctorCreator?.name || 'Sua clínica';
+
+    let inviteEmailStatus: 'sent' | 'failed' = 'sent';
+    try {
+      await this.emailService.sendInviteEmail(patient.email, patient.name, doctorName);
+    } catch {
+      inviteEmailStatus = 'failed';
+    }
+
+    await this.patientRepository.update(patient.id, {
+      inviteEmailStatus,
+      inviteEmailSentAt: new Date(),
+    });
+
+    return { inviteEmailStatus };
   }
 
   private async logAccess(patientId: string, accessedBy: string, action: string, details?: string) {

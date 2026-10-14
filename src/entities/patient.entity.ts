@@ -58,6 +58,17 @@ export class Patient {
   @Column({ type: 'boolean', default: false })
   isShadow: boolean;
 
+  // Tracks the outcome of the welcome/invite email sent when a shadow patient
+  // is created (or re-sent later). Patient creation no longer rolls back when
+  // the email fails — this lets staff see it failed and retry via
+  // POST /patients/:id/resend-invite instead of the account being silently
+  // stuck with no invite ever delivered.
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  inviteEmailStatus: 'sent' | 'failed' | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  inviteEmailSentAt: Date | null;
+
   @Exclude()
   @Column({ type: 'varchar', length: 6, nullable: true })
   verificationCode: string;

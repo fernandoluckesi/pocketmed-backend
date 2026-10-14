@@ -86,6 +86,22 @@ export class PatientsController {
     return this.patientsService.findOne(id, user.userId, user.type, user.role, user.activeClinicId);
   }
 
+  @Post(':id/resend-invite')
+  @ApiOperation({ summary: 'Resend the welcome/invite email for a shadow patient' })
+  @ApiResponse({ status: 200, description: 'Resend attempted; returns the resulting status' })
+  @ApiResponse({ status: 400, description: 'Patient is not a shadow account' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  @ApiResponse({ status: 404, description: 'Patient not found' })
+  async resendInvite(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.patientsService.resendInviteEmail(
+      id,
+      user.type,
+      user.userId,
+      user.role,
+      user.activeClinicId,
+    );
+  }
+
   // ─── Sprint 1: Patient Sub-resource Endpoints ─────────────────────────────
 
   @Get(':id/medical-record')

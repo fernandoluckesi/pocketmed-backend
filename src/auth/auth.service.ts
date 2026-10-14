@@ -240,6 +240,8 @@ export class AuthService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    let savedPatient: Patient;
+
     try {
       const patient = queryRunner.manager.create(Patient, {
         name: dto.name,
@@ -256,7 +258,7 @@ export class AuthService {
         doctorCreatorId: dto.doctorCreatorId,
       });
 
-      const savedPatient = await queryRunner.manager.save(patient);
+      savedPatient = await queryRunner.manager.save(patient);
 
       // When created by clinic staff (admin/secretary), make the shadow patient
       // available to the WHOLE clinic automatically by granting an active
@@ -288,20 +290,43 @@ export class AuthService {
         }
       }
 
-      await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name);
-
       await queryRunner.commitTransaction();
-
-      return {
-        message: 'Shadow patient created successfully. Invitation email sent.',
-        user: this.sanitizeUser(savedPatient),
-      };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
       await queryRunner.release();
     }
+
+    // The invite email is sent AFTER the patient record is committed, and on
+    // its own try/catch, so a Resend outage/misconfiguration or a bad
+    // recipient domain never discards an otherwise-valid patient registration.
+    // The outcome is recorded on the patient so staff can see it failed and
+    // retry via POST /patients/:id/resend-invite.
+    let inviteEmailStatus: 'sent' | 'failed' = 'sent';
+    try {
+      await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name);
+    } catch (emailError) {
+      inviteEmailStatus = 'failed';
+      this.logger.error(
+        `Failed to send invite email for shadow patient ${savedPatient.id}: ${emailError.message}`,
+      );
+    }
+
+    await this.patientRepository.update(savedPatient.id, {
+      inviteEmailStatus,
+      inviteEmailSentAt: new Date(),
+    });
+    savedPatient.inviteEmailStatus = inviteEmailStatus;
+
+    return {
+      message:
+        inviteEmailStatus === 'sent'
+          ? 'Shadow patient created successfully. Invitation email sent.'
+          : 'Shadow patient created successfully, but the invitation email failed to send.',
+      inviteEmailStatus,
+      user: this.sanitizeUser(savedPatient),
+    };
   }
 
   async registerDoctor(dto: RegisterDoctorDto, file?: Express.Multer.File) {
