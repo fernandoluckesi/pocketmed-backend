@@ -103,6 +103,50 @@ export class FinancialController {
     return this.financialService.deleteConvenio(user.activeClinicId, id);
   }
 
+  // ─── CONVENIO PROCEDURES (remuneration table per convênio) ────────────────
+
+  @Get('convenios/:convenioId/procedures')
+  @Roles('doctor', 'admin', 'secretary')
+  listConvenioProcedures(
+    @CurrentUser() user: any,
+    @Param('convenioId') convenioId: string,
+  ) {
+    return this.financialService.listConvenioProcedures(user.activeClinicId, convenioId);
+  }
+
+  @Post('convenios/:convenioId/procedures')
+  createConvenioProcedure(
+    @CurrentUser() user: any,
+    @Param('convenioId') convenioId: string,
+    @Body() dto: any,
+  ) {
+    return this.financialService.createConvenioProcedure(user.activeClinicId, convenioId, dto);
+  }
+
+  @Put('convenios/:convenioId/procedures/:id')
+  updateConvenioProcedure(
+    @CurrentUser() user: any,
+    @Param('convenioId') convenioId: string,
+    @Param('id') id: string,
+    @Body() dto: any,
+  ) {
+    return this.financialService.updateConvenioProcedure(
+      user.activeClinicId,
+      convenioId,
+      id,
+      dto,
+    );
+  }
+
+  @Delete('convenios/:convenioId/procedures/:id')
+  deleteConvenioProcedure(
+    @CurrentUser() user: any,
+    @Param('convenioId') convenioId: string,
+    @Param('id') id: string,
+  ) {
+    return this.financialService.deleteConvenioProcedure(user.activeClinicId, convenioId, id);
+  }
+
   // ─── REVENUES ─────────────────────────────────────────────────────────────
 
   @Get('revenues')

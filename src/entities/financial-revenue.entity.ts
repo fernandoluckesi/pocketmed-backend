@@ -66,6 +66,15 @@ export class FinancialRevenue {
   @Column({ type: 'varchar', length: 50, nullable: true })
   guideNumber: string | null;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  authorizationNumber: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  insurancePlanName: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  insuranceCardNumber: string | null;
+
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   glosaValue: number | null;
 

@@ -17,6 +17,7 @@ import {
 import { FinancialSettings } from '../entities/financial-settings.entity';
 import { FinancialCostCenter } from '../entities/financial-cost-center.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
+import { FinancialConvenioProcedure } from '../entities/financial-convenio-procedure.entity';
 import { FinancialRevenue } from '../entities/financial-revenue.entity';
 import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
@@ -32,6 +33,8 @@ export class FinancialService {
     private readonly costCenterRepo: Repository<FinancialCostCenter>,
     @InjectRepository(FinancialConvenio)
     private readonly convenioRepo: Repository<FinancialConvenio>,
+    @InjectRepository(FinancialConvenioProcedure)
+    private readonly convenioProcedureRepo: Repository<FinancialConvenioProcedure>,
     @InjectRepository(FinancialRevenue)
     private readonly revenueRepo: Repository<FinancialRevenue>,
     @InjectRepository(FinancialExpense)
@@ -188,6 +191,60 @@ export class FinancialService {
       throw new BadRequestException('Cannot delete convenio with linked revenues');
     }
     await this.convenioRepo.remove(convenio);
+  }
+
+  // ─── CONVENIO PROCEDURES (remuneration table per convênio) ─────────────────
+
+  async listConvenioProcedures(clinicId: string, convenioId: string) {
+    const convenio = await this.convenioRepo.findOne({ where: { id: convenioId, clinicId } });
+    if (!convenio) {
+      throw new NotFoundException('Convenio not found');
+    }
+    return this.convenioProcedureRepo.find({
+      where: { clinicId, convenioId },
+      order: { procedureName: 'ASC' },
+    });
+  }
+
+  async createConvenioProcedure(clinicId: string, convenioId: string, dto: any) {
+    const convenio = await this.convenioRepo.findOne({ where: { id: convenioId, clinicId } });
+    if (!convenio) {
+      throw new NotFoundException('Convenio not found');
+    }
+    const existing = await this.convenioProcedureRepo.findOne({
+      where: { convenioId, procedureCode: dto.procedureCode },
+    });
+    if (existing) {
+      throw new ConflictException('Procedure code already registered for this convenio');
+    }
+    const procedure = this.convenioProcedureRepo.create({ ...dto, clinicId, convenioId });
+    return this.convenioProcedureRepo.save(procedure);
+  }
+
+  async updateConvenioProcedure(
+    clinicId: string,
+    convenioId: string,
+    id: string,
+    dto: any,
+  ) {
+    const procedure = await this.convenioProcedureRepo.findOne({
+      where: { id, clinicId, convenioId },
+    });
+    if (!procedure) {
+      throw new NotFoundException('Convenio procedure not found');
+    }
+    Object.assign(procedure, dto);
+    return this.convenioProcedureRepo.save(procedure);
+  }
+
+  async deleteConvenioProcedure(clinicId: string, convenioId: string, id: string) {
+    const procedure = await this.convenioProcedureRepo.findOne({
+      where: { id, clinicId, convenioId },
+    });
+    if (!procedure) {
+      throw new NotFoundException('Convenio procedure not found');
+    }
+    await this.convenioProcedureRepo.remove(procedure);
   }
 
   // ─── REVENUES ──────────────────────────────────────────────────────────────
