@@ -53,6 +53,7 @@ import { DoctorDocument } from './entities/doctor-document.entity';
 import { FinancialSettings } from './entities/financial-settings.entity';
 import { FinancialCostCenter } from './entities/financial-cost-center.entity';
 import { FinancialConvenio } from './entities/financial-convenio.entity';
+import { FinancialConvenioProcedure } from './entities/financial-convenio-procedure.entity';
 import { FinancialRevenue } from './entities/financial-revenue.entity';
 import { FinancialExpense } from './entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from './entities/financial-doctor-transfer.entity';
@@ -154,6 +155,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
           FinancialSettings,
           FinancialCostCenter,
           FinancialConvenio,
+          FinancialConvenioProcedure,
           FinancialRevenue,
           FinancialExpense,
           FinancialDoctorTransfer,
