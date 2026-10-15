@@ -147,6 +147,42 @@ export class FinancialController {
     return this.financialService.deleteConvenioProcedure(user.activeClinicId, convenioId, id);
   }
 
+  // ─── CONVENIO PLANS ────────────────────────────────────────────────────────
+
+  @Get('convenios/:convenioId/plans')
+  @Roles('doctor', 'admin', 'secretary')
+  listConvenioPlans(@CurrentUser() user: any, @Param('convenioId') convenioId: string) {
+    return this.financialService.listConvenioPlans(user.activeClinicId, convenioId);
+  }
+
+  @Post('convenios/:convenioId/plans')
+  createConvenioPlan(
+    @CurrentUser() user: any,
+    @Param('convenioId') convenioId: string,
+    @Body() dto: any,
+  ) {
+    return this.financialService.createConvenioPlan(user.activeClinicId, convenioId, dto);
+  }
+
+  @Put('convenios/:convenioId/plans/:id')
+  updateConvenioPlan(
+    @CurrentUser() user: any,
+    @Param('convenioId') convenioId: string,
+    @Param('id') id: string,
+    @Body() dto: any,
+  ) {
+    return this.financialService.updateConvenioPlan(user.activeClinicId, convenioId, id, dto);
+  }
+
+  @Delete('convenios/:convenioId/plans/:id')
+  deleteConvenioPlan(
+    @CurrentUser() user: any,
+    @Param('convenioId') convenioId: string,
+    @Param('id') id: string,
+  ) {
+    return this.financialService.deleteConvenioPlan(user.activeClinicId, convenioId, id);
+  }
+
   // ─── TUSS PROCEDURES (official ANS code lookup for autocomplete) ──────────
 
   @Get('tuss-procedures/search')

@@ -18,6 +18,7 @@ import { FinancialSettings } from '../entities/financial-settings.entity';
 import { FinancialCostCenter } from '../entities/financial-cost-center.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { FinancialConvenioProcedure } from '../entities/financial-convenio-procedure.entity';
+import { FinancialConvenioPlan } from '../entities/financial-convenio-plan.entity';
 import { FinancialRevenue } from '../entities/financial-revenue.entity';
 import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
@@ -36,6 +37,8 @@ export class FinancialService {
     private readonly convenioRepo: Repository<FinancialConvenio>,
     @InjectRepository(FinancialConvenioProcedure)
     private readonly convenioProcedureRepo: Repository<FinancialConvenioProcedure>,
+    @InjectRepository(FinancialConvenioPlan)
+    private readonly convenioPlanRepo: Repository<FinancialConvenioPlan>,
     @InjectRepository(FinancialRevenue)
     private readonly revenueRepo: Repository<FinancialRevenue>,
     @InjectRepository(FinancialExpense)
@@ -248,6 +251,55 @@ export class FinancialService {
       throw new NotFoundException('Convenio procedure not found');
     }
     await this.convenioProcedureRepo.remove(procedure);
+  }
+
+  // ─── CONVENIO PLANS (per-convênio insurance plans) ─────────────────────────
+
+  async listConvenioPlans(clinicId: string, convenioId: string) {
+    const convenio = await this.convenioRepo.findOne({ where: { id: convenioId, clinicId } });
+    if (!convenio) {
+      throw new NotFoundException('Convenio not found');
+    }
+    return this.convenioPlanRepo.find({
+      where: { clinicId, convenioId },
+      order: { name: 'ASC' },
+    });
+  }
+
+  async createConvenioPlan(clinicId: string, convenioId: string, dto: any) {
+    const convenio = await this.convenioRepo.findOne({ where: { id: convenioId, clinicId } });
+    if (!convenio) {
+      throw new NotFoundException('Convenio not found');
+    }
+    const existing = await this.convenioPlanRepo.findOne({
+      where: { convenioId, name: dto.name },
+    });
+    if (existing) {
+      throw new ConflictException('Plan already registered for this convenio');
+    }
+    const plan = this.convenioPlanRepo.create({ ...dto, clinicId, convenioId });
+    return this.convenioPlanRepo.save(plan);
+  }
+
+  async updateConvenioPlan(clinicId: string, convenioId: string, id: string, dto: any) {
+    const plan = await this.convenioPlanRepo.findOne({
+      where: { id, clinicId, convenioId },
+    });
+    if (!plan) {
+      throw new NotFoundException('Convenio plan not found');
+    }
+    Object.assign(plan, dto);
+    return this.convenioPlanRepo.save(plan);
+  }
+
+  async deleteConvenioPlan(clinicId: string, convenioId: string, id: string) {
+    const plan = await this.convenioPlanRepo.findOne({
+      where: { id, clinicId, convenioId },
+    });
+    if (!plan) {
+      throw new NotFoundException('Convenio plan not found');
+    }
+    await this.convenioPlanRepo.remove(plan);
   }
 
   // ─── TUSS PROCEDURES (official ANS code lookup for autocomplete) ───────────

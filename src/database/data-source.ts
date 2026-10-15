@@ -25,6 +25,7 @@ import { FinancialSettings } from '../entities/financial-settings.entity';
 import { FinancialCostCenter } from '../entities/financial-cost-center.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { FinancialConvenioProcedure } from '../entities/financial-convenio-procedure.entity';
+import { FinancialConvenioPlan } from '../entities/financial-convenio-plan.entity';
 import { FinancialRevenue } from '../entities/financial-revenue.entity';
 import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
@@ -108,6 +109,7 @@ const AppDataSource = new DataSource({
     FinancialCostCenter,
     FinancialConvenio,
     FinancialConvenioProcedure,
+    FinancialConvenioPlan,
     FinancialRevenue,
     FinancialExpense,
     FinancialDoctorTransfer,
