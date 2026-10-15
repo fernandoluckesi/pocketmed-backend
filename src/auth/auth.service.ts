@@ -1847,14 +1847,12 @@ export class AuthService {
     },
     file?: Express.Multer.File,
   ) {
-    // Name and profile photo are considered low-risk and DO NOT require a
-    // verification code, whether changed alone or together. Every other field
-    // (phone, gender, birthDate, specialty, crm, rqe and especially CPF) is
-    // sensitive and requires the emailed code.
+    // Only phone and CPF require the emailed verification code. Name, profile
+    // photo, gender and birthDate are low-risk and save directly. Doctor
+    // credential fields (specialty/crm/rqe) still require the code because
+    // changing them invalidates the professional verification.
     const hasSensitiveChanges =
       data.phone ||
-      data.gender ||
-      data.birthDate ||
       data.specialty ||
       data.crm ||
       data.crmNumber ||
