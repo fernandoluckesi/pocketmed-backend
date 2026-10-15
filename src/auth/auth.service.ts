@@ -977,6 +977,10 @@ export class AuthService {
       resourceId: user.id,
     });
 
+    await this.emailService
+      .sendPasswordChangedNotice(user.email, user.name, 'reset')
+      .catch(() => undefined);
+
     return {
       message: 'Password reset successfully',
     };
@@ -1012,6 +1016,10 @@ export class AuthService {
       resourceId: doctor.id,
     });
 
+    await this.emailService
+      .sendPasswordChangedNotice(doctor.email, doctor.name, 'reset')
+      .catch(() => undefined);
+
     return { message: 'Password reset successfully' };
   }
 
@@ -1046,6 +1054,10 @@ export class AuthService {
       resourceId: patient.id,
     });
 
+    await this.emailService
+      .sendPasswordChangedNotice(patient.email, patient.name, 'reset')
+      .catch(() => undefined);
+
     return { message: 'Password reset successfully' };
   }
 
@@ -1073,6 +1085,11 @@ export class AuthService {
       resourceType: AuditResourceType.USER,
       resourceId: user.id,
     });
+
+    // Best-effort security notice — a mail failure must not break the change.
+    await this.emailService
+      .sendPasswordChangedNotice(user.email, user.name, 'change')
+      .catch(() => undefined);
 
     return {
       message: 'Password changed successfully',
@@ -1824,7 +1841,12 @@ export class AuthService {
     user.verificationCodeExpiry = verificationCodeExpiry;
 
     await this.saveUser(user);
-    await this.emailService.sendEmailVerificationCode(user.email, verificationCode, user.name);
+    await this.emailService.sendEmailVerificationCode(
+      user.email,
+      verificationCode,
+      user.name,
+      'profile-update',
+    );
 
     return { message: 'Verification code sent to your email' };
   }
@@ -1847,14 +1869,12 @@ export class AuthService {
     },
     file?: Express.Multer.File,
   ) {
-    // Name and profile photo are considered low-risk and DO NOT require a
-    // verification code, whether changed alone or together. Every other field
-    // (phone, gender, birthDate, specialty, crm, rqe and especially CPF) is
-    // sensitive and requires the emailed code.
+    // Only phone and CPF require the emailed verification code. Name, profile
+    // photo, gender and birthDate are low-risk and save directly. Doctor
+    // credential fields (specialty/crm/rqe) still require the code because
+    // changing them invalidates the professional verification.
     const hasSensitiveChanges =
       data.phone ||
-      data.gender ||
-      data.birthDate ||
       data.specialty ||
       data.crm ||
       data.crmNumber ||
