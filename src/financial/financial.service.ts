@@ -254,7 +254,7 @@ export class FinancialService {
 
   async searchTussProcedures(query: string) {
     const term = (query || '').trim();
-    if (term.length < 2) {
+    if (term.length < 3) {
       return [];
     }
     const qb = this.tussProcedureRepo
