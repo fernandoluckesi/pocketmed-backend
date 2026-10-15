@@ -224,8 +224,12 @@ export class EmailService {
   }
 
   private buildInviteEmailHtml(patientName: string, doctorName: string): string {
-    const appStoreUrl = 'https://apps.apple.com/br/app/meu-einstein/id1674798757';
-    const playStoreUrl = 'https://play.google.com/store/apps/details?id=br.com.einstein.app';
+    const appStoreUrl =
+      this.configService.get<string>('APP_STORE_URL') ||
+      'https://apps.apple.com/app/id6808506090';
+    const playStoreUrl =
+      this.configService.get<string>('PLAY_STORE_URL') ||
+      'https://play.google.com/store/apps/details?id=com.fernandoluckesi.Hispora';
 
     return `
 <!DOCTYPE html>
@@ -280,7 +284,7 @@ export class EmailService {
                 </tr>
               </table>
               <p style="margin:20px 0 0;font-size:13px;color:#94a3b8;line-height:1.5;text-align:center;">
-                Ao abrir o app, use o email <strong>${patientName.split(' ')[0].toLowerCase()}...</strong> para ativar sua conta.
+                Ao abrir o app, use este mesmo endereço de email para ativar sua conta e definir sua senha.
               </p>
             </td>
           </tr>
@@ -375,7 +379,31 @@ export class EmailService {
     }
   }
 
-  async sendEmailVerificationCode(email: string, code: string, userName: string) {
+  /**
+   * Sends an email-verification code. The copy adapts to the real purpose:
+   * - 'signup': confirming the email right after creating the account.
+   * - 'profile-update': confirming a change to sensitive profile data
+   *   (phone, CPF, professional credentials) for an existing account — this
+   *   must NOT read like a welcome/first-signup message.
+   */
+  async sendEmailVerificationCode(
+    email: string,
+    code: string,
+    userName: string,
+    purpose: 'signup' | 'profile-update' = 'signup',
+  ) {
+    const isProfileUpdate = purpose === 'profile-update';
+    const subject = isProfileUpdate
+      ? 'Código para alterar seus dados - Hispora'
+      : 'Confirme seu email - Hispora';
+    const title = isProfileUpdate ? 'Código de confirmação' : 'Código de verificação';
+    const message = isProfileUpdate
+      ? 'Recebemos um pedido para alterar dados da sua conta Hispora. Use o código abaixo no aplicativo para confirmar a alteração.'
+      : 'Bem-vindo(a) ao Hispora! Para concluir seu cadastro, insira o código de verificação abaixo no aplicativo.';
+    const footer = isProfileUpdate
+      ? 'Se você não solicitou esta alteração, ignore este email. Nenhum dado será alterado sem a confirmação do código.'
+      : 'Se você não criou uma conta no Hispora, pode ignorar este email com segurança.';
+
     try {
       if (!this.ensureEmailEnabledOrLogFallback(email, code, 'Email verification')) {
         return;
@@ -384,14 +412,13 @@ export class EmailService {
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: 'Confirme seu email - Hispora',
+        subject,
         html: this.buildEmailHtml({
           userName,
-          title: 'Código de verificação',
-          message:
-            'Bem-vindo(a) ao Hispora! Para concluir seu cadastro, insira o código de verificação abaixo no aplicativo.',
+          title,
+          message,
           code,
-          footer: 'Se você não criou uma conta no Hispora, pode ignorar este email com segurança.',
+          footer,
         }),
       });
 
@@ -399,7 +426,7 @@ export class EmailService {
         throw new Error(error.message);
       }
 
-      this.logger.log(`Email verification code sent to ${email}`);
+      this.logger.log(`Email verification code sent to ${email} (purpose: ${purpose})`);
     } catch (error) {
       if (this.shouldUseMockFallback(error)) {
         this.logger.warn(`Falling back to mock email verification delivery for ${email}.`);
@@ -576,6 +603,59 @@ export class EmailService {
       // Non-critical: never block the email change because the notice failed.
       this.logger.warn(
         `Could not send email-changed notice to ${oldEmail}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Notifies the account owner that their password was just changed or reset,
+   * so they can react if it wasn't them (account-takeover defense).
+   *
+   * Non-critical: never block the password change because the notice failed.
+   */
+  async sendPasswordChangedNotice(
+    email: string,
+    userName: string,
+    context: 'change' | 'reset' = 'change',
+  ) {
+    try {
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Password-changed notice for ${email} not sent because EMAIL_ENABLED=false.`,
+        );
+        return;
+      }
+
+      const intro =
+        context === 'reset'
+          ? 'A senha da sua conta Hispora foi redefinida com sucesso.'
+          : 'A senha da sua conta Hispora foi alterada com sucesso.';
+
+      const html = this.buildNoticeHtml({
+        userName,
+        heading: 'Senha alterada',
+        paragraphs: [
+          intro,
+          'Se foi você, nenhuma ação é necessária.',
+          '<strong style="color:#b91c1c;">Se você não reconhece esta alteração, redefina sua senha imediatamente e entre em contato com o suporte, pois sua conta pode estar comprometida.</strong>',
+        ],
+      });
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: 'Sua senha foi alterada - Hispora',
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Password-changed notice sent to ${email}`);
+    } catch (error) {
+      this.logger.warn(
+        `Could not send password-changed notice to ${email}: ${(error as Error).message}`,
       );
     }
   }
