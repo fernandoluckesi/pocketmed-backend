@@ -155,6 +155,12 @@ export class FinancialController {
     return this.financialService.searchTussProcedures(q);
   }
 
+  @Get('tuss-procedures/common')
+  @Roles('doctor', 'admin', 'secretary')
+  getCommonTussProcedures(@CurrentUser() user: any) {
+    return this.financialService.getCommonTussProcedures(user.activeClinicId);
+  }
+
   // ─── REVENUES ─────────────────────────────────────────────────────────────
 
   @Get('revenues')

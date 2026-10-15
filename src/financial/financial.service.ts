@@ -270,6 +270,32 @@ export class FinancialService {
     return qb.getMany();
   }
 
+  /**
+   * The N TUSS codes this clinic has actually billed most often, shown as a
+   * head-start when the procedure field is focused empty — picked from this
+   * clinic's own revenue history rather than a generic/global list.
+   */
+  async getCommonTussProcedures(clinicId: string, limit = 5): Promise<TussProcedure[]> {
+    const ranked = await this.revenueRepo
+      .createQueryBuilder('r')
+      .select('r.procedureCode', 'code')
+      .addSelect('COUNT(*)', 'useCount')
+      .where('r.clinicId = :clinicId', { clinicId })
+      .andWhere('r.procedureCode IS NOT NULL')
+      .groupBy('r.procedureCode')
+      .orderBy('useCount', 'DESC')
+      .limit(limit)
+      .getRawMany<{ code: string; useCount: string }>();
+
+    const codes = ranked.map((r) => r.code);
+    if (!codes.length) {
+      return [];
+    }
+    const procedures = await this.tussProcedureRepo.find({ where: { code: In(codes) } });
+    const byCode = new Map(procedures.map((p) => [p.code, p]));
+    return codes.map((code) => byCode.get(code)).filter((p): p is TussProcedure => !!p);
+  }
+
   // ─── REVENUES ──────────────────────────────────────────────────────────────
 
   async listRevenues(
