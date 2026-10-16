@@ -18,6 +18,7 @@ export enum MedicationFrequency {
   TWICE_DAILY = 'twice_daily',
   THREE_TIMES_DAILY = 'three_times_daily',
   FOUR_TIMES_DAILY = 'four_times_daily',
+  FIVE_TIMES_DAILY = 'five_times_daily',
   EVERY_6_HOURS = 'every_6_hours',
   EVERY_8_HOURS = 'every_8_hours',
   EVERY_12_HOURS = 'every_12_hours',
