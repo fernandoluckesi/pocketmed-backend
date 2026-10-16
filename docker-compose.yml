@@ -65,6 +65,11 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin123
       MINIO_BUCKET_NAME: pocketmed-images
+      # Without this, file URLs returned to the browser use MINIO_ENDPOINT
+      # ("minio", the Docker service name), which only the api container can
+      # resolve - uploads would succeed but every image/document link would
+      # be broken on the host. See backend/src/upload/upload.service.ts.
+      MINIO_PUBLIC_URL: http://localhost:9000
       EMAIL_HOST: smtp.gmail.com
       EMAIL_PORT: 587
       EMAIL_USER: your-email@gmail.com
