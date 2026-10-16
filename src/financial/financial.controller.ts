@@ -17,12 +17,16 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FinancialService } from './financial.service';
+import { FinancialHighlightsService } from './highlights/financial-highlights.service';
 
 @Controller('financial')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class FinancialController {
-  constructor(private readonly financialService: FinancialService) {}
+  constructor(
+    private readonly financialService: FinancialService,
+    private readonly financialHighlightsService: FinancialHighlightsService,
+  ) {}
 
   @Get('health')
   health() {
@@ -415,6 +419,19 @@ export class FinancialController {
     @Query('month') month?: string,
   ) {
     return this.financialService.getDashboardKPIs(
+      user.activeClinicId,
+      year ? parseInt(year, 10) : undefined,
+      month ? parseInt(month, 10) : undefined,
+    );
+  }
+
+  @Get('dashboard/highlights')
+  getHighlights(
+    @CurrentUser() user: any,
+    @Query('year') year?: string,
+    @Query('month') month?: string,
+  ) {
+    return this.financialHighlightsService.getHighlights(
       user.activeClinicId,
       year ? parseInt(year, 10) : undefined,
       month ? parseInt(month, 10) : undefined,

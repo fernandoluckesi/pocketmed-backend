@@ -14,7 +14,9 @@ import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.e
 import { FinancialCashflowEntry } from '../entities/financial-cashflow-entry.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { TussProcedure } from '../entities/tuss-procedure.entity';
+import { Doctor } from '../entities/doctor.entity';
 import { UploadModule } from '../upload/upload.module';
+import { FinancialHighlightsService } from './highlights/financial-highlights.service';
 
 @Module({
   imports: [
@@ -30,11 +32,12 @@ import { UploadModule } from '../upload/upload.module';
       FinancialCashflowEntry,
       ClinicMembership,
       TussProcedure,
+      Doctor,
     ]),
     UploadModule,
   ],
   controllers: [FinancialController],
-  providers: [FinancialService, FinancialCronService],
+  providers: [FinancialService, FinancialCronService, FinancialHighlightsService],
   exports: [FinancialService],
 })
 export class FinancialModule {}
