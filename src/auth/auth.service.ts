@@ -154,10 +154,34 @@ export class AuthService {
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      // Defense in depth: if two concurrent signups passed the pre-check and
+      // collided on the DB-level unique CPF index, surface the same friendly
+      // conflict instead of a 500.
+      if (this.isDuplicateCpfError(error)) {
+        throw new ConflictException('CPF já cadastrado');
+      }
       throw error;
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Detects a MySQL duplicate-key error coming from the patient CPF unique
+   * index (IDX_patients_cpf_unique / the cpfUnique generated column).
+   */
+  private isDuplicateCpfError(error: unknown): boolean {
+    const err = error as { code?: string; message?: string } | null;
+    if (!err) return false;
+    const isDup =
+      err.code === 'ER_DUP_ENTRY' ||
+      String(err.message || '').includes('ER_DUP_ENTRY') ||
+      String(err.message || '')
+        .toLowerCase()
+        .includes('duplicate entry');
+    if (!isDup) return false;
+    const msg = String(err.message || '').toLowerCase();
+    return msg.includes('cpfunique') || msg.includes('idx_patients_cpf_unique');
   }
 
   async registerPatientShadow(
@@ -1249,6 +1273,76 @@ export class AuthService {
     }
   }
 
+  /**
+   * Ensures the given phone isn't already used by another active account
+   * (patient or doctor). Shadow patients are ignored, like the CPF check.
+   * Compared on normalized digits so masked/unmasked values match. Throws a
+   * ConflictException WITHOUT echoing the phone value.
+   */
+  private async assertPhoneAvailable(phone: string, excludeUserId?: string): Promise<void> {
+    const normalized = (phone || '').replace(/\D/g, '');
+    if (!normalized) return;
+
+    // Direct indexed lookup on the DB-maintained `phoneNormalized` column
+    // (see migration 1829) instead of scanning every row.
+    const doctorClash = await this.doctorRepository
+      .createQueryBuilder('doctor')
+      .where('doctor.phoneNormalized = :normalized', { normalized })
+      .andWhere(excludeUserId ? 'doctor.id != :excludeUserId' : '1=1', { excludeUserId })
+      .getExists();
+    if (doctorClash) {
+      throw new ConflictException('Celular já cadastrado');
+    }
+
+    const patientClash = await this.patientRepository
+      .createQueryBuilder('patient')
+      .where('patient.phoneNormalized = :normalized', { normalized })
+      .andWhere('patient.isShadow = :isShadow', { isShadow: false })
+      .andWhere(excludeUserId ? 'patient.id != :excludeUserId' : '1=1', { excludeUserId })
+      .getExists();
+    if (patientClash) {
+      throw new ConflictException('Celular já cadastrado');
+    }
+  }
+
+  /**
+   * Pre-flight availability check used by the profile edit screen BEFORE the
+   * email verification code is sent, so a taken CPF/phone is reported inline on
+   * the right field instead of only after the user types the token.
+   *
+   * Returns the list of conflicting field names (subset of 'cpf' | 'phone').
+   * Invalid CPF format is reported as a 'cpf' conflict too (the client shows a
+   * field error either way). Never throws for conflicts — it reports them.
+   */
+  async checkProfileAvailability(
+    userId: string,
+    data: { cpf?: string; phone?: string },
+  ): Promise<{ conflicts: string[] }> {
+    const conflicts: string[] = [];
+
+    if (data.cpf !== undefined && data.cpf !== null && data.cpf !== '') {
+      if (!isValidCpf(data.cpf)) {
+        conflicts.push('cpf');
+      } else {
+        try {
+          await this.assertCpfAvailable(normalizeCpf(data.cpf), userId);
+        } catch {
+          conflicts.push('cpf');
+        }
+      }
+    }
+
+    if (data.phone !== undefined && data.phone !== null && data.phone !== '') {
+      try {
+        await this.assertPhoneAvailable(data.phone, userId);
+      } catch {
+        conflicts.push('phone');
+      }
+    }
+
+    return { conflicts };
+  }
+
   private async generateToken(user: AuthUser) {
     const payload: Record<string, string | null> = {
       email: user.email,
@@ -1892,6 +1986,12 @@ export class AuthService {
       }
       normalizedCpf = normalizeCpf(data.cpf);
       await this.assertCpfAvailable(normalizedCpf, userId);
+    }
+
+    // Phone uniqueness (defense in depth — the client pre-checks before sending
+    // the code, but enforce here too so a taken phone can never be persisted).
+    if (data.phone !== undefined && data.phone !== null && data.phone !== '') {
+      await this.assertPhoneAvailable(data.phone, userId);
     }
     // Require verification code only for sensitive data changes (name/photo are
     // exempt).

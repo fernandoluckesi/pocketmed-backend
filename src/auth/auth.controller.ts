@@ -279,6 +279,21 @@ export class AuthController {
     return this.authService.verifyEmail(user.userId, user.type, dto.code);
   }
 
+  @Post('profile/check-availability')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Check CPF/phone availability before requesting the update code',
+  })
+  @ApiResponse({ status: 200, description: 'Returns the list of conflicting fields' })
+  async checkProfileAvailability(
+    @CurrentUser() user: any,
+    @Body() body: { cpf?: string; phone?: string },
+  ) {
+    return this.authService.checkProfileAvailability(user.userId, body);
+  }
+
   @Post('profile/send-verification')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')

@@ -15,6 +15,7 @@ import {
 import { UploadService } from '../upload/upload.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDependentDto } from './dto/create-dependent.dto';
+import { UpdateDependentDto } from './dto/update-dependent.dto';
 
 const RESPONSIBLE_INVITE_CREATED = 'RESPONSIBLE_INVITE_CREATED';
 const RESPONSIBLE_INVITE_RESPONDED = 'RESPONSIBLE_INVITE_RESPONDED';
@@ -55,6 +56,35 @@ export class DependentsService {
       adminResponsibleId: userId,
       responsibles: [patient],
     });
+
+    return await this.dependentRepository.save(dependent);
+  }
+
+  /**
+   * Updates a dependent's own data (name, gender, type, birthDate, photo).
+   * Only the admin responsible may edit — same boundary as delete.
+   */
+  async update(id: string, userId: string, dto: UpdateDependentDto, file?: Express.Multer.File) {
+    const dependent = await this.dependentRepository.findOne({
+      where: { id },
+    });
+
+    if (!dependent) {
+      throw new NotFoundException('Dependent not found');
+    }
+
+    if (dependent.adminResponsibleId !== userId) {
+      throw new ForbiddenException('Only the admin responsible can edit the dependent');
+    }
+
+    if (file) {
+      dependent.profileImage = await this.uploadService.uploadFile(file, 'profiles');
+    }
+
+    if (dto.name !== undefined) dependent.name = dto.name;
+    if (dto.gender !== undefined) dependent.gender = dto.gender;
+    if (dto.type !== undefined) dependent.type = dto.type;
+    if (dto.birthDate !== undefined) dependent.birthDate = new Date(dto.birthDate);
 
     return await this.dependentRepository.save(dependent);
   }

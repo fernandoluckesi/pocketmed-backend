@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Query,
@@ -25,6 +26,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateDependentDto } from './dto/create-dependent.dto';
+import { UpdateDependentDto } from './dto/update-dependent.dto';
 import { AddResponsibleDto } from './dto/add-responsible.dto';
 import { InviteResponsibleDto } from './dto/invite-responsible.dto';
 import { RespondResponsibleInviteDto } from './dto/respond-responsible-invite.dto';
@@ -152,6 +154,23 @@ export class DependentsController {
     @CurrentUser() user: any,
   ) {
     return this.dependentsService.transferAdmin(id, dto.newAdminId, user.userId);
+  }
+
+  @Patch(':id')
+  @Roles('patient')
+  @UseInterceptors(FileInterceptor('profileImage'))
+  @ApiOperation({ summary: 'Update dependent data (admin only)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 200, description: 'Dependent updated successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admin can edit' })
+  @ApiResponse({ status: 404, description: 'Dependent not found' })
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateDependentDto,
+    @CurrentUser() user: any,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.dependentsService.update(id, user.userId, dto, file);
   }
 
   @Delete(':id')

@@ -39,6 +39,19 @@ export class Patient {
   @Column({ type: 'varchar', length: 20 })
   phone: string;
 
+  // Digits-only mirror of `phone`, maintained by the DB. Indexed so the phone
+  // availability check is a direct lookup instead of scanning every row.
+  // `select: false` keeps it out of normal queries.
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+    select: false,
+    asExpression: "REGEXP_REPLACE(phone, '[^0-9]', '')",
+    generatedType: 'STORED',
+  })
+  phoneNormalized: string | null;
+
   // Personal identifier (11 digits, no mask). Nullable so onboarding isn't
   // blocked; the patient can fill it later in the profile. Uniqueness is
   // enforced in application code (not a DB constraint) because of the shadow
