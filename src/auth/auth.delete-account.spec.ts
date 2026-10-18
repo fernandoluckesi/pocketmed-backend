@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
@@ -108,6 +109,7 @@ describe('AuthService - deleteAccount', () => {
         AuthService,
         { provide: getRepositoryToken(Patient), useValue: patientRepo },
         { provide: getRepositoryToken(Doctor), useValue: { findOne: jest.fn() } },
+        { provide: getRepositoryToken(Clinic), useValue: {} },
         { provide: getRepositoryToken(ClinicMembership), useValue: {} },
         { provide: getRepositoryToken(ClinicAdminProfile), useValue: {} },
         { provide: getRepositoryToken(Secretary), useValue: {} },

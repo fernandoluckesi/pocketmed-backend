@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
+import { Clinic } from '../entities/clinic.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
@@ -23,6 +24,7 @@ import { EmailModule } from '../email/email.module';
     TypeOrmModule.forFeature([
       Patient,
       Doctor,
+      Clinic,
       ClinicMembership,
       ClinicAdminProfile,
       Secretary,

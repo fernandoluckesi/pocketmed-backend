@@ -192,7 +192,12 @@ export class EmailService {
 </html>`;
   }
 
-  async sendInviteEmail(email: string, patientName: string, doctorName: string) {
+  async sendInviteEmail(
+    email: string,
+    patientName: string,
+    doctorName: string,
+    clinicName?: string | null,
+  ) {
     try {
       const enabledFlag = this.emailEnabled;
       if (!enabledFlag) {
@@ -202,11 +207,15 @@ export class EmailService {
         return;
       }
 
+      const subject = clinicName
+        ? `${clinicName} cadastrou você no Hispora`
+        : `${doctorName} adicionou você ao Hispora`;
+
       const { error } = await this.resend.emails.send({
         from: this.emailFrom,
         to: email,
-        subject: `${doctorName} adicionou você ao Hispora`,
-        html: this.buildInviteEmailHtml(patientName, doctorName),
+        subject,
+        html: this.buildInviteEmailHtml(patientName, doctorName, clinicName),
       });
 
       if (error) {
@@ -223,10 +232,13 @@ export class EmailService {
     }
   }
 
-  private buildInviteEmailHtml(patientName: string, doctorName: string): string {
+  private buildInviteEmailHtml(
+    patientName: string,
+    doctorName: string,
+    clinicName?: string | null,
+  ): string {
     const appStoreUrl =
-      this.configService.get<string>('APP_STORE_URL') ||
-      'https://apps.apple.com/app/id6808506090';
+      this.configService.get<string>('APP_STORE_URL') || 'https://apps.apple.com/app/id6808506090';
     const playStoreUrl =
       this.configService.get<string>('PLAY_STORE_URL') ||
       'https://play.google.com/store/apps/details?id=com.fernandoluckesi.Hispora';
@@ -254,17 +266,32 @@ export class EmailService {
           <tr>
             <td style="padding:36px 40px 24px;">
               <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1a1a2e;">Olá, ${patientName}!</h1>
-              <p style="margin:0 0 20px;font-size:14px;color:#64748b;line-height:1.6;">
-                O(a) <strong>Dr(a). ${doctorName}</strong> cadastrou seus dados no Hispora para que você tenha acesso ao seu prontuário digital.
+              <p style="margin:0 0 16px;font-size:14px;color:#64748b;line-height:1.6;">
+                ${
+                  clinicName
+                    ? `A clínica <strong>${clinicName}</strong>, por meio do(a) <strong>Dr(a). ${doctorName}</strong>, cadastrou seus dados no Hispora`
+                    : `O(a) <strong>Dr(a). ${doctorName}</strong> cadastrou seus dados no Hispora`
+                } para que você tenha acesso ao seu prontuário digital.
               </p>
-              <p style="margin:0 0 24px;font-size:14px;color:#64748b;line-height:1.6;">
+              <!-- Interoperability highlight -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 20px;">
+                <tr>
+                  <td style="background-color:#f0f4ff;border-radius:12px;border:1px solid #1B3FCC20;padding:16px 18px;">
+                    <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#1B3FCC;">Baixe o app e leve seu histórico com você</p>
+                    <p style="margin:0;font-size:13px;color:#475569;line-height:1.6;">
+                      Ao ativar sua conta, você reúne em um só lugar <strong>tudo o que já foi registrado sobre você em qualquer clínica que usa o Hispora</strong> — consultas, exames, receitas e medicamentos. Seu histórico de saúde deixa de ficar espalhado e passa a andar com você.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 12px;font-size:14px;color:#64748b;line-height:1.6;">
                 Com o Hispora você pode:
               </p>
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 24px;">
                 <tr><td style="padding:4px 0;font-size:14px;color:#334155;">✓ Acessar consultas e resultados de exames</td></tr>
                 <tr><td style="padding:4px 0;font-size:14px;color:#334155;">✓ Receber lembretes de medicamentos</td></tr>
                 <tr><td style="padding:4px 0;font-size:14px;color:#334155;">✓ Manter seu histórico médico organizado</td></tr>
-                <tr><td style="padding:4px 0;font-size:14px;color:#334155;">✓ Compartilhar dados com profissionais de confiança</td></tr>
+                <tr><td style="padding:4px 0;font-size:14px;color:#334155;">✓ Acessar seus dados de todas as clínicas Hispora em um só app</td></tr>
               </table>
               <!-- CTA Buttons -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">

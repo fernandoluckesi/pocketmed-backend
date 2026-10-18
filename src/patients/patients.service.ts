@@ -30,10 +30,7 @@ import { PatientSurgery } from '../entities/patient-surgery.entity';
 import { FinancialConvenio } from '../entities/financial-convenio.entity';
 import { Certificate } from '../entities/certificate.entity';
 import { Report, ReportType } from '../entities/report.entity';
-import {
-  MedicalAttachment,
-  MedicalAttachmentKind,
-} from '../entities/medical-attachment.entity';
+import { MedicalAttachment, MedicalAttachmentKind } from '../entities/medical-attachment.entity';
 import { Clinic } from '../entities/clinic.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
 import { UploadService } from '../upload/upload.service';
@@ -260,9 +257,20 @@ export class PatientsService {
 
     const doctorName = patient.doctorCreator?.name || 'Sua clínica';
 
+    // Resolve the clinic name (when resent from a clinic context) so the invite
+    // email names the clinic too. Best-effort.
+    let clinicName: string | null = null;
+    if (activeClinicId) {
+      const clinic = await this.clinicRepository.findOne({
+        where: { id: activeClinicId },
+        select: ['id', 'name'],
+      });
+      clinicName = clinic?.name ?? null;
+    }
+
     let inviteEmailStatus: 'sent' | 'failed' = 'sent';
     try {
-      await this.emailService.sendInviteEmail(patient.email, patient.name, doctorName);
+      await this.emailService.sendInviteEmail(patient.email, patient.name, doctorName, clinicName);
     } catch {
       inviteEmailStatus = 'failed';
     }
@@ -2033,9 +2041,7 @@ export class PatientsService {
     const isDependent = (patient as any).isDependent === true;
 
     const report = await this.reportRepository.findOne({
-      where: isDependent
-        ? { id: reportId, dependentId: patientId }
-        : { id: reportId, patientId },
+      where: isDependent ? { id: reportId, dependentId: patientId } : { id: reportId, patientId },
     });
     if (!report) {
       throw new NotFoundException('Laudo não encontrado');

@@ -23,6 +23,7 @@ import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
+import { Clinic } from '../entities/clinic.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { Secretary } from '../entities/secretary.entity';
@@ -52,6 +53,8 @@ export class AuthService {
     private patientRepository: Repository<Patient>,
     @InjectRepository(Doctor)
     private doctorRepository: Repository<Doctor>,
+    @InjectRepository(Clinic)
+    private clinicRepository: Repository<Clinic>,
     @InjectRepository(ClinicMembership)
     private clinicMembershipRepository: Repository<ClinicMembership>,
     @InjectRepository(ClinicAdminProfile)
@@ -249,6 +252,22 @@ export class AuthService {
     }
     // Shadows with same email are allowed (will be merged on activation)
 
+    // CPF cannot belong to an existing REAL account (active patient or doctor).
+    // Shadows may still share a CPF among themselves (merge model), so this
+    // only blocks when the CPF is already owned by a non-shadow account.
+    if (dto.cpf) {
+      const shadowCpf = normalizeCpf(dto.cpf);
+      if (shadowCpf) {
+        await this.assertCpfAvailable(shadowCpf);
+      }
+    }
+
+    // Same rule for the phone: it cannot belong to an existing REAL account.
+    // Shadows may still share a phone among themselves (merge model).
+    if (dto.phone) {
+      await this.assertPhoneAvailable(dto.phone);
+    }
+
     let profileImageUrl = null;
     if (file) {
       try {
@@ -327,9 +346,33 @@ export class AuthService {
     // recipient domain never discards an otherwise-valid patient registration.
     // The outcome is recorded on the patient so staff can see it failed and
     // retry via POST /patients/:id/resend-invite.
+    // Resolve the clinic name for the invite email: the requester's active
+    // clinic when created by clinic staff, otherwise the creator doctor's first
+    // active clinic (if any). Best-effort — the email still sends without it.
+    let clinicName: string | null = null;
+    try {
+      let clinicId = requester.activeClinicId ?? null;
+      if (!clinicId) {
+        const membership = await this.clinicMembershipRepository.findOne({
+          where: { professionalId: dto.doctorCreatorId, isActive: true },
+          order: { createdAt: 'ASC' },
+        });
+        clinicId = membership?.clinicId ?? null;
+      }
+      if (clinicId) {
+        const clinic = await this.clinicRepository.findOne({
+          where: { id: clinicId },
+          select: ['id', 'name'],
+        });
+        clinicName = clinic?.name ?? null;
+      }
+    } catch {
+      // Non-blocking: fall back to a clinic-less invite.
+    }
+
     let inviteEmailStatus: 'sent' | 'failed' = 'sent';
     try {
-      await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name);
+      await this.emailService.sendInviteEmail(dto.email, dto.name, doctor.name, clinicName);
     } catch (emailError) {
       inviteEmailStatus = 'failed';
       this.logger.error(
