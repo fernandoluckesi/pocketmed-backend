@@ -104,6 +104,7 @@ export class AppointmentsService {
     Pick<
       Appointment,
       | 'locationClinicName'
+      | 'locationCep'
       | 'locationStreet'
       | 'locationNumber'
       | 'locationNeighborhood'
@@ -116,6 +117,7 @@ export class AppointmentsService {
       if (clinic) {
         return {
           locationClinicName: clinic.name,
+          locationCep: clinic.cep,
           locationStreet: clinic.street,
           locationNumber: clinic.number,
           locationNeighborhood: clinic.neighborhood,
@@ -127,6 +129,7 @@ export class AppointmentsService {
 
     return {
       locationClinicName: dto.locationClinicName || null,
+      locationCep: dto.locationCep || null,
       locationStreet: dto.locationStreet || null,
       locationNumber: dto.locationNumber || null,
       locationNeighborhood: dto.locationNeighborhood || null,
@@ -418,6 +421,7 @@ export class AppointmentsService {
       paymentType: dto.paymentType || 'particular',
       convenioId: dto.paymentType === 'convenio' ? dto.convenioId || null : null,
       locationClinicName: dto.locationClinicName || null,
+      locationCep: dto.locationCep || null,
       locationStreet: dto.locationStreet || null,
       locationNumber: dto.locationNumber || null,
       locationNeighborhood: dto.locationNeighborhood || null,

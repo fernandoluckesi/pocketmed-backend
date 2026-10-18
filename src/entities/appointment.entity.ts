@@ -143,6 +143,9 @@ export class Appointment {
   @Column({ type: 'varchar', length: 255, nullable: true })
   locationClinicName: string | null;
 
+  @Column({ type: 'varchar', length: 9, nullable: true })
+  locationCep: string | null;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   locationStreet: string | null;
 

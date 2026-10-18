@@ -105,6 +105,11 @@ export class CreateAppointmentDto {
   @IsOptional()
   locationClinicName?: string;
 
+  @ApiProperty({ example: '01310-100', required: false })
+  @IsString()
+  @IsOptional()
+  locationCep?: string;
+
   @ApiProperty({ example: 'Av. Paulista', required: false })
   @IsString()
   @IsOptional()
