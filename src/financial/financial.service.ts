@@ -24,6 +24,53 @@ import { FinancialExpense } from '../entities/financial-expense.entity';
 import { FinancialDoctorTransfer } from '../entities/financial-doctor-transfer.entity';
 import { FinancialCashflowEntry } from '../entities/financial-cashflow-entry.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
+import {
+  UpdateFinancialSettingsDto,
+  CreateCostCenterDto,
+  UpdateCostCenterDto,
+  CreateConvenioDto,
+  UpdateConvenioDto,
+  CreateConvenioProcedureDto,
+  UpdateConvenioProcedureDto,
+  CreateConvenioPlanDto,
+  UpdateConvenioPlanDto,
+  CreateRevenueDto,
+  UpdateRevenueDto,
+  CreateExpenseDto,
+  UpdateExpenseDto,
+  CreateCashflowAdjustmentDto,
+} from './dto';
+
+/**
+ * Copies only the given keys from a DTO onto an entity, and only when the
+ * key was actually present in the payload.
+ *
+ * Replaces `Object.assign(entity, dto)` throughout this service. The DTOs +
+ * global ValidationPipe already strip unknown properties, so this is defence
+ * in depth rather than the primary control: it means a field can only ever
+ * be written if it appears in an explicit allow-list *here too*, so adding a
+ * column to an entity (or a property to a DTO) can't silently become
+ * client-writable. `clinicId`/`id` are absent from every list below.
+ *
+ * `undefined` is skipped so a partial update doesn't blank out fields the
+ * client didn't mention, while an explicit `null` still clears a nullable
+ * column.
+ */
+function applyAllowedFields<T extends object, D extends object>(
+  entity: T,
+  dto: D,
+  // Each key must exist on BOTH the entity and the DTO, so a typo or a field
+  // renamed on only one side is a compile error rather than a silently
+  // ignored update.
+  allowed: ReadonlyArray<keyof T & keyof D & string>,
+): void {
+  const source = dto as Record<string, unknown>;
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
+      (entity as Record<string, unknown>)[key] = source[key];
+    }
+  }
+}
 import { TussProcedure } from '../entities/tuss-procedure.entity';
 
 @Injectable()
@@ -72,9 +119,27 @@ export class FinancialService {
     return settings;
   }
 
-  async updateSettings(clinicId: string, dto: any) {
+  /** Fields an admin may change on their clinic's financial settings.
+   * `clinicId`/`id` excluded on purpose — see applyAllowedFields. */
+  private static readonly SETTINGS_FIELDS = [
+    'taxRegime',
+    'issRate',
+    'dasRate',
+    'irpjRate',
+    'csllRate',
+    'defaultDoctorTransferPercentage',
+    'bankName',
+    'bankAgency',
+    'bankAccount',
+    'pixKey',
+    'invoicePrefix',
+  ] as const;
+
+  async updateSettings(clinicId: string, dto: UpdateFinancialSettingsDto) {
     const settings = await this.getSettings(clinicId);
-    Object.assign(settings, dto);
+    applyAllowedFields(settings, dto, FinancialService.SETTINGS_FIELDS);
+    // Re-pinned rather than trusted from the payload: getSettings already
+    // scoped the row to this clinic, and clinicId is not an updatable field.
     settings.clinicId = clinicId;
     return this.settingsRepo.save(settings);
   }
@@ -88,18 +153,37 @@ export class FinancialService {
     });
   }
 
-  async createCostCenter(clinicId: string, dto: any) {
+  private static readonly COST_CENTER_FIELDS = [
+    'name',
+    'code',
+    'budgetAllocated',
+    'color',
+    'description',
+  ] as const;
+
+  /** `active` is only settable on update (DELETE soft-deletes by clearing
+   * it); a new cost center always starts active via the column default. */
+  private static readonly COST_CENTER_UPDATE_FIELDS = [
+    ...FinancialService.COST_CENTER_FIELDS,
+    'active',
+  ] as const;
+
+  async createCostCenter(clinicId: string, dto: CreateCostCenterDto) {
     const existing = await this.costCenterRepo.findOne({
       where: { clinicId, code: dto.code },
     });
     if (existing) {
       throw new ConflictException('Cost center code already exists');
     }
-    const costCenter = this.costCenterRepo.create({ ...dto, clinicId });
+    // Built field-by-field instead of `create({ ...dto, clinicId })`: the
+    // spread form relied entirely on the DTO to keep clinicId/id out of the
+    // payload, with nothing behind it if that ever regressed.
+    const costCenter = this.costCenterRepo.create({ clinicId });
+    applyAllowedFields(costCenter, dto, FinancialService.COST_CENTER_FIELDS);
     return this.costCenterRepo.save(costCenter);
   }
 
-  async updateCostCenter(clinicId: string, id: string, dto: any) {
+  async updateCostCenter(clinicId: string, id: string, dto: UpdateCostCenterDto) {
     const costCenter = await this.costCenterRepo.findOne({ where: { id, clinicId } });
     if (!costCenter) {
       throw new NotFoundException('Cost center not found');
@@ -112,7 +196,7 @@ export class FinancialService {
         throw new ConflictException('Cost center code already exists');
       }
     }
-    Object.assign(costCenter, dto);
+    applyAllowedFields(costCenter, dto, FinancialService.COST_CENTER_UPDATE_FIELDS);
     return this.costCenterRepo.save(costCenter);
   }
 
@@ -148,18 +232,42 @@ export class FinancialService {
     });
   }
 
-  async createConvenio(clinicId: string, dto: any) {
+  private static readonly CONVENIO_FIELDS = [
+    'name',
+    'ansCode',
+    'cnpj',
+    'contractTable',
+    'paymentTerm',
+    'glosaTolerance',
+    'markupPercentage',
+    'contactName',
+    'contactPhone',
+    'contactEmail',
+    'contractStartDate',
+    'contractEndDate',
+    'notes',
+  ] as const;
+
+  /** `active` is update-only here too — PATCH /convenios/:id/toggle is the
+   * usual path, and creation defaults to active. */
+  private static readonly CONVENIO_UPDATE_FIELDS = [
+    ...FinancialService.CONVENIO_FIELDS,
+    'active',
+  ] as const;
+
+  async createConvenio(clinicId: string, dto: CreateConvenioDto) {
     const existing = await this.convenioRepo.findOne({
       where: { clinicId, ansCode: dto.ansCode },
     });
     if (existing) {
       throw new ConflictException('ANS code already exists for this clinic');
     }
-    const convenio = this.convenioRepo.create({ ...dto, clinicId });
+    const convenio = this.convenioRepo.create({ clinicId });
+    applyAllowedFields(convenio, dto, FinancialService.CONVENIO_FIELDS);
     return this.convenioRepo.save(convenio);
   }
 
-  async updateConvenio(clinicId: string, id: string, dto: any) {
+  async updateConvenio(clinicId: string, id: string, dto: UpdateConvenioDto) {
     const convenio = await this.convenioRepo.findOne({ where: { id, clinicId } });
     if (!convenio) {
       throw new NotFoundException('Convenio not found');
@@ -172,7 +280,7 @@ export class FinancialService {
         throw new ConflictException('ANS code already exists for this clinic');
       }
     }
-    Object.assign(convenio, dto);
+    applyAllowedFields(convenio, dto, FinancialService.CONVENIO_UPDATE_FIELDS);
     return this.convenioRepo.save(convenio);
   }
 
@@ -212,7 +320,18 @@ export class FinancialService {
     });
   }
 
-  async createConvenioProcedure(clinicId: string, convenioId: string, dto: any) {
+  private static readonly CONVENIO_PROCEDURE_FIELDS = [
+    'procedureCode',
+    'procedureName',
+    'value',
+    'active',
+  ] as const;
+
+  async createConvenioProcedure(
+    clinicId: string,
+    convenioId: string,
+    dto: CreateConvenioProcedureDto,
+  ) {
     const convenio = await this.convenioRepo.findOne({ where: { id: convenioId, clinicId } });
     if (!convenio) {
       throw new NotFoundException('Convenio not found');
@@ -223,7 +342,11 @@ export class FinancialService {
     if (existing) {
       throw new ConflictException('Procedure code already registered for this convenio');
     }
-    const procedure = this.convenioProcedureRepo.create({ ...dto, clinicId, convenioId });
+    // clinicId/convenioId come from the validated path and auth context, not
+    // the body: otherwise the two could disagree and a row would be filed
+    // under a convênio the URL never addressed (and never checked).
+    const procedure = this.convenioProcedureRepo.create({ clinicId, convenioId });
+    applyAllowedFields(procedure, dto, FinancialService.CONVENIO_PROCEDURE_FIELDS);
     return this.convenioProcedureRepo.save(procedure);
   }
 
@@ -231,7 +354,7 @@ export class FinancialService {
     clinicId: string,
     convenioId: string,
     id: string,
-    dto: any,
+    dto: UpdateConvenioProcedureDto,
   ) {
     const procedure = await this.convenioProcedureRepo.findOne({
       where: { id, clinicId, convenioId },
@@ -239,7 +362,7 @@ export class FinancialService {
     if (!procedure) {
       throw new NotFoundException('Convenio procedure not found');
     }
-    Object.assign(procedure, dto);
+    applyAllowedFields(procedure, dto, FinancialService.CONVENIO_PROCEDURE_FIELDS);
     return this.convenioProcedureRepo.save(procedure);
   }
 
@@ -266,7 +389,9 @@ export class FinancialService {
     });
   }
 
-  async createConvenioPlan(clinicId: string, convenioId: string, dto: any) {
+  private static readonly CONVENIO_PLAN_FIELDS = ['name', 'active'] as const;
+
+  async createConvenioPlan(clinicId: string, convenioId: string, dto: CreateConvenioPlanDto) {
     const convenio = await this.convenioRepo.findOne({ where: { id: convenioId, clinicId } });
     if (!convenio) {
       throw new NotFoundException('Convenio not found');
@@ -277,18 +402,24 @@ export class FinancialService {
     if (existing) {
       throw new ConflictException('Plan already registered for this convenio');
     }
-    const plan = this.convenioPlanRepo.create({ ...dto, clinicId, convenioId });
+    const plan = this.convenioPlanRepo.create({ clinicId, convenioId });
+    applyAllowedFields(plan, dto, FinancialService.CONVENIO_PLAN_FIELDS);
     return this.convenioPlanRepo.save(plan);
   }
 
-  async updateConvenioPlan(clinicId: string, convenioId: string, id: string, dto: any) {
+  async updateConvenioPlan(
+    clinicId: string,
+    convenioId: string,
+    id: string,
+    dto: UpdateConvenioPlanDto,
+  ) {
     const plan = await this.convenioPlanRepo.findOne({
       where: { id, clinicId, convenioId },
     });
     if (!plan) {
       throw new NotFoundException('Convenio plan not found');
     }
-    Object.assign(plan, dto);
+    applyAllowedFields(plan, dto, FinancialService.CONVENIO_PLAN_FIELDS);
     return this.convenioPlanRepo.save(plan);
   }
 
@@ -448,18 +579,50 @@ export class FinancialService {
     await this.cashflowRepo.save(entry);
   }
 
-  async createRevenue(clinicId: string, dto: any) {
+  /**
+   * Client-writable fields on a revenue.
+   *
+   * Excluded on purpose: `clinicId`/`id` (tenant + identity), `netValue`
+   * (always derived from grossValue - discountValue below), `paidAt`
+   * (server-stamped, so a paid date can't be moved outside a DRE window),
+   * and `glosaValue`/`glosaReason` (only via updateRevenueStatus, the path
+   * that also keeps the cash flow consistent).
+   */
+  private static readonly REVENUE_FIELDS = [
+    'patientId',
+    'doctorId',
+    'appointmentId',
+    'convenioId',
+    'procedure',
+    'procedureCode',
+    'specialty',
+    'grossValue',
+    'discountValue',
+    'paymentMethod',
+    'status',
+    'dueDate',
+    'invoiceNumber',
+    'guideNumber',
+    'authorizationNumber',
+    'insurancePlanName',
+    'insuranceCardNumber',
+    'notes',
+  ] as const;
+
+  async createRevenue(clinicId: string, dto: CreateRevenueDto) {
+    const revenue = this.revenueRepo.create({ clinicId });
+    applyAllowedFields(revenue, dto, FinancialService.REVENUE_FIELDS);
+
+    // Recomputed server-side, never taken from the payload: the client does
+    // send netValue today, and trusting it would let a receivable be booked
+    // with a total unrelated to its gross/discount.
     const grossValue = Number(dto.grossValue) || 0;
     const discountValue = Number(dto.discountValue) || 0;
-    const netValue = grossValue - discountValue;
-    const revenue = this.revenueRepo.create({
-      ...dto,
-      clinicId,
-      grossValue,
-      discountValue,
-      netValue,
-      status: dto.status || 'PENDENTE',
-    }) as unknown as FinancialRevenue;
+    revenue.grossValue = grossValue;
+    revenue.discountValue = discountValue;
+    revenue.netValue = grossValue - discountValue;
+    revenue.status = dto.status || 'PENDENTE';
+
     if (revenue.status === 'PAGO') {
       revenue.paidAt = new Date();
     }
@@ -470,12 +633,12 @@ export class FinancialService {
     return saved;
   }
 
-  async updateRevenue(clinicId: string, id: string, dto: any) {
+  async updateRevenue(clinicId: string, id: string, dto: UpdateRevenueDto) {
     const revenue = await this.revenueRepo.findOne({ where: { id, clinicId } });
     if (!revenue) {
       throw new NotFoundException('Revenue not found');
     }
-    Object.assign(revenue, dto);
+    applyAllowedFields(revenue, dto, FinancialService.REVENUE_FIELDS);
     if (dto.grossValue !== undefined || dto.discountValue !== undefined) {
       const grossValue = Number(revenue.grossValue) || 0;
       const discountValue = Number(revenue.discountValue) || 0;
@@ -583,18 +746,38 @@ export class FinancialService {
     return { byCategory, byStatus, total };
   }
 
-  async createExpense(clinicId: string, dto: any) {
+  /** Client-writable fields on an expense. `clinicId`/`id`, `netValue`
+   * (derived) and `paidAt` (server-stamped) are excluded. */
+  private static readonly EXPENSE_FIELDS = [
+    'costCenterId',
+    'category',
+    'subcategory',
+    'provider',
+    'providerCnpj',
+    'description',
+    'grossValue',
+    'taxValue',
+    'paymentMethod',
+    'status',
+    'dueDate',
+    'recurrence',
+    'invoiceNumber',
+    'attachmentUrl',
+    'notes',
+  ] as const;
+
+  async createExpense(clinicId: string, dto: CreateExpenseDto) {
+    const expense = this.expenseRepo.create({ clinicId });
+    applyAllowedFields(expense, dto, FinancialService.EXPENSE_FIELDS);
+
+    // Same reasoning as createRevenue: netValue is derived, never trusted.
     const grossValue = Number(dto.grossValue) || 0;
     const taxValue = Number(dto.taxValue) || 0;
-    const netValue = grossValue + taxValue;
-    const expense = this.expenseRepo.create({
-      ...dto,
-      clinicId,
-      grossValue,
-      taxValue,
-      netValue,
-      status: dto.status || 'PENDENTE',
-    }) as unknown as FinancialExpense;
+    expense.grossValue = grossValue;
+    expense.taxValue = taxValue;
+    expense.netValue = grossValue + taxValue;
+    expense.status = dto.status || 'PENDENTE';
+
     if (expense.status === 'PAGO') {
       expense.paidAt = new Date();
     }
@@ -605,12 +788,12 @@ export class FinancialService {
     return saved;
   }
 
-  async updateExpense(clinicId: string, id: string, dto: any) {
+  async updateExpense(clinicId: string, id: string, dto: UpdateExpenseDto) {
     const expense = await this.expenseRepo.findOne({ where: { id, clinicId } });
     if (!expense) {
       throw new NotFoundException('Expense not found');
     }
-    Object.assign(expense, dto);
+    applyAllowedFields(expense, dto, FinancialService.EXPENSE_FIELDS);
     if (dto.grossValue !== undefined || dto.taxValue !== undefined) {
       const grossValue = Number(expense.grossValue) || 0;
       const taxValue = Number(expense.taxValue) || 0;
@@ -831,13 +1014,25 @@ export class FinancialService {
     return { balance, totalEntradas, totalSaidas };
   }
 
-  async createAdjustment(clinicId: string, dto: any) {
-    const entry = this.cashflowRepo.create({
-      ...dto,
-      clinicId,
-      sourceType: 'AJUSTE',
-      reconciled: false,
-    });
+  /** Client-writable fields on a manual cash-flow adjustment. Notably absent:
+   * `sourceType`/`sourceId` (forced below, so an adjustment can't pose as a
+   * system-generated entry), `reconciled` (would skip review) and
+   * `balanceAfter` (derived snapshot). */
+  private static readonly CASHFLOW_ADJUSTMENT_FIELDS = [
+    'type',
+    'description',
+    'value',
+    'date',
+    'category',
+  ] as const;
+
+  async createAdjustment(clinicId: string, dto: CreateCashflowAdjustmentDto) {
+    const entry = this.cashflowRepo.create({ clinicId });
+    applyAllowedFields(entry, dto, FinancialService.CASHFLOW_ADJUSTMENT_FIELDS);
+    // Pinned after the copy so the payload can never override them.
+    entry.sourceType = 'AJUSTE';
+    entry.sourceId = null;
+    entry.reconciled = false;
     return this.cashflowRepo.save(entry);
   }
 

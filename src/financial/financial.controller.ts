@@ -11,6 +11,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -18,6 +19,24 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FinancialService } from './financial.service';
 import { FinancialHighlightsService } from './highlights/financial-highlights.service';
+import {
+  UpdateFinancialSettingsDto,
+  CreateCostCenterDto,
+  UpdateCostCenterDto,
+  CreateConvenioDto,
+  UpdateConvenioDto,
+  CreateConvenioProcedureDto,
+  UpdateConvenioProcedureDto,
+  CreateConvenioPlanDto,
+  UpdateConvenioPlanDto,
+  CreateRevenueDto,
+  UpdateRevenueDto,
+  UpdateRevenueStatusDto,
+  CreateExpenseDto,
+  UpdateExpenseDto,
+  CreateCashflowAdjustmentDto,
+  GenerateTransfersDto,
+} from './dto';
 
 @Controller('financial')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -41,7 +60,7 @@ export class FinancialController {
   }
 
   @Put('settings')
-  updateSettings(@CurrentUser() user: any, @Body() dto: any) {
+  updateSettings(@CurrentUser() user: any, @Body() dto: UpdateFinancialSettingsDto) {
     return this.financialService.updateSettings(user.activeClinicId, dto);
   }
 
@@ -53,17 +72,21 @@ export class FinancialController {
   }
 
   @Post('cost-centers')
-  createCostCenter(@CurrentUser() user: any, @Body() dto: any) {
+  createCostCenter(@CurrentUser() user: any, @Body() dto: CreateCostCenterDto) {
     return this.financialService.createCostCenter(user.activeClinicId, dto);
   }
 
   @Put('cost-centers/:id')
-  updateCostCenter(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
+  updateCostCenter(
+    @CurrentUser() user: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCostCenterDto,
+  ) {
     return this.financialService.updateCostCenter(user.activeClinicId, id, dto);
   }
 
   @Delete('cost-centers/:id')
-  deleteCostCenter(@CurrentUser() user: any, @Param('id') id: string) {
+  deleteCostCenter(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.deleteCostCenter(user.activeClinicId, id);
   }
 
@@ -87,23 +110,27 @@ export class FinancialController {
   }
 
   @Post('convenios')
-  createConvenio(@CurrentUser() user: any, @Body() dto: any) {
+  createConvenio(@CurrentUser() user: any, @Body() dto: CreateConvenioDto) {
     return this.financialService.createConvenio(user.activeClinicId, dto);
   }
 
   @Put('convenios/:id')
-  updateConvenio(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
+  updateConvenio(
+    @CurrentUser() user: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateConvenioDto,
+  ) {
     return this.financialService.updateConvenio(user.activeClinicId, id, dto);
   }
 
   @Patch('convenios/:id/toggle')
   @HttpCode(HttpStatus.OK)
-  toggleConvenio(@CurrentUser() user: any, @Param('id') id: string) {
+  toggleConvenio(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.toggleConvenio(user.activeClinicId, id);
   }
 
   @Delete('convenios/:id')
-  deleteConvenio(@CurrentUser() user: any, @Param('id') id: string) {
+  deleteConvenio(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.deleteConvenio(user.activeClinicId, id);
   }
 
@@ -113,7 +140,7 @@ export class FinancialController {
   @Roles('doctor', 'admin', 'secretary')
   listConvenioProcedures(
     @CurrentUser() user: any,
-    @Param('convenioId') convenioId: string,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
   ) {
     return this.financialService.listConvenioProcedures(user.activeClinicId, convenioId);
   }
@@ -121,8 +148,8 @@ export class FinancialController {
   @Post('convenios/:convenioId/procedures')
   createConvenioProcedure(
     @CurrentUser() user: any,
-    @Param('convenioId') convenioId: string,
-    @Body() dto: any,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
+    @Body() dto: CreateConvenioProcedureDto,
   ) {
     return this.financialService.createConvenioProcedure(user.activeClinicId, convenioId, dto);
   }
@@ -130,23 +157,18 @@ export class FinancialController {
   @Put('convenios/:convenioId/procedures/:id')
   updateConvenioProcedure(
     @CurrentUser() user: any,
-    @Param('convenioId') convenioId: string,
-    @Param('id') id: string,
-    @Body() dto: any,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateConvenioProcedureDto,
   ) {
-    return this.financialService.updateConvenioProcedure(
-      user.activeClinicId,
-      convenioId,
-      id,
-      dto,
-    );
+    return this.financialService.updateConvenioProcedure(user.activeClinicId, convenioId, id, dto);
   }
 
   @Delete('convenios/:convenioId/procedures/:id')
   deleteConvenioProcedure(
     @CurrentUser() user: any,
-    @Param('convenioId') convenioId: string,
-    @Param('id') id: string,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.financialService.deleteConvenioProcedure(user.activeClinicId, convenioId, id);
   }
@@ -155,15 +177,18 @@ export class FinancialController {
 
   @Get('convenios/:convenioId/plans')
   @Roles('doctor', 'admin', 'secretary')
-  listConvenioPlans(@CurrentUser() user: any, @Param('convenioId') convenioId: string) {
+  listConvenioPlans(
+    @CurrentUser() user: any,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
+  ) {
     return this.financialService.listConvenioPlans(user.activeClinicId, convenioId);
   }
 
   @Post('convenios/:convenioId/plans')
   createConvenioPlan(
     @CurrentUser() user: any,
-    @Param('convenioId') convenioId: string,
-    @Body() dto: any,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
+    @Body() dto: CreateConvenioPlanDto,
   ) {
     return this.financialService.createConvenioPlan(user.activeClinicId, convenioId, dto);
   }
@@ -171,9 +196,9 @@ export class FinancialController {
   @Put('convenios/:convenioId/plans/:id')
   updateConvenioPlan(
     @CurrentUser() user: any,
-    @Param('convenioId') convenioId: string,
-    @Param('id') id: string,
-    @Body() dto: any,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateConvenioPlanDto,
   ) {
     return this.financialService.updateConvenioPlan(user.activeClinicId, convenioId, id, dto);
   }
@@ -181,8 +206,8 @@ export class FinancialController {
   @Delete('convenios/:convenioId/plans/:id')
   deleteConvenioPlan(
     @CurrentUser() user: any,
-    @Param('convenioId') convenioId: string,
-    @Param('id') id: string,
+    @Param('convenioId', ParseUUIDPipe) convenioId: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.financialService.deleteConvenioPlan(user.activeClinicId, convenioId, id);
   }
@@ -235,12 +260,16 @@ export class FinancialController {
   }
 
   @Post('revenues')
-  createRevenue(@CurrentUser() user: any, @Body() dto: any) {
+  createRevenue(@CurrentUser() user: any, @Body() dto: CreateRevenueDto) {
     return this.financialService.createRevenue(user.activeClinicId, dto);
   }
 
   @Put('revenues/:id')
-  updateRevenue(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
+  updateRevenue(
+    @CurrentUser() user: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRevenueDto,
+  ) {
     return this.financialService.updateRevenue(user.activeClinicId, id, dto);
   }
 
@@ -248,8 +277,8 @@ export class FinancialController {
   @HttpCode(HttpStatus.OK)
   updateRevenueStatus(
     @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() body: { status: string; glosaValue?: number; glosaReason?: string },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateRevenueStatusDto,
   ) {
     return this.financialService.updateRevenueStatus(
       user.activeClinicId,
@@ -261,7 +290,7 @@ export class FinancialController {
   }
 
   @Delete('revenues/:id')
-  deleteRevenue(@CurrentUser() user: any, @Param('id') id: string) {
+  deleteRevenue(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.deleteRevenue(user.activeClinicId, id);
   }
 
@@ -299,23 +328,27 @@ export class FinancialController {
   }
 
   @Post('expenses')
-  createExpense(@CurrentUser() user: any, @Body() dto: any) {
+  createExpense(@CurrentUser() user: any, @Body() dto: CreateExpenseDto) {
     return this.financialService.createExpense(user.activeClinicId, dto);
   }
 
   @Put('expenses/:id')
-  updateExpense(@CurrentUser() user: any, @Param('id') id: string, @Body() dto: any) {
+  updateExpense(
+    @CurrentUser() user: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateExpenseDto,
+  ) {
     return this.financialService.updateExpense(user.activeClinicId, id, dto);
   }
 
   @Patch('expenses/:id/pay')
   @HttpCode(HttpStatus.OK)
-  payExpense(@CurrentUser() user: any, @Param('id') id: string) {
+  payExpense(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.payExpense(user.activeClinicId, id);
   }
 
   @Delete('expenses/:id')
-  deleteExpense(@CurrentUser() user: any, @Param('id') id: string) {
+  deleteExpense(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.deleteExpense(user.activeClinicId, id);
   }
 
@@ -347,19 +380,19 @@ export class FinancialController {
   }
 
   @Post('transfers/generate')
-  generateTransfers(@CurrentUser() user: any, @Body() body: { month: string }) {
+  generateTransfers(@CurrentUser() user: any, @Body() body: GenerateTransfersDto) {
     return this.financialService.generateTransfers(user.activeClinicId, body.month);
   }
 
   @Patch('transfers/:id/approve')
   @HttpCode(HttpStatus.OK)
-  approveTransfer(@CurrentUser() user: any, @Param('id') id: string) {
+  approveTransfer(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.approveTransfer(user.activeClinicId, id);
   }
 
   @Patch('transfers/:id/pay')
   @HttpCode(HttpStatus.OK)
-  payTransfer(@CurrentUser() user: any, @Param('id') id: string) {
+  payTransfer(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.payTransfer(user.activeClinicId, id);
   }
 
@@ -389,13 +422,13 @@ export class FinancialController {
   }
 
   @Post('cashflow/adjustment')
-  createAdjustment(@CurrentUser() user: any, @Body() dto: any) {
+  createAdjustment(@CurrentUser() user: any, @Body() dto: CreateCashflowAdjustmentDto) {
     return this.financialService.createAdjustment(user.activeClinicId, dto);
   }
 
   @Patch('cashflow/:id/reconcile')
   @HttpCode(HttpStatus.OK)
-  reconcileEntry(@CurrentUser() user: any, @Param('id') id: string) {
+  reconcileEntry(@CurrentUser() user: any, @Param('id', ParseUUIDPipe) id: string) {
     return this.financialService.reconcileEntry(user.activeClinicId, id);
   }
 

@@ -98,11 +98,44 @@ export class MercadoPagoService {
   }
 
   /**
+   * How old an `x-signature` timestamp may be before the notification is
+   * treated as a replay. MP retries a failed delivery every 15 minutes, so
+   * the window has to comfortably exceed a single delivery attempt's own
+   * latency without being wide enough to make captured requests useful.
+   * Five minutes is the common choice across webhook providers.
+   */
+  private static readonly SIGNATURE_MAX_AGE_SECONDS = 300;
+
+  /**
    * MP Webhooks v2 signature check (`x-signature` / `x-request-id` headers).
-   * If no secret has been configured yet (the webhook subscription hasn't
-   * been created in the MP dashboard), this passes through — the caller
-   * still re-fetches authoritative state via `getSubscription` instead of
-   * trusting the notification body, which is what MP recommends regardless.
+   *
+   * Returns true only for a notification that is provably from Mercado Pago
+   * and recent. Three properties this deliberately guarantees, each of which
+   * was missing before:
+   *
+   *  1. **Fails closed when unconfigured.** This used to `return true` if
+   *     MERCADOPAGO_WEBHOOK_SECRET was unset, which meant a deployment that
+   *     simply forgot the variable accepted forged notifications from anyone
+   *     — and the endpoint is public. Since the handler can flip a clinic's
+   *     subscriptionStatus and planId, that let an attacker who guessed a
+   *     preapproval id drive paid-plan state. Re-fetching state from the MP
+   *     API limits the damage (a forged body is never persisted) but does
+   *     not prevent it: `syncMercadoPagoSubscription` applies whatever MP
+   *     reports for the id it was handed, so forcing a sync at a chosen
+   *     moment is still an unauthenticated write. It now returns false, and
+   *     the caller decides how to respond (see payments.controller.ts).
+   *
+   *  2. **Constant-time comparison.** `expected === v1` on a secret-derived
+   *     HMAC leaks, through timing, how many leading bytes matched. With an
+   *     endpoint an attacker can call freely and a signature they control,
+   *     that is the textbook setup for recovering a valid signature byte by
+   *     byte. `crypto.timingSafeEqual` removes the signal.
+   *
+   *  3. **Replay rejection.** A signature stays valid forever if only the
+   *     HMAC is checked, so a single captured delivery could be re-sent
+   *     indefinitely. `ts` is part of the signed manifest — an attacker
+   *     can't retime a captured request without invalidating the signature —
+   *     so bounding its age closes replays.
    */
   verifyWebhookSignature(params: {
     xSignature?: string;
@@ -110,7 +143,13 @@ export class MercadoPagoService {
     dataId?: string;
   }): boolean {
     const secret = this.configService.get<string>('MERCADOPAGO_WEBHOOK_SECRET');
-    if (!secret) return true;
+    if (!secret) {
+      this.logger.error(
+        'MERCADOPAGO_WEBHOOK_SECRET is not set — rejecting the webhook notification. ' +
+          'Configure the secret from Suas integrações > Webhooks in the Mercado Pago dashboard.',
+      );
+      return false;
+    }
     if (!params.xSignature || !params.dataId) return false;
 
     const parts: Record<string, string> = {};
@@ -122,8 +161,26 @@ export class MercadoPagoService {
     const v1 = parts.v1;
     if (!ts || !v1) return false;
 
+    // Reject stale/replayed deliveries. `ts` is a Unix timestamp in seconds
+    // and is covered by the HMAC below, so it can't be rewritten in transit.
+    const tsSeconds = Number(ts);
+    if (!Number.isFinite(tsSeconds)) return false;
+    const ageSeconds = Math.abs(Date.now() / 1000 - tsSeconds);
+    if (ageSeconds > MercadoPagoService.SIGNATURE_MAX_AGE_SECONDS) {
+      this.logger.warn(
+        `Rejected Mercado Pago webhook with stale signature timestamp (age ${Math.round(ageSeconds)}s).`,
+      );
+      return false;
+    }
+
     const manifest = `id:${params.dataId.toLowerCase()};request-id:${params.xRequestId || ''};ts:${ts};`;
     const expected = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
-    return expected === v1;
+
+    // timingSafeEqual throws on length mismatch, so compare lengths first —
+    // the length of a hex SHA-256 digest isn't secret.
+    const expectedBuf = Buffer.from(expected, 'utf8');
+    const receivedBuf = Buffer.from(v1, 'utf8');
+    if (expectedBuf.length !== receivedBuf.length) return false;
+    return crypto.timingSafeEqual(expectedBuf, receivedBuf);
   }
 }

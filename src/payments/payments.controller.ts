@@ -8,6 +8,8 @@ import {
   Post,
   RawBodyRequest,
   Req,
+  UnauthorizedException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -15,6 +17,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { StripeService } from './stripe.service';
 import { MercadoPagoService } from './mercadopago.service';
 import { PaymentsService } from './payments.service';
+import { MercadoPagoWebhookDto } from './dto/mercadopago-webhook.dto';
 
 @Controller('webhooks')
 export class PaymentsController {
@@ -55,7 +58,19 @@ export class PaymentsController {
   @HttpCode(200)
   @ApiExcludeEndpoint()
   async handleMercadoPagoWebhook(
-    @Body() body: { type?: string; topic?: string; action?: string; data?: { id?: string } },
+    // Route-level pipe overriding the global one from main.ts, which runs
+    // with `forbidNonWhitelisted: true`. A real MP delivery carries fields
+    // this integration ignores (`id`, `live_mode`, `date_created`,
+    // `user_id`, `api_version`, and whatever MP adds next), so forbidding
+    // unknown properties here would 400 every genuine notification — and
+    // since MP retries any non-2xx every 15 minutes until it succeeds, that
+    // becomes an indefinite retry storm with subscription updates never
+    // applying. `whitelist` still strips anything undeclared, so nothing
+    // unvalidated reaches the handler; it's just dropped instead of fatal.
+    // Safe because no field of this body is ever persisted — `data.id` is
+    // only used to re-fetch authoritative state from the MP API.
+    @Body(new ValidationPipe({ whitelist: true, transform: true }))
+    body: MercadoPagoWebhookDto,
     @Headers('x-signature') xSignature?: string,
     @Headers('x-request-id') xRequestId?: string,
   ) {
@@ -68,7 +83,14 @@ export class PaymentsController {
       dataId,
     });
     if (!validSignature) {
-      throw new BadRequestException('Invalid Mercado Pago webhook signature');
+      // 401, not 400: this is an authentication failure, and it's what MP's
+      // own reference implementation returns for a bad signature. Logged
+      // because on a public endpoint a burst of these is the signal that
+      // someone is probing — or that the secret is misconfigured.
+      this.logger.warn(
+        `Rejected Mercado Pago webhook for data.id ${dataId}: invalid or missing signature`,
+      );
+      throw new UnauthorizedException('Invalid Mercado Pago webhook signature');
     }
 
     // Mercado Pago identifies the event in `type` or (older deliveries) in
