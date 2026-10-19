@@ -131,6 +131,13 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
         retryAttempts: 10,
         retryDelay: 3000,
         connectTimeout: 20000,
+        // Opt-in via DB_SSL — see the matching comment in database/data-source.ts
+        // for why this isn't on by default (can't verify a TLS handshake
+        // against the real Railway MySQL instance before deploying).
+        ssl:
+          configService.get<string>('DB_SSL') === 'true'
+            ? { rejectUnauthorized: configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED') === 'true' }
+            : undefined,
         entities: [
           Patient,
           Doctor,

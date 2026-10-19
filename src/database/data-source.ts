@@ -81,9 +81,28 @@ const connectionConfig = connectionUrl
         'pocketmed',
     };
 
+/**
+ * TLS is opt-in via DB_SSL, not on by default. This connects to Railway's
+ * MySQL, and neither this sandbox nor CI has a way to verify a TLS
+ * handshake against that actual instance before deploying — enabling it
+ * unconditionally risks a silent, total DB-connectivity outage if the
+ * server's cert setup doesn't match what's assumed here. Turn it on by
+ * setting DB_SSL=true once verified safe (e.g. in a low-traffic window,
+ * watching the deploy logs for connection errors); unset it to roll back
+ * instantly. rejectUnauthorized defaults to false because managed MySQL
+ * providers (Railway included) typically don't hand you a CA bundle to
+ * validate against — this still encrypts the connection, it just doesn't
+ * verify the server's certificate chain against a known CA.
+ */
+const dbSslEnabled = process.env.DB_SSL === 'true';
+const dbSsl = dbSslEnabled
+  ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true' }
+  : undefined;
+
 const AppDataSource = new DataSource({
   type: 'mysql',
   ...connectionConfig,
+  ssl: dbSsl,
   entities: [
     Patient,
     Doctor,
