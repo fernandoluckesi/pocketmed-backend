@@ -20,8 +20,15 @@ import { SignatureStatus } from '../documents/signature/signature.types';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UploadService } from '../upload/upload.service';
 import { CreateExamRequestDto } from './dto/create-exam-request.dto';
 import { UpdateExamRequestDto } from './dto/update-exam-request.dto';
+
+/** How long a signed download link stays valid once an authenticated user
+ * requests it — short-lived by design, see upload.service.ts. */
+const PDF_DOWNLOAD_URL_EXPIRY_SECONDS = 300;
+/** Just long enough for the internal fetch() below to grab the bytes. */
+const INTERNAL_FETCH_URL_EXPIRY_SECONDS = 60;
 
 @Injectable()
 export class ExamRequestsService {
@@ -41,6 +48,7 @@ export class ExamRequestsService {
     private signatureService: SignatureService,
     private auditService: AuditService,
     private notificationsService: NotificationsService,
+    private uploadService: UploadService,
   ) {}
 
   async create(doctorId: string, dto: CreateExamRequestDto) {
@@ -372,8 +380,12 @@ export class ExamRequestsService {
     }
 
     const spec = await this.buildSpec(examRequest);
-    const response = await fetch(examRequest.documentUrl);
-    if (!response.ok) {
+    const fetchUrl = await this.uploadService.getPresignedUrl(
+      examRequest.documentUrl,
+      INTERNAL_FETCH_URL_EXPIRY_SECONDS,
+    );
+    const response = fetchUrl ? await fetch(fetchUrl) : null;
+    if (!response?.ok) {
       throw new ConflictException('Could not fetch the stored PDF to start the signature request');
     }
     const pdfBuffer = Buffer.from(await response.arrayBuffer());
@@ -514,7 +526,14 @@ export class ExamRequestsService {
       metadata: { documentHash: examRequest.documentHash },
     });
 
-    return examRequest.documentUrl;
+    const signedUrl = await this.uploadService.getPresignedUrl(
+      examRequest.documentUrl,
+      PDF_DOWNLOAD_URL_EXPIRY_SECONDS,
+    );
+    if (!signedUrl) {
+      throw new NotFoundException('PDF not generated yet');
+    }
+    return signedUrl;
   }
 
   private async findOwnedByDoctor(id: string, doctorId: string) {
