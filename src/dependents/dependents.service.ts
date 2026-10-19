@@ -186,11 +186,24 @@ export class DependentsService {
   }
 
   async findOne(id: string, userId: string) {
+    // Access control via EXISTS on the join table, so the returned
+    // `responsibles` list isn't narrowed to just the requesting user — we need
+    // ALL responsibles for the details screen. The subquery only gates access.
     const dependent = await this.dependentRepository
       .createQueryBuilder('dependent')
       .leftJoinAndSelect('dependent.responsibles', 'responsibles')
       .where('dependent.id = :id', { id })
-      .andWhere('responsibles.id = :userId', { userId })
+      .andWhere((qb) => {
+        const sub = qb
+          .subQuery()
+          .select('1')
+          .from('dependent_responsibles', 'dr')
+          .where('dr.dependentId = dependent.id')
+          .andWhere('dr.patientId = :userId')
+          .getQuery();
+        return `EXISTS ${sub}`;
+      })
+      .setParameter('userId', userId)
       .getOne();
 
     if (!dependent) {
