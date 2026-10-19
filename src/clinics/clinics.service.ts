@@ -31,6 +31,7 @@ import { MercadoPagoService } from '../payments/mercadopago.service';
 import { PaymentsService } from '../payments/payments.service';
 import { buildExternalReference } from '../payments/mercadopago-reference';
 import { resolveCrmInput } from '../common/crm.util';
+import { normalizeCpf } from '../common/validators/cpf.util';
 
 /** "Active" patient: had an appointment (created or last touched) with the
  * clinic in the last 12 months — matches the plan's definition, so a clinic
@@ -145,7 +146,11 @@ export class ClinicsService {
         password: hashedPassword,
         gender: dto.gender,
         specialty: dto.specialty,
-        cpf: dto.cpf,
+        // Normalized to digits: CPF is encrypted at rest deterministically
+        // (see common/cpf-encryption.util.ts), so a masked value would be a
+        // different ciphertext than the same CPF stored unmasked — making
+        // this doctor unfindable by CPF and invisible to the duplicate check.
+        cpf: normalizeCpf(dto.cpf),
         phone: dto.phone,
         birthDate: new Date(dto.birthDate),
         crm: resolvedCrm.crm,

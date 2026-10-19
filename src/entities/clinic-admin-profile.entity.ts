@@ -11,6 +11,7 @@ import {
 import { Exclude } from 'class-transformer';
 import { Doctor } from './doctor.entity';
 import { Clinic } from './clinic.entity';
+import { cpfColumnTransformer } from '../common/cpf-encryption.util';
 
 @Entity('clinic_admin_profiles')
 @Unique('UQ_clinic_admin_profiles_professional', ['professionalId'])
@@ -44,7 +45,9 @@ export class ClinicAdminProfile {
   @Column({ type: 'date', nullable: true })
   birthDate: Date | null;
 
-  @Column({ type: 'varchar', length: 14, nullable: true })
+  // Plaintext at the application layer; encrypted at rest transparently via
+  // cpfColumnTransformer — see src/common/cpf-encryption.util.ts.
+  @Column({ type: 'varchar', length: 64, nullable: true, transformer: cpfColumnTransformer })
   cpf: string | null;
 
   @Column({ type: 'uuid', nullable: true })

@@ -10,6 +10,7 @@ import {
   ManyToMany,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { cpfColumnTransformer } from '../common/cpf-encryption.util';
 import { Appointment } from './appointment.entity';
 import { Medication } from './medication.entity';
 import { Exam } from './exam.entity';
@@ -52,11 +53,16 @@ export class Patient {
   })
   phoneNormalized: string | null;
 
-  // Personal identifier (11 digits, no mask). Nullable so onboarding isn't
-  // blocked; the patient can fill it later in the profile. Uniqueness is
-  // enforced in application code (not a DB constraint) because of the shadow
-  // account / merge model.
-  @Column({ type: 'varchar', length: 11, nullable: true })
+  // Personal identifier (11 digits, no mask — application code always reads/
+  // writes plaintext; encryption is transparent via cpfColumnTransformer).
+  // Nullable so onboarding isn't blocked; the patient can fill it later in
+  // the profile. A DB-level uniqueness safety net exists among real (non-
+  // shadow) patients via the generated `cpfUnique` column (see migration
+  // 1828000000000-AddUniquePatientCpf.ts) — deterministic encryption keeps
+  // that working since the same CPF always encrypts to the same bytes.
+  // length: 64 fits the encrypted form (16-byte IV + 16-byte ciphertext,
+  // base64-encoded, ~44 chars) — plenty of room over the original 11.
+  @Column({ type: 'varchar', length: 64, nullable: true, transformer: cpfColumnTransformer })
   cpf: string | null;
 
   @Column({ type: 'date' })

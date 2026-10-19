@@ -6,8 +6,15 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { UploadService } from './upload/upload.service';
 import { PresignDocumentUrlsInterceptor } from './upload/presign-document-urls.interceptor';
+import { assertCpfEncryptionKeyConfigured } from './common/cpf-encryption.util';
 
 async function bootstrap() {
+  // Before anything else: every cpf column is encrypted at rest through
+  // CPF_ENCRYPTION_KEY (see common/cpf-encryption.util.ts). Refuse to boot
+  // without a valid key rather than starting "healthy" and only failing once
+  // a user hits signup/login/patient-search.
+  assertCpfEncryptionKeyConfigured();
+
   // rawBody: true lets webhook handlers (Stripe) verify signatures against
   // the exact bytes received, before Nest's JSON body parser touches them.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
