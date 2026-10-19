@@ -8,7 +8,6 @@ import {
   Query,
   Body,
   UseGuards,
-  Redirect,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { PrescriptionsService } from './prescriptions.service';
@@ -142,9 +141,10 @@ export class PrescriptionsController {
 
   @Get(':id/pdf')
   @Roles('doctor', 'admin')
-  @Redirect()
-  @ApiOperation({ summary: 'Redirects to the stored PDF for this prescription' })
-  @ApiResponse({ status: 302, description: 'Redirect to the document URL' })
+  @ApiOperation({
+    summary: 'Returns a short-lived signed URL for this prescription\'s stored PDF',
+  })
+  @ApiResponse({ status: 200, description: 'Signed URL, valid for a few minutes' })
   @ApiResponse({ status: 404, description: 'No PDF generated yet' })
   async getPdf(@Param('id') id: string, @CurrentUser() user: any) {
     return { url: await this.prescriptionsService.getDocumentUrl(id, user.userId) };

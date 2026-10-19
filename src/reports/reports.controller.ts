@@ -11,7 +11,6 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Redirect,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -215,9 +214,8 @@ export class ReportsController {
 
   @Get(':id/pdf')
   @Roles('doctor', 'admin')
-  @Redirect()
-  @ApiOperation({ summary: 'Redirects to the stored PDF for this report' })
-  @ApiResponse({ status: 302, description: 'Redirect to the document URL' })
+  @ApiOperation({ summary: 'Returns a short-lived signed URL for this report\'s stored PDF' })
+  @ApiResponse({ status: 200, description: 'Signed URL, valid for a few minutes' })
   @ApiResponse({ status: 404, description: 'No PDF generated yet' })
   async getPdf(@Param('id') id: string, @CurrentUser() user: any) {
     return { url: await this.reportsService.getDocumentUrl(id, user.userId) };
