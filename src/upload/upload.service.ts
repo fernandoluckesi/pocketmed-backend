@@ -49,26 +49,35 @@ export class UploadService implements OnModuleInit {
       if (!bucketExists) {
         await this.minioClient.makeBucket(this.bucketName, 'us-east-1');
         this.logger.log(`Bucket ${this.bucketName} created successfully`);
-
-        const policy = {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { AWS: ['*'] },
-              Action: ['s3:GetObject'],
-              Resource: [`arn:aws:s3:::${this.bucketName}/*`],
-            },
-          ],
-        };
-
-        await this.minioClient.setBucketPolicy(this.bucketName, JSON.stringify(policy));
-        this.logger.log(`Bucket ${this.bucketName} policy set to public read`);
       } else {
         this.logger.log(`Bucket ${this.bucketName} already exists`);
       }
+      // Deliberately does NOT set a public-read bucket policy anymore: every
+      // file is served through a short-lived presigned URL (getPresignedUrl)
+      // or a scoped document-access token instead of a permanent public link.
+      // On Cloudflare R2, a bucket's "Public Development URL" (the pub-*.r2.dev
+      // host behind MINIO_PUBLIC_URL) is a toggle in the Cloudflare dashboard,
+      // not something this SDK's setBucketPolicy call controls — disabling
+      // that toggle for the production bucket is a required manual step to
+      // actually close public access, independent of this code change.
     } catch (error) {
       this.logger.error(`Error initializing MinIO: ${error.message}`);
+    }
+  }
+
+  /**
+   * Recovers the raw object key (e.g. "prescriptions/uuid.pdf") from a URL
+   * previously returned by uploadFile(), regardless of which branch built it
+   * (MINIO_PUBLIC_URL host-only, or protocol://host/bucket/key fallback).
+   */
+  private extractObjectKey(storedUrl: string): string | null {
+    try {
+      const { pathname } = new URL(storedUrl);
+      const prefix = `/${this.bucketName}/`;
+      const path = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : pathname.slice(1);
+      return path || null;
+    } catch {
+      return null;
     }
   }
 
@@ -122,7 +131,7 @@ export class UploadService implements OnModuleInit {
     }
 
     try {
-      const fileName = fileUrl.split(`/${this.bucketName}/`)[1];
+      const fileName = this.extractObjectKey(fileUrl);
       if (fileName) {
         await this.minioClient.removeObject(this.bucketName, fileName);
         this.logger.log(`File ${fileName} deleted successfully`);
@@ -130,6 +139,32 @@ export class UploadService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`Error deleting file: ${error.message}`);
       throw error;
+    }
+  }
+
+  /**
+   * Builds a time-limited URL for a file previously stored via uploadFile(),
+   * valid for `expirySeconds` (default 5 minutes). This is the only way
+   * callers should hand a document URL to a client from now on — never the
+   * permanent URL returned by uploadFile()/stored as `documentUrl`.
+   */
+  async getPresignedUrl(storedUrl: string, expirySeconds: number = 300): Promise<string | null> {
+    if (!this.isConfigured || !this.minioClient) {
+      this.logger.warn('MinIO not configured — cannot sign URL.');
+      return null;
+    }
+
+    const objectKey = this.extractObjectKey(storedUrl);
+    if (!objectKey) {
+      this.logger.error(`Could not extract object key from stored URL: ${storedUrl}`);
+      return null;
+    }
+
+    try {
+      return await this.minioClient.presignedGetObject(this.bucketName, objectKey, expirySeconds);
+    } catch (error) {
+      this.logger.error(`Error signing URL for ${objectKey}: ${error.message}`);
+      return null;
     }
   }
 }
