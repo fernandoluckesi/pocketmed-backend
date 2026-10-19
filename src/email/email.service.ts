@@ -332,6 +332,113 @@ export class EmailService {
 </html>`;
   }
 
+  async sendConsultationSummaryEmail(
+    email: string,
+    patientName: string,
+    doctorName: string,
+    appointmentDate: Date,
+    documents: { label: string; url: string }[],
+  ) {
+    try {
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Consultation summary email for ${email} not sent because EMAIL_ENABLED=false.`,
+        );
+        return;
+      }
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: `Resumo da sua consulta com ${doctorName}`,
+        html: this.buildConsultationSummaryEmailHtml(patientName, doctorName, appointmentDate, documents),
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Consultation summary email sent to ${email}`);
+    } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        this.logger.warn(`Falling back to mock consultation summary email delivery for ${email}.`);
+        return;
+      }
+      this.rethrowEmailError(error, 'Error sending consultation summary email');
+    }
+  }
+
+  private buildConsultationSummaryEmailHtml(
+    patientName: string,
+    doctorName: string,
+    appointmentDate: Date,
+    documents: { label: string; url: string }[],
+  ): string {
+    const dateFormatted = appointmentDate.toLocaleDateString('pt-BR');
+
+    const documentRows = documents
+      .map(
+        (doc) => `
+                <tr>
+                  <td style="padding:10px 0;border-bottom:1px solid #f1f5f9;">
+                    <a href="${doc.url}" style="display:inline-flex;align-items:center;color:#1B3FCC;font-size:14px;font-weight:600;text-decoration:none;">
+                      📄&nbsp;&nbsp;${doc.label}
+                    </a>
+                  </td>
+                </tr>`,
+      )
+      .join('');
+
+    return `
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f7fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f4f7fa;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg,#0d47a1 0%,#1B3FCC 55%,#2B5AED 100%);padding:32px 40px;text-align:center;">
+              <img src="${this.logoHorizontalUrl}" alt="Hispora" height="40" style="display:block;margin:0 auto;max-width:200px;height:40px;" />
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 40px 24px;">
+              <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#1a1a2e;">Olá, ${patientName}!</h1>
+              <p style="margin:0 0 24px;font-size:14px;color:#64748b;line-height:1.6;">
+                Sua consulta com <strong>Dr(a). ${doctorName}</strong> em ${dateFormatted} foi finalizada. Veja abaixo os documentos emitidos:
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 8px;">
+                ${documentRows}
+              </table>
+              <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;line-height:1.5;">
+                Estes links funcionam sem necessidade de login e podem ser mostrados diretamente na farmácia ou no laboratório.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:20px 40px 28px;border-top:1px solid #f1f5f9;">
+              <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;line-height:1.5;">
+                Este é um email automático. Não responda.<br>
+                © ${new Date().getFullYear()} Hispora. Todos os direitos reservados.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  }
+
   async sendShadowActivationCode(email: string, code: string, userName: string) {
     try {
       if (!this.ensureEmailEnabledOrLogFallback(email, code, 'Shadow activation')) {

@@ -19,10 +19,14 @@ import { Certificate } from '../entities/certificate.entity';
 import { Report } from '../entities/report.entity';
 import { MedicalAttachment } from '../entities/medical-attachment.entity';
 import { Clinic } from '../entities/clinic.entity';
+import { Prescription } from '../entities/prescription.entity';
+import { ExamRequest } from '../entities/exam-request.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UploadModule } from '../upload/upload.module';
 import { DocumentParsingModule } from '../document-parsing/document-parsing.module';
+import { DocumentsModule } from '../documents/documents.module';
 import { EmailModule } from '../email/email.module';
+import { ConsultationSummaryEmailService } from './consultation-summary-email.service';
 
 @Module({
   imports: [
@@ -44,14 +48,17 @@ import { EmailModule } from '../email/email.module';
       Report,
       MedicalAttachment,
       Clinic,
+      Prescription,
+      ExamRequest,
     ]),
     NotificationsModule,
     UploadModule,
     DocumentParsingModule,
+    DocumentsModule,
     EmailModule,
   ],
   controllers: [PatientsController],
-  providers: [PatientsService],
+  providers: [PatientsService, ConsultationSummaryEmailService],
   exports: [PatientsService],
 })
 export class PatientsModule {}

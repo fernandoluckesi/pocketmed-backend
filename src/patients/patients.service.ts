@@ -39,6 +39,7 @@ import { DOCUMENT_FOLDERS, DocumentStatus } from '../documents/document.types';
 import { NotificationsService } from '../notifications/notifications.service';
 import { normalizeCpf } from '../common/validators/cpf.util';
 import { EmailService } from '../email/email.service';
+import { ConsultationSummaryEmailService } from './consultation-summary-email.service';
 
 /** Shape accepted by create/update surgery (all optional except handled in code). */
 export interface SurgeryData {
@@ -130,7 +131,31 @@ export class PatientsService {
     private uploadService: UploadService,
     private documentTextExtractorService: DocumentTextExtractorService,
     private emailService: EmailService,
+    private consultationSummaryEmailService: ConsultationSummaryEmailService,
   ) {}
+
+  /** Fires the end-of-consultation summary email exactly once, the moment an
+   * appointment's status actually becomes 'completed' (shadow patients reach
+   * that directly; non-shadow patients only after they approve it — see
+   * createConsultation/updateConsultation/approveConsultation). Never throws:
+   * email delivery must not break whichever save triggered it. */
+  private async maybeSendConsultationSummaryEmail(
+    appointment: Appointment,
+    previousStatus: string | null,
+  ): Promise<void> {
+    if (previousStatus === 'completed' || (appointment.status as any) !== 'completed') return;
+
+    const patient = await this.patientRepository.findOne({ where: { id: appointment.patientId } });
+    if (!patient) return;
+
+    await this.consultationSummaryEmailService.notifyIfApplicable({
+      appointmentId: appointment.id,
+      patientEmail: patient.email,
+      patientName: patient.name,
+      doctorName: appointment.doctorName || 'Seu médico',
+      appointmentDate: appointment.dateTime,
+    });
+  }
 
   private async getAccessiblePatientIdsForDoctor(doctorId: string): Promise<string[]> {
     const createdByDoctor = await this.patientRepository.find({
@@ -861,6 +886,7 @@ export class PatientsService {
     });
 
     const saved = await this.appointmentRepository.save(appointment);
+    await this.maybeSendConsultationSummaryEmail(saved, null);
 
     // Send push notification to patient if not shadow
     if (!isShadow) {
@@ -919,6 +945,8 @@ export class PatientsService {
     if (!appointment) {
       throw new NotFoundException('Consultation not found');
     }
+
+    const previousStatus = appointment.status as any;
 
     // If patient tries to edit a doctor-locked consultation, deny
     if (userType === 'patient' && appointment.lockedByDoctor) {
@@ -1005,7 +1033,9 @@ export class PatientsService {
       }
     }
 
-    return this.appointmentRepository.save(appointment);
+    const saved = await this.appointmentRepository.save(appointment);
+    await this.maybeSendConsultationSummaryEmail(saved, previousStatus);
+    return saved;
   }
 
   async approveConsultation(
@@ -1031,11 +1061,14 @@ export class PatientsService {
       throw new ForbiddenException('This consultation is not pending approval');
     }
 
+    const previousStatus = appointment.status as any;
+
     appointment.status = (
       approved ? (appointment.isCompleted ? 'completed' : 'approved') : 'rejected'
     ) as any;
 
     const saved = await this.appointmentRepository.save(appointment);
+    await this.maybeSendConsultationSummaryEmail(saved, previousStatus);
 
     // Notify the doctor about the decision
     const patientEntity = await this.patientRepository.findOne({
