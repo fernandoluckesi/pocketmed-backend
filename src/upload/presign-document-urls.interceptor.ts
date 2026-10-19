@@ -5,11 +5,18 @@ import { UploadService } from './upload.service';
 
 /** Field names ever used to store a permanent object-storage link (see
  * entities across the codebase — Prescription/ExamRequest/Report.documentUrl,
- * Report/Certificate/MedicalAttachment.fileUrl, Exam.resultFile(s),
- * ExamSchedule.resultFileUrl). Kept as a flat list rather than per-entity
- * typing since this runs generically over whatever shape a controller
- * returns. */
-const URL_FIELD_NAMES = new Set(['documentUrl', 'fileUrl', 'resultFileUrl', 'resultFile']);
+ * Report/Certificate/MedicalAttachment/DoctorDocument.fileUrl,
+ * Exam.resultFile(s), ExamSchedule.resultFileUrl,
+ * Patient/Doctor/Dependent.profileImage). Kept as a flat list rather than
+ * per-entity typing since this runs generically over whatever shape a
+ * controller returns. */
+const URL_FIELD_NAMES = new Set([
+  'documentUrl',
+  'fileUrl',
+  'resultFileUrl',
+  'resultFile',
+  'profileImage',
+]);
 const URL_ARRAY_FIELD_NAMES = new Set(['resultFiles']);
 
 /** Matches the last mile of every leak this interceptor closed in October
