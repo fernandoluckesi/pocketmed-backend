@@ -4,6 +4,8 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { UploadService } from './upload/upload.service';
+import { PresignDocumentUrlsInterceptor } from './upload/presign-document-urls.interceptor';
 
 async function bootstrap() {
   // rawBody: true lets webhook handlers (Stripe) verify signatures against
@@ -30,7 +32,18 @@ async function bootstrap() {
   // `@Exclude()` on those columns (see entities/*.entity.ts) is honored on
   // every response, nested relations included, regardless of which service
   // method loaded them.
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  //
+  // PresignDocumentUrlsInterceptor is registered FIRST (outermost), so in
+  // the response pipeline it runs AFTER ClassSerializerInterceptor — it only
+  // ever sees the already-plain, already-@Exclude()'d object, never a raw
+  // entity instance. It rewrites every documentUrl/fileUrl/resultFile(s) it
+  // finds (at any nesting depth) from the permanent bucket link stored in
+  // the DB into a short-lived signed one, since the bucket's public read
+  // access was disabled in October 2026 (see upload.service.ts).
+  app.useGlobalInterceptors(
+    new PresignDocumentUrlsInterceptor(app.get(UploadService)),
+    new ClassSerializerInterceptor(app.get(Reflector)),
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({
