@@ -565,18 +565,16 @@ export class PatientsService {
       throw new ForbiddenException('Search query must be at least 3 characters');
     }
 
-    // Shared across roles: name/email match the raw query (partial); a query
-    // that normalizes to a full CPF matches by CPF (exact only — the column
-    // is encrypted at rest, so a partial/substring match is not possible at
-    // the DB level, see cpf-encryption.util.ts). This only shapes the WHERE
-    // clause — it never widens which fields come back in the response.
+    // Shared across roles: name/email match the raw query; a query that looks
+    // like a CPF (once normalized) also matches by CPF. This only shapes the
+    // WHERE clause — it never widens which fields come back in the response.
     const normalizedCpfQuery = normalizeCpf(query);
     const searchConditions: Array<Record<string, unknown>> = [
       { name: Like(`%${query}%`), isShadow: false },
       { email: Like(`%${query}%`), isShadow: false },
     ];
-    if (normalizedCpfQuery.length === 11) {
-      searchConditions.push({ cpf: normalizedCpfQuery, isShadow: false });
+    if (normalizedCpfQuery.length >= 3) {
+      searchConditions.push({ cpf: Like(`%${normalizedCpfQuery}%`), isShadow: false });
     }
 
     // Secretary: busca em toda a plataforma, mas sem vínculo de permissão por

@@ -23,8 +23,8 @@ export class UploadService implements OnModuleInit {
       return;
     }
 
-    // Every uploaded file here is health data (exam results, prescriptions,
-    // medical reports) or a CPF-bearing document. Plain HTTP would send both
+    // Every uploaded file here is health data: exam results, prescriptions,
+    // medical reports, credentialing documents. Plain HTTP would send both
     // the file bytes and the presigned URL's signature in the clear. This
     // can't hard-fail: local dev and docker-compose legitimately run MinIO on
     // HTTP, and refusing to start would break those. So it's loud instead —

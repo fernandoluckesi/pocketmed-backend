@@ -16,7 +16,6 @@ import { DoctorPermission } from '../entities/doctor-permission.entity';
 import { ClinicAdminProfile } from '../entities/clinic-admin-profile.entity';
 import { SecretaryProfile } from '../entities/secretary-profile.entity';
 import { ProfessionalRole } from '../auth/professional-role.enum';
-import { encryptCpf } from '../common/cpf-encryption.util';
 import { normalizeCpf } from '../common/validators/cpf.util';
 import { AddClinicMemberDto } from './dto/add-clinic-member.dto';
 import { CreateShadowDoctorByAdminDto } from './dto/create-shadow-doctor-by-admin.dto';
@@ -587,10 +586,9 @@ export class ClinicAdminService {
         crm: `SEC${suffix}`,
         crmNumber: null,
         crmUf: null,
-        // Digits only (no mask): cpf is encrypted deterministically, and the
-        // mask would just be stripped before encryption anyway — storing it
-        // unmasked keeps the stored value consistent with every other row.
-        // Still synthetic/non-valid by construction, same as the CRM above.
+        // Digits only, consistent with every other stored CPF (a masked
+        // value wouldn't match the digit-based lookups). Still synthetic and
+        // deliberately not a valid CPF, same as the CRM placeholder above.
         cpf: `000000${suffix.slice(0, 5)}`,
         profileImage: null,
         type: 'doctor',
@@ -706,9 +704,10 @@ export class ClinicAdminService {
       email: normalizedEmail,
       gender: dto.gender,
       specialty: dto.specialty,
-      // Digits only — the column is encrypted deterministically, so a masked
-      // value stores as a different ciphertext and would never match the
-      // exact-match CPF lookup in searchDoctors below.
+      // Stored as digits only, matching how auth.service persists every CPF.
+      // Without this, a masked value ('390.533.447-05') would never match the
+      // digit-based LIKE lookup in searchDoctors below, nor the duplicate
+      // check in auth.service, which both compare against bare digits.
       cpf: normalizeCpf(dto.cpf),
       phone: dto.phone,
       birthDate: new Date(dto.birthDate),
@@ -938,12 +937,8 @@ export class ClinicAdminService {
       .orderBy('doctor.name', 'ASC')
       .take(20);
 
-    // Exact match only — doctor.cpf is encrypted at rest (deterministically,
-    // see cpf-encryption.util.ts), so a substring LIKE against the stored
-    // ciphertext can never match. QueryBuilder bypasses column transformers,
-    // so the value is encrypted here manually before being compared.
-    if (onlyDigits.length === 11) {
-      doctorsQb.orWhere('doctor.cpf = :cpf', { cpf: encryptCpf(onlyDigits) });
+    if (onlyDigits) {
+      doctorsQb.orWhere('doctor.cpf LIKE :cpf', { cpf: `%${onlyDigits}%` });
     }
 
     const doctors = await doctorsQb.getMany();

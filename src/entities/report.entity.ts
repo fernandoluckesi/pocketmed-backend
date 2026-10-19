@@ -13,7 +13,6 @@ import { Dependent } from './dependent.entity';
 import { Appointment } from './appointment.entity';
 import { DocumentStatus, ProseMirrorDoc } from '../documents/document.types';
 import { SignatureStatus } from '../documents/signature/signature.types';
-import { cpfColumnTransformer } from '../common/cpf-encryption.util';
 
 export enum ReportType {
   LAUDO_MEDICO = 'laudo_medico',
@@ -123,9 +122,7 @@ export class Report {
   @Column({ type: 'varchar', length: 255 })
   patientNameSnapshot: string;
 
-  // Plaintext at the application layer; encrypted at rest transparently via
-  // cpfColumnTransformer — see src/common/cpf-encryption.util.ts.
-  @Column({ type: 'varchar', length: 64, nullable: true, transformer: cpfColumnTransformer })
+  @Column({ type: 'varchar', length: 14, nullable: true })
   patientCpfSnapshot: string | null;
 
   @Column({ type: 'date', nullable: true })

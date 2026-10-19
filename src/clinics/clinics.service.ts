@@ -146,10 +146,10 @@ export class ClinicsService {
         password: hashedPassword,
         gender: dto.gender,
         specialty: dto.specialty,
-        // Normalized to digits: CPF is encrypted at rest deterministically
-        // (see common/cpf-encryption.util.ts), so a masked value would be a
-        // different ciphertext than the same CPF stored unmasked — making
-        // this doctor unfindable by CPF and invisible to the duplicate check.
+        // Stored as digits only, matching how auth.service persists every CPF.
+        // A masked value here would be invisible to the duplicate check in
+        // auth.service (which compares bare digits), letting the same CPF be
+        // registered twice through this endpoint.
         cpf: normalizeCpf(dto.cpf),
         phone: dto.phone,
         birthDate: new Date(dto.birthDate),

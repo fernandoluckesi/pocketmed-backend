@@ -7,7 +7,6 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
-import { cpfColumnTransformer } from '../common/cpf-encryption.util';
 import { Appointment } from './appointment.entity';
 import { Medication } from './medication.entity';
 import { Exam } from './exam.entity';
@@ -124,9 +123,7 @@ export class Doctor {
   @Column({ type: 'varchar', length: 20, nullable: true })
   rqe: string;
 
-  // Plaintext at the application layer; encrypted at rest transparently via
-  // cpfColumnTransformer — see src/common/cpf-encryption.util.ts.
-  @Column({ type: 'varchar', length: 64, transformer: cpfColumnTransformer })
+  @Column({ type: 'varchar', length: 14 })
   cpf: string;
 
   @Column({ type: 'varchar', length: 20, default: 'PENDING' })
