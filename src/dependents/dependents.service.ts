@@ -11,6 +11,7 @@ import { Patient } from '../entities/patient.entity';
 import {
   DependentResponsibleInvite,
   ResponsibleInviteStatus,
+  ResponsibleInviteKind,
 } from '../entities/dependent-responsible-invite.entity';
 import { UploadService } from '../upload/upload.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -19,6 +20,8 @@ import { UpdateDependentDto } from './dto/update-dependent.dto';
 
 const RESPONSIBLE_INVITE_CREATED = 'RESPONSIBLE_INVITE_CREATED';
 const RESPONSIBLE_INVITE_RESPONDED = 'RESPONSIBLE_INVITE_RESPONDED';
+const ADMIN_TRANSFER_REQUESTED = 'ADMIN_TRANSFER_REQUESTED';
+const ADMIN_TRANSFER_RESPONDED = 'ADMIN_TRANSFER_RESPONDED';
 
 @Injectable()
 export class DependentsService {
@@ -411,11 +414,10 @@ export class DependentsService {
     invite.status = status;
     await this.inviteRepository.save(invite);
 
-    await this.notificationsService.syncNotificationStatusByType(
-      invite.id,
-      RESPONSIBLE_INVITE_CREATED,
-      status,
-    );
+    const isAdminTransfer = invite.kind === ResponsibleInviteKind.ADMIN_TRANSFER;
+    const createdType = isAdminTransfer ? ADMIN_TRANSFER_REQUESTED : RESPONSIBLE_INVITE_CREATED;
+
+    await this.notificationsService.syncNotificationStatusByType(invite.id, createdType, status);
 
     if (status === ResponsibleInviteStatus.ACCEPTED) {
       const invitee = await this.patientRepository.findOne({
@@ -426,21 +428,43 @@ export class DependentsService {
         (r) => r.id === invite.inviteePatientId,
       );
 
+      // Both flows ensure the invitee is a responsible; the admin transfer also
+      // moves the adminResponsibleId to them.
       if (invitee && !alreadyResponsible) {
         invite.dependent.responsibles.push(invitee);
+      }
+      if (isAdminTransfer && invitee) {
+        invite.dependent.adminResponsibleId = invitee.id;
+      }
+      if (invitee && (!alreadyResponsible || isAdminTransfer)) {
         await this.dependentRepository.save(invite.dependent);
       }
     }
+
+    const respondedType = isAdminTransfer ? ADMIN_TRANSFER_RESPONDED : RESPONSIBLE_INVITE_RESPONDED;
+    const accepted = status === ResponsibleInviteStatus.ACCEPTED;
+    const title = isAdminTransfer
+      ? accepted
+        ? 'Transferência de administração aceita'
+        : 'Transferência de administração recusada'
+      : accepted
+        ? 'Convite aceito!'
+        : 'Convite recusado';
+    const body = isAdminTransfer
+      ? accepted
+        ? `A administração de ${invite.dependent.name} foi transferida com sucesso.`
+        : `Sua solicitação para transferir a administração de ${invite.dependent.name} foi recusada.`
+      : accepted
+        ? `Seu convite para gerenciar ${invite.dependent.name} foi aceito.`
+        : `Seu convite para gerenciar ${invite.dependent.name} foi recusado.`;
 
     this.notificationsService
       .createNotification(
         invite.inviterPatientId,
         'patient',
-        status === ResponsibleInviteStatus.ACCEPTED ? 'Convite aceito!' : 'Convite recusado',
-        status === ResponsibleInviteStatus.ACCEPTED
-          ? `Seu convite para gerenciar ${invite.dependent.name} foi aceito.`
-          : `Seu convite para gerenciar ${invite.dependent.name} foi recusado.`,
-        RESPONSIBLE_INVITE_RESPONDED,
+        title,
+        body,
+        respondedType,
         {
           status,
           dependentId: invite.dependentId,
@@ -456,6 +480,177 @@ export class DependentsService {
       message: `Invite ${status}`,
       invite,
     };
+  }
+
+  /**
+   * Lets a NON-admin responsible step down (stop being responsible for the
+   * dependent). The admin can't use this — they must either transfer admin to
+   * someone else first, or delete the dependent (handled on the client via the
+   * deletion-impact flow). Returns whether any responsible remains.
+   */
+  async leaveResponsible(dependentId: string, userId: string) {
+    const dependent = await this.dependentRepository.findOne({
+      where: { id: dependentId },
+      relations: ['responsibles'],
+    });
+
+    if (!dependent) {
+      throw new NotFoundException('Dependent not found');
+    }
+
+    const isResponsible = (dependent.responsibles || []).some((r) => r.id === userId);
+    if (!isResponsible) {
+      throw new ForbiddenException('You are not a responsible for this dependent');
+    }
+
+    if (dependent.adminResponsibleId === userId) {
+      throw new BadRequestException(
+        'The admin responsible cannot step down directly. Transfer administration to another responsible or delete the dependent.',
+      );
+    }
+
+    dependent.responsibles = dependent.responsibles.filter((r) => r.id !== userId);
+    await this.dependentRepository.save(dependent);
+
+    // Cancel any still-pending invites targeting this user for this dependent,
+    // so stale invites don't linger after they leave.
+    await this.inviteRepository.update(
+      {
+        dependentId,
+        inviteePatientId: userId,
+        status: ResponsibleInviteStatus.PENDING,
+      },
+      { status: ResponsibleInviteStatus.REJECTED },
+    );
+
+    return { message: 'You are no longer responsible for this dependent' };
+  }
+
+  /**
+   * The admin asks an EXISTING responsible to take over as admin. This is a
+   * request/accept flow (not an immediate transfer): the target gets a
+   * notification and must accept; the admin is notified of the outcome.
+   */
+  async requestAdminTransfer(
+    dependentId: string,
+    targetResponsibleId: string,
+    requestUserId: string,
+  ) {
+    const dependent = await this.dependentRepository.findOne({
+      where: { id: dependentId },
+      relations: ['responsibles'],
+    });
+
+    if (!dependent) {
+      throw new NotFoundException('Dependent not found');
+    }
+
+    if (dependent.adminResponsibleId !== requestUserId) {
+      throw new ForbiddenException('Only the admin responsible can transfer administration');
+    }
+
+    if (targetResponsibleId === requestUserId) {
+      throw new BadRequestException('You are already the admin of this dependent');
+    }
+
+    const target = (dependent.responsibles || []).find((r) => r.id === targetResponsibleId);
+    if (!target) {
+      throw new BadRequestException('The new admin must already be a responsible');
+    }
+
+    const existingPending = await this.inviteRepository.findOne({
+      where: {
+        dependentId,
+        inviteePatientId: targetResponsibleId,
+        kind: ResponsibleInviteKind.ADMIN_TRANSFER,
+        status: ResponsibleInviteStatus.PENDING,
+      },
+    });
+    if (existingPending) {
+      throw new BadRequestException('An admin transfer is already pending for this responsible');
+    }
+
+    const inviter = await this.patientRepository.findOne({ where: { id: requestUserId } });
+
+    const invite = this.inviteRepository.create({
+      dependentId,
+      inviterPatientId: requestUserId,
+      inviteePatientId: targetResponsibleId,
+      inviteeEmail: target.email,
+      kind: ResponsibleInviteKind.ADMIN_TRANSFER,
+      status: ResponsibleInviteStatus.PENDING,
+    });
+
+    const savedInvite = await this.inviteRepository.save(invite);
+
+    this.notificationsService
+      .createNotification(
+        targetResponsibleId,
+        'patient',
+        'Solicitação para ser administrador',
+        `${inviter?.name ?? 'O administrador'} quer transferir a administração de ${dependent.name} para você.`,
+        ADMIN_TRANSFER_REQUESTED,
+        {
+          dependentId,
+          dependentName: dependent.name,
+          inviterId: requestUserId,
+          inviterName: inviter?.name ?? '',
+        },
+        savedInvite.id,
+      )
+      .catch(() => {
+        /* best-effort */
+      });
+
+    return {
+      message: 'Admin transfer request sent successfully',
+      invite: savedInvite,
+    };
+  }
+
+  /**
+   * Admin removes ANOTHER responsible from the dependent. The admin can't
+   * remove themselves here (they must transfer admin or delete the dependent).
+   */
+  async removeResponsible(dependentId: string, responsibleId: string, requestUserId: string) {
+    const dependent = await this.dependentRepository.findOne({
+      where: { id: dependentId },
+      relations: ['responsibles'],
+    });
+
+    if (!dependent) {
+      throw new NotFoundException('Dependent not found');
+    }
+
+    if (dependent.adminResponsibleId !== requestUserId) {
+      throw new ForbiddenException('Only the admin responsible can remove responsibles');
+    }
+
+    if (responsibleId === requestUserId) {
+      throw new BadRequestException(
+        'The admin cannot remove themselves. Transfer administration or delete the dependent.',
+      );
+    }
+
+    const isResponsible = (dependent.responsibles || []).some((r) => r.id === responsibleId);
+    if (!isResponsible) {
+      throw new BadRequestException('This user is not a responsible for this dependent');
+    }
+
+    dependent.responsibles = dependent.responsibles.filter((r) => r.id !== responsibleId);
+    await this.dependentRepository.save(dependent);
+
+    // Cancel any pending invites targeting the removed responsible.
+    await this.inviteRepository.update(
+      {
+        dependentId,
+        inviteePatientId: responsibleId,
+        status: ResponsibleInviteStatus.PENDING,
+      },
+      { status: ResponsibleInviteStatus.REJECTED },
+    );
+
+    return { message: 'Responsible removed successfully' };
   }
 
   async remove(id: string, userId: string) {

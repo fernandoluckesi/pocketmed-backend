@@ -16,6 +16,13 @@ export enum ResponsibleInviteStatus {
   REJECTED = 'rejected',
 }
 
+export enum ResponsibleInviteKind {
+  /** Invite a patient to BECOME a responsible for the dependent. */
+  RESPONSIBLE = 'responsible',
+  /** Ask an existing responsible to BECOME the admin (ownership transfer). */
+  ADMIN_TRANSFER = 'admin_transfer',
+}
+
 @Entity('dependent_responsible_invites')
 export class DependentResponsibleInvite {
   @PrimaryGeneratedColumn('uuid')
@@ -47,6 +54,14 @@ export class DependentResponsibleInvite {
   /** Email used to resolve the invitee (kept for auditing). */
   @Column({ type: 'varchar', length: 255 })
   inviteeEmail: string;
+
+  /** What this invite grants: becoming a responsible or becoming the admin. */
+  @Column({
+    type: 'enum',
+    enum: ResponsibleInviteKind,
+    default: ResponsibleInviteKind.RESPONSIBLE,
+  })
+  kind: ResponsibleInviteKind;
 
   @Column({
     type: 'enum',

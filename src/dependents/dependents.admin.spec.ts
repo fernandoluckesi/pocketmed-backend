@@ -17,6 +17,14 @@ import { NotificationsService } from '../notifications/notifications.service';
 describe('DependentsService - admin transfer & deletion impact', () => {
   let service: DependentsService;
   let dependentRepo: { find: jest.Mock; findOne: jest.Mock; save: jest.Mock };
+  let inviteRepo: {
+    findOne: jest.Mock;
+    find: jest.Mock;
+    save: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+  };
+  let patientRepo: { findOne: jest.Mock };
 
   const ADMIN_ID = 'patient-admin';
   const OTHER_RESP_ID = 'patient-other';
@@ -28,18 +36,32 @@ describe('DependentsService - admin transfer & deletion impact', () => {
       findOne: jest.fn(),
       save: jest.fn((x) => Promise.resolve(x)),
     };
+    inviteRepo = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      save: jest.fn((x) => Promise.resolve({ id: 'invite-1', ...x })),
+      create: jest.fn((x) => x),
+      update: jest.fn(),
+    };
+    patientRepo = { findOne: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DependentsService,
         { provide: getRepositoryToken(Dependent), useValue: dependentRepo },
-        { provide: getRepositoryToken(Patient), useValue: { findOne: jest.fn() } },
+        { provide: getRepositoryToken(Patient), useValue: patientRepo },
         {
           provide: getRepositoryToken(DependentResponsibleInvite),
-          useValue: { findOne: jest.fn(), find: jest.fn(), save: jest.fn(), create: jest.fn() },
+          useValue: inviteRepo,
         },
         { provide: UploadService, useValue: { uploadFile: jest.fn(), deleteFile: jest.fn() } },
-        { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createNotification: jest.fn().mockResolvedValue(undefined),
+            syncNotificationStatusByType: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -147,6 +169,115 @@ describe('DependentsService - admin transfer & deletion impact', () => {
       await expect(
         service.transferAdmin('missing', OTHER_RESP_ID, ADMIN_ID),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('leaveResponsible', () => {
+    it('removes a non-admin responsible and rejects their pending invites', async () => {
+      dependentRepo.findOne.mockResolvedValue({
+        id: 'dep-1',
+        adminResponsibleId: ADMIN_ID,
+        responsibles: [{ id: ADMIN_ID }, { id: OTHER_RESP_ID }],
+      });
+
+      await service.leaveResponsible('dep-1', OTHER_RESP_ID);
+
+      // The leaving user is dropped from responsibles.
+      expect(dependentRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          responsibles: [{ id: ADMIN_ID }],
+        }),
+      );
+      expect(inviteRepo.update).toHaveBeenCalled();
+    });
+
+    it('blocks the admin from leaving directly', async () => {
+      dependentRepo.findOne.mockResolvedValue({
+        id: 'dep-1',
+        adminResponsibleId: ADMIN_ID,
+        responsibles: [{ id: ADMIN_ID }, { id: OTHER_RESP_ID }],
+      });
+
+      await expect(service.leaveResponsible('dep-1', ADMIN_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(dependentRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the user is not a responsible', async () => {
+      dependentRepo.findOne.mockResolvedValue({
+        id: 'dep-1',
+        adminResponsibleId: ADMIN_ID,
+        responsibles: [{ id: ADMIN_ID }],
+      });
+
+      await expect(service.leaveResponsible('dep-1', STRANGER_ID)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+  });
+
+  describe('requestAdminTransfer', () => {
+    it('creates a pending admin_transfer invite for an existing responsible', async () => {
+      dependentRepo.findOne.mockResolvedValue({
+        id: 'dep-1',
+        name: 'Filho',
+        adminResponsibleId: ADMIN_ID,
+        responsibles: [
+          { id: ADMIN_ID, email: 'admin@x.com' },
+          { id: OTHER_RESP_ID, email: 'other@x.com' },
+        ],
+      });
+      inviteRepo.findOne.mockResolvedValue(null); // no pending
+      patientRepo.findOne.mockResolvedValue({ id: ADMIN_ID, name: 'Admin' });
+
+      const result = await service.requestAdminTransfer('dep-1', OTHER_RESP_ID, ADMIN_ID);
+
+      expect(inviteRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inviteePatientId: OTHER_RESP_ID,
+          kind: 'admin_transfer',
+          status: 'pending',
+        }),
+      );
+      expect(result.message).toMatch(/sent/i);
+    });
+
+    it('rejects when the requester is not the admin', async () => {
+      dependentRepo.findOne.mockResolvedValue({
+        id: 'dep-1',
+        adminResponsibleId: ADMIN_ID,
+        responsibles: [{ id: ADMIN_ID }, { id: OTHER_RESP_ID }],
+      });
+
+      await expect(
+        service.requestAdminTransfer('dep-1', OTHER_RESP_ID, OTHER_RESP_ID),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('rejects when the target is not already a responsible', async () => {
+      dependentRepo.findOne.mockResolvedValue({
+        id: 'dep-1',
+        adminResponsibleId: ADMIN_ID,
+        responsibles: [{ id: ADMIN_ID }],
+      });
+
+      await expect(
+        service.requestAdminTransfer('dep-1', STRANGER_ID, ADMIN_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects a duplicate pending admin transfer', async () => {
+      dependentRepo.findOne.mockResolvedValue({
+        id: 'dep-1',
+        adminResponsibleId: ADMIN_ID,
+        responsibles: [{ id: ADMIN_ID }, { id: OTHER_RESP_ID, email: 'o@x.com' }],
+      });
+      inviteRepo.findOne.mockResolvedValue({ id: 'existing' });
+
+      await expect(
+        service.requestAdminTransfer('dep-1', OTHER_RESP_ID, ADMIN_ID),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

@@ -156,6 +156,52 @@ export class DependentsController {
     return this.dependentsService.transferAdmin(id, dto.newAdminId, user.userId);
   }
 
+  @Post(':id/transfer-admin-request')
+  @Roles('patient')
+  @ApiOperation({
+    summary: 'Request another responsible to take over as admin (admin only, requires acceptance)',
+  })
+  @ApiResponse({ status: 201, description: 'Admin transfer request sent' })
+  @ApiResponse({
+    status: 400,
+    description: 'Target is not a responsible / already admin / pending',
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admin can transfer administration' })
+  @ApiResponse({ status: 404, description: 'Dependent not found' })
+  async requestAdminTransfer(
+    @Param('id') id: string,
+    @Body() dto: TransferAdminDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.dependentsService.requestAdminTransfer(id, dto.newAdminId, user.userId);
+  }
+
+  @Post(':id/leave')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Stop being a responsible for the dependent (non-admin only)' })
+  @ApiResponse({ status: 201, description: 'Left as responsible successfully' })
+  @ApiResponse({ status: 400, description: 'Admin must transfer or delete instead' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not a responsible' })
+  @ApiResponse({ status: 404, description: 'Dependent not found' })
+  async leaveResponsible(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.dependentsService.leaveResponsible(id, user.userId);
+  }
+
+  @Delete(':id/responsibles/:responsibleId')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Remove another responsible from the dependent (admin only)' })
+  @ApiResponse({ status: 200, description: 'Responsible removed successfully' })
+  @ApiResponse({ status: 400, description: 'Admin cannot remove themselves / not a responsible' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admin can remove responsibles' })
+  @ApiResponse({ status: 404, description: 'Dependent not found' })
+  async removeResponsible(
+    @Param('id') id: string,
+    @Param('responsibleId') responsibleId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.dependentsService.removeResponsible(id, responsibleId, user.userId);
+  }
+
   @Patch(':id')
   @Roles('patient')
   @UseInterceptors(FileInterceptor('profileImage'))
