@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Ip,
   Param,
   Patch,
   Post,
@@ -12,6 +13,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
+import { THROTTLE_AUTH, THROTTLE_EMAIL } from '../common/throttler.config';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -31,6 +34,12 @@ export class ClinicsController {
 
   @Public()
   @Post()
+  // Public registration endpoint — same rate-limit treatment as
+  // auth.controller.ts's register endpoints (brute-force/automation target,
+  // not an email sender).
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
   @ApiOperation({
     summary: 'Register a new clinic with its admin doctor (public)',
@@ -38,8 +47,13 @@ export class ClinicsController {
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Clinic and admin created successfully' })
   @ApiResponse({ status: 409, description: 'Email, phone, CRM or CNPJ already registered' })
-  async create(@Body() dto: CreateClinicDto, @UploadedFile() file?: Express.Multer.File) {
-    return this.clinicsService.create(dto, file);
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async create(
+    @Body() dto: CreateClinicDto,
+    @Ip() ip: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.clinicsService.create(dto, file, ip);
   }
 
   @Get('mine')

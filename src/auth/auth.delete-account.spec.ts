@@ -17,6 +17,7 @@ import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TurnstileService } from '../common/turnstile/turnstile.service';
 
 /**
  * Unit tests for AuthService.deleteAccount focusing on the hard-delete
@@ -122,6 +123,7 @@ describe('AuthService - deleteAccount', () => {
         { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
         { provide: DataSource, useValue: dataSource },
         { provide: ConfigService, useValue: { get: jest.fn(() => undefined) } },
+        { provide: TurnstileService, useValue: { verify: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

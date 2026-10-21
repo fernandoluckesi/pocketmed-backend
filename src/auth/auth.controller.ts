@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Ip,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
@@ -55,6 +56,7 @@ export class AuthController {
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async registerPatient(
     @Body() dto: RegisterPatientDto,
+    @Ip() ip: string,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     console.log('=== AUTH CONTROLLER - REGISTER PATIENT ===');
@@ -67,7 +69,7 @@ export class AuthController {
         size: file.size,
       });
     }
-    return this.authService.registerPatient(dto, file);
+    return this.authService.registerPatient(dto, file, ip);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -100,8 +102,12 @@ export class AuthController {
   @ApiResponse({ status: 201, description: 'Doctor registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   @ApiResponse({ status: 429, description: 'Too many requests' })
-  async registerDoctor(@Body() dto: RegisterDoctorDto, @UploadedFile() file?: Express.Multer.File) {
-    return this.authService.registerDoctor(dto, file);
+  async registerDoctor(
+    @Body() dto: RegisterDoctorDto,
+    @Ip() ip: string,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.authService.registerDoctor(dto, file, ip);
   }
 
   @Public()

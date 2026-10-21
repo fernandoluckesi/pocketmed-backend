@@ -91,4 +91,12 @@ export class RegisterDoctorDto {
   @ApiProperty({ type: 'string', format: 'binary', required: false })
   @IsOptional()
   profileImage?: any;
+
+  @ApiProperty({
+    required: false,
+    description: 'Cloudflare Turnstile token (required only when captcha is enabled)',
+  })
+  @IsOptional()
+  @IsString()
+  captchaToken?: string;
 }

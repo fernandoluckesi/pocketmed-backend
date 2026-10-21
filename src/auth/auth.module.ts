@@ -18,6 +18,7 @@ import { DoctorDocument } from '../entities/doctor-document.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UploadModule } from '../upload/upload.module';
 import { EmailModule } from '../email/email.module';
+import { TurnstileModule } from '../common/turnstile/turnstile.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { EmailModule } from '../email/email.module';
     }),
     UploadModule,
     EmailModule,
+    TurnstileModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

@@ -32,6 +32,7 @@ import { PaymentsService } from '../payments/payments.service';
 import { buildExternalReference } from '../payments/mercadopago-reference';
 import { resolveCrmInput } from '../common/crm.util';
 import { normalizeCpf } from '../common/validators/cpf.util';
+import { TurnstileService } from '../common/turnstile/turnstile.service';
 
 /** "Active" patient: had an appointment (created or last touched) with the
  * clinic in the last 12 months — matches the plan's definition, so a clinic
@@ -61,13 +62,16 @@ export class ClinicsService {
     private mercadoPagoService: MercadoPagoService,
     private paymentsService: PaymentsService,
     private configService: ConfigService,
+    private turnstileService: TurnstileService,
   ) {}
 
   /**
    * Creates a new clinic + doctor admin in a single transaction (public endpoint).
    * Same data as doctor registration + clinic fields.
    */
-  async create(dto: CreateClinicDto, file?: Express.Multer.File) {
+  async create(dto: CreateClinicDto, file?: Express.Multer.File, ip?: string) {
+    await this.turnstileService.verify(dto.captchaToken, ip);
+
     // ── Validate uniqueness ─────────────────────────────────────────────────
     const conflicts: string[] = [];
 

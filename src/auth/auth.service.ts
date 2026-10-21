@@ -34,6 +34,7 @@ import { ProfessionalRole } from './professional-role.enum';
 import { normalizeCpf, isValidCpf } from '../common/validators/cpf.util';
 import { resolveCrmInput } from '../common/crm.util';
 import { DeletionRequestType, RequestDataDeletionDto } from './dto/request-data-deletion.dto';
+import { TurnstileService } from '../common/turnstile/turnstile.service';
 
 type AuthUser = Patient | Doctor;
 
@@ -72,9 +73,12 @@ export class AuthService {
     private notificationsService: NotificationsService,
     private dataSource: DataSource,
     private configService: ConfigService,
+    private turnstileService: TurnstileService,
   ) {}
 
-  async registerPatient(dto: RegisterPatientDto, file?: Express.Multer.File) {
+  async registerPatient(dto: RegisterPatientDto, file?: Express.Multer.File, ip?: string) {
+    await this.turnstileService.verify(dto.captchaToken, ip);
+
     // Only check for active (non-shadow) accounts with same email in PATIENTS table
     const existingActive = await this.patientRepository.findOne({
       where: { email: dto.email, isShadow: false },
@@ -396,7 +400,9 @@ export class AuthService {
     };
   }
 
-  async registerDoctor(dto: RegisterDoctorDto, file?: Express.Multer.File) {
+  async registerDoctor(dto: RegisterDoctorDto, file?: Express.Multer.File, ip?: string) {
+    await this.turnstileService.verify(dto.captchaToken, ip);
+
     // Check all conflicts at once
     const conflicts: string[] = [];
 

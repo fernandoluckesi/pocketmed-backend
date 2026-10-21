@@ -13,6 +13,7 @@ import { SubscriptionPayment } from '../entities/subscription-payment.entity';
 import { UploadModule } from '../upload/upload.module';
 import { EmailModule } from '../email/email.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { TurnstileModule } from '../common/turnstile/turnstile.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { PaymentsModule } from '../payments/payments.module';
     UploadModule,
     EmailModule,
     PaymentsModule,
+    TurnstileModule,
   ],
   controllers: [ClinicsController],
   providers: [ClinicsService],

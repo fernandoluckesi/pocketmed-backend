@@ -16,6 +16,7 @@ import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TurnstileService } from '../common/turnstile/turnstile.service';
 import { DeletionRequestType } from './dto/request-data-deletion.dto';
 import { AuditAction } from '../audit/audit.constants';
 
@@ -68,6 +69,7 @@ describe('AuthService - public data deletion request', () => {
           provide: ConfigService,
           useValue: { get: jest.fn(() => 'privacidade@hispora.com.br') },
         },
+        { provide: TurnstileService, useValue: { verify: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
