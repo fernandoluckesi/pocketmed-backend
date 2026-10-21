@@ -11,7 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -28,7 +28,7 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
 import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
 import { RequestDataDeletionDto } from './dto/request-data-deletion.dto';
-import { THROTTLE_EMAIL } from '../common/throttler.config';
+import { THROTTLE_EMAIL, THROTTLE_AUTH } from '../common/throttler.config';
 import { Public } from './decorators/public.decorator';
 import { AllowUnverified } from './decorators/allow-unverified.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -44,11 +44,15 @@ export class AuthController {
 
   @Public()
   @Post('register/patient')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Register a new patient' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Patient registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async registerPatient(
     @Body() dto: RegisterPatientDto,
     @UploadedFile() file?: Express.Multer.File,
@@ -87,21 +91,29 @@ export class AuthController {
 
   @Public()
   @Post('register/doctor')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
   @ApiOperation({ summary: 'Register a new doctor' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Doctor registered successfully' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async registerDoctor(@Body() dto: RegisterDoctorDto, @UploadedFile() file?: Express.Multer.File) {
     return this.authService.registerDoctor(dto, file);
   }
 
   @Public()
   @Post('login')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'User login' })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async login(@Body() dto: LoginDto) {
     console.log('[LOGIN] Attempting login for:', dto.email);
     const result = await this.authService.login(dto);
@@ -111,109 +123,155 @@ export class AuthController {
 
   @Public()
   @Post('check-shadow')
+  // Sends an activation code by email when the account exists, so it's an
+  // email-spray vector just like forgot-password — same bucket.
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_EMAIL]: { ttl: 60 * 60_000, limit: 5 } })
+  @SkipThrottle({ [THROTTLE_AUTH]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check if email belongs to a shadow account and send activation code' })
   @ApiResponse({ status: 200, description: 'Shadow check result' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async checkShadowAccount(@Body() dto: SendVerificationCodeDto) {
     return this.authService.checkShadowAccount(dto.email);
   }
 
   @Public()
   @Post('send-verification-code')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_EMAIL]: { ttl: 60 * 60_000, limit: 5 } })
+  @SkipThrottle({ [THROTTLE_AUTH]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send verification code to shadow account' })
   @ApiResponse({ status: 200, description: 'Verification code sent' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async sendVerificationCode(@Body() dto: SendVerificationCodeDto) {
     return this.authService.sendVerificationCode(dto.email);
   }
 
   @Public()
   @Post('activate-shadow-account')
+  // Guesses a 6-digit code — brute-force target, not an email sender.
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Activate shadow account with verification code' })
   @ApiResponse({ status: 200, description: 'Account activated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid or expired verification code' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async activateShadowAccount(@Body() dto: ActivateShadowAccountDto) {
     return this.authService.activateShadowAccount(dto.email, dto.verificationCode, dto.password);
   }
 
   @Public()
   @Post('validate-code')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Validate verification code without activating' })
   @ApiResponse({ status: 200, description: 'Code is valid' })
   @ApiResponse({ status: 400, description: 'Invalid or expired code' })
   @ApiResponse({ status: 404, description: 'Account not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async validateCode(@Body() body: { email: string; verificationCode: string }) {
     return this.authService.validateCode(body.email, body.verificationCode);
   }
 
   @Public()
   @Post('forgot-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_EMAIL]: { ttl: 60 * 60_000, limit: 5 } })
+  @SkipThrottle({ [THROTTLE_AUTH]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset code (generic — prefers doctor)' })
   @ApiResponse({ status: 200, description: 'Reset code sent to email' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
   }
 
   @Public()
   @Post('doctor/forgot-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_EMAIL]: { ttl: 60 * 60_000, limit: 5 } })
+  @SkipThrottle({ [THROTTLE_AUTH]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset code for doctor (web)' })
   @ApiResponse({ status: 200, description: 'Reset code sent to email' })
   @ApiResponse({ status: 404, description: 'Doctor not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async forgotPasswordDoctor(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPasswordDoctor(dto.email);
   }
 
   @Public()
   @Post('patient/forgot-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_EMAIL]: { ttl: 60 * 60_000, limit: 5 } })
+  @SkipThrottle({ [THROTTLE_AUTH]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset code for patient (mobile)' })
   @ApiResponse({ status: 200, description: 'Reset code sent to email' })
   @ApiResponse({ status: 404, description: 'Patient not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async forgotPasswordPatient(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPasswordPatient(dto.email);
   }
 
   @Public()
   @Post('reset-password')
+  // Guesses a 6-digit reset code — brute-force target, not an email sender.
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with code (generic — prefers doctor)' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 400, description: 'Invalid or expired reset code' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.email, dto.resetCode, dto.newPassword);
   }
 
   @Public()
   @Post('doctor/reset-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with code for doctor (web)' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 400, description: 'Invalid or expired reset code' })
   @ApiResponse({ status: 404, description: 'Doctor not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async resetPasswordDoctor(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPasswordDoctor(dto.email, dto.resetCode, dto.newPassword);
   }
 
   @Public()
   @Post('patient/reset-password')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with code for patient (mobile)' })
   @ApiResponse({ status: 200, description: 'Password reset successfully' })
   @ApiResponse({ status: 400, description: 'Invalid or expired reset code' })
   @ApiResponse({ status: 404, description: 'Patient not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async resetPasswordPatient(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPasswordPatient(dto.email, dto.resetCode, dto.newPassword);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
@@ -221,6 +279,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   @ApiResponse({ status: 400, description: 'Invalid old password' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
   async changePassword(@CurrentUser() user: any, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(
       user.userId,
@@ -370,6 +429,7 @@ export class AuthController {
   // bulk abuse pointless.
   @UseGuards(ThrottlerGuard)
   @Throttle({ [THROTTLE_EMAIL]: { ttl: 60 * 60_000, limit: 5 } })
+  @SkipThrottle({ [THROTTLE_AUTH]: true })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Public account/data deletion request (Google Play Data Safety URL)',
