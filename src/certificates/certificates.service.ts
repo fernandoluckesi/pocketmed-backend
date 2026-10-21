@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsSelect, Repository } from 'typeorm';
 import { Certificate } from '../entities/certificate.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Patient } from '../entities/patient.entity';
@@ -32,6 +32,37 @@ export class CertificatesService {
     private doctorsService: DoctorsService,
     private uploadService: UploadService,
   ) {}
+
+  /**
+   * Field allow-list for `findAll` (item #17 — trim API responses).
+   * `patient`/`dependent` kept with the fields `Atestados/index.tsx` (web)
+   * reads (`patient.name`/`profileImage`, `dependent.name`) — this endpoint
+   * has no mobile list consumer at all (no `findAll` method on the
+   * generated mobile client). `doctor`/`appointment` trimmed to a minimal
+   * id/name/specialty shape even though the current list screen doesn't
+   * render them, for consistency with the other 3 endpoints — a doctor
+   * name on a certificate row is a near-certain future need, at near-zero
+   * cost.
+   */
+  private readonly certificateListSelect: FindOptionsSelect<Certificate> = {
+    id: true,
+    doctorId: true,
+    patientId: true,
+    dependentId: true,
+    appointmentId: true,
+    crm: true,
+    cid: true,
+    description: true,
+    daysOff: true,
+    issueDate: true,
+    fileUrl: true,
+    createdAt: true,
+    updatedAt: true,
+    doctor: { id: true, name: true, specialty: true },
+    patient: { id: true, name: true, profileImage: true },
+    dependent: { id: true, name: true },
+    appointment: { id: true },
+  };
 
   async create(
     userId: string,
@@ -193,7 +224,8 @@ export class CertificatesService {
           doctorId: userId,
           ...(patientId ? { patientId } : {}),
         },
-        relations: ['doctor', 'patient', 'dependent', 'appointment'],
+        relations: { doctor: true, patient: true, dependent: true, appointment: true },
+        select: this.certificateListSelect,
         order: { createdAt: 'DESC' },
       });
     }
@@ -201,7 +233,8 @@ export class CertificatesService {
     if (userType === 'patient') {
       const patientCertificates = await this.certificateRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'appointment'],
+        relations: { doctor: true, patient: true, dependent: true, appointment: true },
+        select: this.certificateListSelect,
         order: { createdAt: 'DESC' },
       });
 
@@ -217,10 +250,21 @@ export class CertificatesService {
       if (dependentIds.length > 0) {
         dependentCertificates = await this.certificateRepository
           .createQueryBuilder('certificate')
-          .leftJoinAndSelect('certificate.doctor', 'doctor')
-          .leftJoinAndSelect('certificate.patient', 'patient')
-          .leftJoinAndSelect('certificate.dependent', 'dependent')
-          .leftJoinAndSelect('certificate.appointment', 'appointment')
+          .leftJoin('certificate.doctor', 'doctor')
+          .leftJoin('certificate.patient', 'patient')
+          .leftJoin('certificate.dependent', 'dependent')
+          .leftJoin('certificate.appointment', 'appointment')
+          .addSelect([
+            'doctor.id',
+            'doctor.name',
+            'doctor.specialty',
+            'patient.id',
+            'patient.name',
+            'patient.profileImage',
+            'dependent.id',
+            'dependent.name',
+            'appointment.id',
+          ])
           .where('certificate.dependentId IN (:...dependentIds)', { dependentIds })
           .getMany();
       }

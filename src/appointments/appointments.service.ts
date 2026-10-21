@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { FindOptionsSelect, In, Repository } from 'typeorm';
 import { Appointment, AppointmentStatus } from '../entities/appointment.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Patient } from '../entities/patient.entity';
@@ -45,6 +45,44 @@ export class AppointmentsService {
     private patientsService: PatientsService,
     private auditService: AuditService,
   ) {}
+
+  /**
+   * Field allow-list for listing endpoints (item #17 — trim API responses).
+   * `doctor`/`patient`/`dependent`/`convenio` were previously loaded as full
+   * entities via `relations: [...]`, exposing every column (cpf, phone,
+   * birthDate, verification internals, convenio contract/markup fields...)
+   * on every appointment row. Fields kept here were confirmed in use by
+   * grepping web (DashboardContent, Consultations, Schedule) and mobile —
+   * notably `patient.cpf`/`phone`/`email` ARE read directly from this list
+   * response (Consultations, Schedule), so they stay; mobile uses the
+   * denormalized `doctorName`/`doctorSpecialty` columns instead of the
+   * `doctor` relation, so that one is trimmed hard.
+   */
+  private readonly appointmentListSelect: FindOptionsSelect<Appointment> = {
+    id: true,
+    doctorCrm: true,
+    doctorName: true,
+    doctorSpecialty: true,
+    reason: true,
+    dateTime: true,
+    isCompleted: true,
+    startedAt: true,
+    endedAt: true,
+    durationSeconds: true,
+    status: true,
+    doctorId: true,
+    patientId: true,
+    dependentId: true,
+    visitType: true,
+    paymentType: true,
+    convenioId: true,
+    createdAt: true,
+    updatedAt: true,
+    doctor: { id: true, name: true, specialty: true, crm: true },
+    patient: { id: true, name: true, cpf: true, phone: true, email: true, profileImage: true },
+    dependent: { id: true, name: true },
+    convenio: { id: true, name: true },
+  };
 
   private async getClinicDoctorIds(clinicId: string): Promise<string[]> {
     // Admins are also physicians who see patients, so their appointments must be
@@ -476,20 +514,23 @@ export class AppointmentsService {
 
         return await this.appointmentRepository.find({
           where: doctorIds.map((doctorId) => ({ doctorId })),
-          relations: ['doctor', 'patient', 'dependent', 'convenio'],
+          relations: { doctor: true, patient: true, dependent: true, convenio: true },
+          select: this.appointmentListSelect,
         });
       }
 
       return await this.appointmentRepository.find({
         where: { doctorId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'convenio'],
+        relations: { doctor: true, patient: true, dependent: true, convenio: true },
+        select: this.appointmentListSelect,
       });
     }
 
     if (userType === 'patient') {
       const patientAppointments = await this.appointmentRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'convenio'],
+        relations: { doctor: true, patient: true, dependent: true, convenio: true },
+        select: this.appointmentListSelect,
       });
 
       const dependents = await this.dependentRepository
@@ -504,10 +545,26 @@ export class AppointmentsService {
       if (dependentIds.length > 0) {
         dependentAppointments = await this.appointmentRepository
           .createQueryBuilder('appointment')
-          .leftJoinAndSelect('appointment.doctor', 'doctor')
-          .leftJoinAndSelect('appointment.patient', 'patient')
-          .leftJoinAndSelect('appointment.dependent', 'dependent')
-          .leftJoinAndSelect('appointment.convenio', 'convenio')
+          .leftJoin('appointment.doctor', 'doctor')
+          .leftJoin('appointment.patient', 'patient')
+          .leftJoin('appointment.dependent', 'dependent')
+          .leftJoin('appointment.convenio', 'convenio')
+          .addSelect([
+            'doctor.id',
+            'doctor.name',
+            'doctor.specialty',
+            'doctor.crm',
+            'patient.id',
+            'patient.name',
+            'patient.cpf',
+            'patient.phone',
+            'patient.email',
+            'patient.profileImage',
+            'dependent.id',
+            'dependent.name',
+            'convenio.id',
+            'convenio.name',
+          ])
           .where('appointment.dependentId IN (:...dependentIds)', { dependentIds })
           .getMany();
       }

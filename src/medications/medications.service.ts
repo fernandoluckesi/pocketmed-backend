@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsSelect, Repository } from 'typeorm';
 import { Medication } from '../entities/medication.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Patient } from '../entities/patient.entity';
@@ -30,6 +30,40 @@ export class MedicationsService {
     private appointmentRepository: Repository<Appointment>,
     private doctorsService: DoctorsService,
   ) {}
+
+  /**
+   * Field allow-list for `findAll` (item #17 — trim API responses). Mirrors
+   * the reasoning in `ExamsService.examListSelect`: `doctor`/`appointment`
+   * trimmed to the fields mobile's offline-cache mapper reads
+   * (`doctor.name`, `appointment.id`); `patient`/`dependent` dropped
+   * entirely — confirmed unused (consumers read the flat FK columns);
+   * `attachment` kept with every field the mapper reads, `fileUrl` by its
+   * exact name since `PresignDocumentUrlsInterceptor` signs it by that key.
+   */
+  private readonly medicationListSelect: FindOptionsSelect<Medication> = {
+    id: true,
+    name: true,
+    dosage: true,
+    frequency: true,
+    times: true,
+    startDate: true,
+    endDate: true,
+    duration: true,
+    instructions: true,
+    isActive: true,
+    isFinished: true,
+    doctorId: true,
+    patientId: true,
+    dependentId: true,
+    appointmentId: true,
+    lockedByDoctor: true,
+    attachmentId: true,
+    createdAt: true,
+    updatedAt: true,
+    doctor: { id: true, name: true, specialty: true },
+    appointment: { id: true },
+    attachment: { id: true, kind: true, fileUrl: true, extractedText: true },
+  };
 
   async create(userId: string, userType: string, dto: CreateMedicationDto) {
     if (userType === 'patient') {
@@ -184,14 +218,16 @@ export class MedicationsService {
     if (userType === 'doctor') {
       return await this.medicationRepository.find({
         where: { doctorId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'appointment', 'attachment'],
+        relations: { doctor: true, appointment: true, attachment: true },
+        select: this.medicationListSelect,
       });
     }
 
     if (userType === 'patient') {
       const patientMedications = await this.medicationRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'appointment', 'attachment'],
+        relations: { doctor: true, appointment: true, attachment: true },
+        select: this.medicationListSelect,
       });
 
       const dependents = await this.dependentRepository
@@ -206,11 +242,19 @@ export class MedicationsService {
       if (dependentIds.length > 0) {
         dependentMedications = await this.medicationRepository
           .createQueryBuilder('medication')
-          .leftJoinAndSelect('medication.doctor', 'doctor')
-          .leftJoinAndSelect('medication.patient', 'patient')
-          .leftJoinAndSelect('medication.dependent', 'dependent')
-          .leftJoinAndSelect('medication.appointment', 'appointment')
-          .leftJoinAndSelect('medication.attachment', 'attachment')
+          .leftJoin('medication.doctor', 'doctor')
+          .leftJoin('medication.appointment', 'appointment')
+          .leftJoin('medication.attachment', 'attachment')
+          .addSelect([
+            'doctor.id',
+            'doctor.name',
+            'doctor.specialty',
+            'appointment.id',
+            'attachment.id',
+            'attachment.kind',
+            'attachment.fileUrl',
+            'attachment.extractedText',
+          ])
           .where('medication.dependentId IN (:...dependentIds)', { dependentIds })
           .getMany();
       }
@@ -295,9 +339,7 @@ export class MedicationsService {
         'isActive',
         'isFinished',
       ];
-      const attemptedDoctorOnlyChange = doctorOnlyFields.some(
-        (field) => dto[field] !== undefined,
-      );
+      const attemptedDoctorOnlyChange = doctorOnlyFields.some((field) => dto[field] !== undefined);
       if (attemptedDoctorOnlyChange) {
         throw new ForbiddenException(
           'This medication was prescribed by a doctor — you can only adjust its times and start/end dates',

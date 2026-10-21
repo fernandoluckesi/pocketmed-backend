@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsSelect, Repository } from 'typeorm';
 import { Exam } from '../entities/exam.entity';
 import { Doctor } from '../entities/doctor.entity';
 import { Patient } from '../entities/patient.entity';
@@ -32,6 +32,40 @@ export class ExamsService {
     private doctorsService: DoctorsService,
     private uploadService: UploadService,
   ) {}
+
+  /**
+   * Field allow-list for `findAll` (item #17 — trim API responses). `doctor`
+   * is kept minimal (mobile's offline-cache mapper only reads `doctor.name`
+   * as a fallback for the exam's own `doctorName`-shaped display, and web
+   * doesn't consume this endpoint for any list screen). `patient`/`dependent`
+   * are dropped from `relations` entirely below — confirmed unused anywhere
+   * (consumers read the flat `patientId`/`dependentId` columns instead).
+   */
+  private readonly examListSelect: FindOptionsSelect<Exam> = {
+    id: true,
+    name: true,
+    type: true,
+    description: true,
+    scheduledDate: true,
+    status: true,
+    results: true,
+    resultFile: true,
+    observations: true,
+    laboratory: true,
+    doctorId: true,
+    patientId: true,
+    dependentId: true,
+    appointmentId: true,
+    lockedByDoctor: true,
+    batchId: true,
+    completedAt: true,
+    resultFiles: true,
+    attachmentId: true,
+    createdAt: true,
+    updatedAt: true,
+    doctor: { id: true, name: true, specialty: true },
+    appointment: { id: true },
+  };
 
   async create(userId: string, userType: string, dto: CreateExamDto, file?: Express.Multer.File) {
     if (userType === 'patient') {
@@ -167,14 +201,16 @@ export class ExamsService {
     if (userType === 'doctor') {
       return await this.examRepository.find({
         where: { doctorId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'appointment'],
+        relations: { doctor: true, appointment: true },
+        select: this.examListSelect,
       });
     }
 
     if (userType === 'patient') {
       const patientExams = await this.examRepository.find({
         where: { patientId: userId },
-        relations: ['doctor', 'patient', 'dependent', 'appointment'],
+        relations: { doctor: true, appointment: true },
+        select: this.examListSelect,
       });
 
       const dependents = await this.dependentRepository
@@ -189,10 +225,9 @@ export class ExamsService {
       if (dependentIds.length > 0) {
         dependentExams = await this.examRepository
           .createQueryBuilder('exam')
-          .leftJoinAndSelect('exam.doctor', 'doctor')
-          .leftJoinAndSelect('exam.patient', 'patient')
-          .leftJoinAndSelect('exam.dependent', 'dependent')
-          .leftJoinAndSelect('exam.appointment', 'appointment')
+          .leftJoin('exam.doctor', 'doctor')
+          .leftJoin('exam.appointment', 'appointment')
+          .addSelect(['doctor.id', 'doctor.name', 'doctor.specialty', 'appointment.id'])
           .where('exam.dependentId IN (:...dependentIds)', { dependentIds })
           .getMany();
       }
@@ -359,9 +394,7 @@ export class ExamsService {
     // Mirrors the mobile app, which hides "Excluir" entirely for a
     // doctor-requested exam.
     if (isOwnerPatient && exam.lockedByDoctor) {
-      throw new ForbiddenException(
-        'This exam was requested by a doctor and cannot be deleted',
-      );
+      throw new ForbiddenException('This exam was requested by a doctor and cannot be deleted');
     }
 
     if (exam.resultFile) {
