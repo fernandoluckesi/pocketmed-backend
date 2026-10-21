@@ -10,7 +10,6 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
-  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -29,18 +28,11 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateCertificateDto } from './dto/create-certificate.dto';
 import { UpdateCertificateDto } from './dto/update-certificate.dto';
-
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
-const ALLOWED_MIMETYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/tiff',
-  'image/heic',
-  'image/webp',
-];
+import {
+  createFileTypeValidationPipe,
+  DOCUMENT_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 @ApiTags('Certificates')
 @Controller('certificates')
@@ -54,7 +46,7 @@ export class CertificatesController {
 
   @Post()
   @Roles('doctor', 'admin', 'patient')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   @ApiOperation({
     summary:
       'Issue a certificate ("atestado") — by a doctor for a patient/dependent, or self-reported by the patient',
@@ -66,7 +58,13 @@ export class CertificatesController {
   async create(
     @CurrentUser() user: any,
     @Body() dto: CreateCertificateDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.certificatesService.create(user.userId, user.type, dto, file);
   }
@@ -75,7 +73,7 @@ export class CertificatesController {
   @Roles('doctor', 'admin', 'patient')
   @UseInterceptors(
     FileInterceptor('file', {
-      limits: { fileSize: MAX_FILE_SIZE },
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
     }),
   )
   @ApiConsumes('multipart/form-data')
@@ -84,15 +82,12 @@ export class CertificatesController {
       'Parse an attached certificate (PDF/image) and extract CRM, CID, description, days off and issue date',
   })
   @ApiResponse({ status: 200, description: 'Returns the fields detected in the attachment' })
-  async parse(@UploadedFile() file: Express.Multer.File) {
-    if (!file) {
-      throw new BadRequestException('Nenhum arquivo enviado.');
-    }
-    if (!ALLOWED_MIMETYPES.includes(file.mimetype)) {
-      throw new BadRequestException(
-        'Formato não suportado. Aceitos: PDF, JPEG, JPG, PNG, GIF, TIFF, HEIC, WEBP.',
-      );
-    }
+  async parse(
+    @UploadedFile(
+      createFileTypeValidationPipe({ allowedMimeTypes: DOCUMENT_MIME_TYPES, fileIsRequired: true }),
+    )
+    file: Express.Multer.File,
+  ) {
     return this.certificateParserService.parseCertificate(file);
   }
 
@@ -115,7 +110,7 @@ export class CertificatesController {
 
   @Put(':id')
   @Roles('doctor', 'admin', 'patient')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   @ApiOperation({ summary: 'Update a certificate (issuing doctor or owning patient)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Certificate updated successfully' })
@@ -125,7 +120,13 @@ export class CertificatesController {
     @Param('id') id: string,
     @CurrentUser() user: any,
     @Body() dto: UpdateCertificateDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.certificatesService.update(id, user.userId, user.type, dto, file);
   }

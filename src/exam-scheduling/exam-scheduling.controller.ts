@@ -23,6 +23,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import {
+  createFileTypeValidationPipe,
+  DOCUMENT_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 @ApiTags('Exam Scheduling')
 @Controller('exam-schedules')
@@ -78,7 +83,7 @@ export class ExamSchedulingController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: memoryStorage(),
-      limits: { fileSize: 15 * 1024 * 1024 },
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
     }),
   )
   @ApiConsumes('multipart/form-data')
@@ -88,7 +93,13 @@ export class ExamSchedulingController {
     @CurrentUser() user: any,
     @Param('id') id: string,
     @Body() body: SaveExamScheduleResultDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.examSchedulingService.saveResult(id, user.userId, body, file);
   }

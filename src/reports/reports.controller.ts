@@ -30,18 +30,11 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
 import { ConfirmSignatureDto } from '../common/dto/confirm-signature.dto';
 import { DocumentStatus } from '../documents/document.types';
-
-const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
-const ALLOWED_MIMETYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/tiff',
-  'image/heic',
-  'image/webp',
-];
+import {
+  createFileTypeValidationPipe,
+  DOCUMENT_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 @ApiTags('Reports')
 @Controller('reports')
@@ -135,7 +128,7 @@ export class ReportsController {
 
   @Post(':id/file')
   @Roles('doctor', 'admin')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_FILE_SIZE } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary:
@@ -147,15 +140,16 @@ export class ReportsController {
   async attachFile(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     if (!file) {
       throw new BadRequestException('Nenhum arquivo enviado.');
-    }
-    if (!ALLOWED_MIMETYPES.includes(file.mimetype)) {
-      throw new BadRequestException(
-        'Formato não suportado. Aceitos: PDF, JPEG, JPG, PNG, GIF, TIFF, HEIC, WEBP.',
-      );
     }
     return this.reportsService.attachFile(id, user.userId, file);
   }

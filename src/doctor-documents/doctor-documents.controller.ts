@@ -10,6 +10,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DoctorDocumentsService } from './doctor-documents.service';
 import { Roles } from '../auth/decorators/roles.decorator';
+import {
+  createFileTypeValidationPipe,
+  DOCUMENT_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 /**
  * A doctor manages their OWN credential documents here (scoped to req.user.userId).
@@ -21,10 +26,13 @@ export class DoctorDocumentsController {
   constructor(private readonly documentsService: DoctorDocumentsService) {}
 
   @Post(':type')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   async uploadDocument(
     @Param('type') type: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({ allowedMimeTypes: DOCUMENT_MIME_TYPES, fileIsRequired: true }),
+    )
+    file: Express.Multer.File,
     @Request() req,
   ) {
     const doctorId = req.user.userId;

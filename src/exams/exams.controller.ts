@@ -22,6 +22,11 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
 import { SubmitResultDto } from './dto/submit-result.dto';
+import {
+  createFileTypeValidationPipe,
+  DOCUMENT_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 @ApiTags('Exams')
 @Controller('exams')
@@ -32,7 +37,7 @@ export class ExamsController {
 
   @Post()
   @Roles('doctor', 'admin', 'patient')
-  @UseInterceptors(FileInterceptor('resultFile'))
+  @UseInterceptors(FileInterceptor('resultFile', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   @ApiOperation({ summary: 'Create exam (doctor or patient owner)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Exam created successfully' })
@@ -41,7 +46,13 @@ export class ExamsController {
   async create(
     @CurrentUser() user: any,
     @Body() dto: CreateExamDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.examsService.create(user.userId, user.type, dto, file);
   }
@@ -64,7 +75,7 @@ export class ExamsController {
 
   @Put(':id')
   @Roles('doctor', 'admin', 'patient')
-  @UseInterceptors(FileInterceptor('resultFile'))
+  @UseInterceptors(FileInterceptor('resultFile', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   @ApiOperation({ summary: 'Update exam (doctor creator or patient owner)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Exam updated successfully' })
@@ -74,14 +85,25 @@ export class ExamsController {
     @Param('id') id: string,
     @CurrentUser() user: any,
     @Body() dto: UpdateExamDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.examsService.update(id, user.userId, user.type, dto, file);
   }
 
   @Put(':id/result')
   @Roles('doctor', 'admin', 'patient')
-  @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({ summary: 'Submit exam result with files' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Exam result saved' })
@@ -89,7 +111,13 @@ export class ExamsController {
     @Param('id') id: string,
     @CurrentUser() user: any,
     @Body() body: SubmitResultDto,
-    @UploadedFiles() files?: Express.Multer.File[],
+    @UploadedFiles(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    files?: Express.Multer.File[],
   ) {
     return this.examsService.submitResult(id, user.userId, user.type, body.completedAt, files);
   }

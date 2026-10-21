@@ -38,6 +38,11 @@ import { UpdateVaccineDto } from './dto/update-vaccine.dto';
 import { SurgeryDto } from './dto/surgery.dto';
 import { CreateReportDto } from './dto/create-report.dto';
 import { CreateAttachmentDto } from './dto/create-attachment.dto';
+import {
+  createFileTypeValidationPipe,
+  DOCUMENT_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 @ApiTags('Patients')
 @Controller('patients')
@@ -657,7 +662,12 @@ export class PatientsController {
   }
 
   @Post(':id/reports')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({
     summary:
       'Patient files a laudo by uploading an external document (PDF/image); its text is read via OCR',
@@ -668,7 +678,13 @@ export class PatientsController {
     @Param('id') id: string,
     @CurrentUser() user: any,
     @Body() body: CreateReportDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     if (!file) {
       throw new BadRequestException('Nenhum arquivo enviado.');
@@ -707,7 +723,12 @@ export class PatientsController {
   // ─── Attachments (shared "receita"/"guia" files) ──────────────────────────
 
   @Post(':id/attachments')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({
     summary:
       'Patient uploads a prescription ("receita") or exam order ("guia") file; its text is read via OCR. Returns the attachment to link medications/exams to.',
@@ -718,7 +739,13 @@ export class PatientsController {
     @Param('id') id: string,
     @CurrentUser() user: any,
     @Body() body: CreateAttachmentDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: DOCUMENT_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     if (!file) {
       throw new BadRequestException('Nenhum arquivo enviado.');

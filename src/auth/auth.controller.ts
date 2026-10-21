@@ -34,6 +34,11 @@ import { CheckProfileAvailabilityDto } from './dto/check-profile-availability.dt
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { THROTTLE_EMAIL, THROTTLE_AUTH } from '../common/throttler.config';
+import {
+  createFileTypeValidationPipe,
+  PROFILE_IMAGE_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 import { Public } from './decorators/public.decorator';
 import { AllowUnverified } from './decorators/allow-unverified.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -52,7 +57,12 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
   @SkipThrottle({ [THROTTLE_EMAIL]: true })
-  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('profileImage', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({ summary: 'Register a new patient' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Patient registered successfully' })
@@ -61,7 +71,13 @@ export class AuthController {
   async registerPatient(
     @Body() dto: RegisterPatientDto,
     @Ip() ip: string,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: PROFILE_IMAGE_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     console.log('=== AUTH CONTROLLER - REGISTER PATIENT ===');
     console.log('File received in controller:', file ? 'YES' : 'NO');
@@ -80,7 +96,12 @@ export class AuthController {
   @Roles('doctor', 'admin', 'secretary')
   @RequireDoctorVerified()
   @Post('register/patient-shadow')
-  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('profileImage', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({ summary: 'Register a shadow patient by a professional account' })
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth('JWT-auth')
@@ -90,7 +111,13 @@ export class AuthController {
   async registerPatientShadow(
     @CurrentUser() user: any,
     @Body() dto: RegisterPatientShadowDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: PROFILE_IMAGE_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.authService.registerPatientShadow(dto, file, user);
   }
@@ -100,7 +127,12 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
   @SkipThrottle({ [THROTTLE_EMAIL]: true })
-  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('profileImage', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({ summary: 'Register a new doctor' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Doctor registered successfully' })
@@ -109,7 +141,13 @@ export class AuthController {
   async registerDoctor(
     @Body() dto: RegisterDoctorDto,
     @Ip() ip: string,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: PROFILE_IMAGE_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.authService.registerDoctor(dto, file, ip);
   }
@@ -375,14 +413,25 @@ export class AuthController {
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('profileImage', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({ summary: 'Update current user profile' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Profile updated' })
   async updateProfile(
     @CurrentUser() user: any,
     @Body() body: UpdateProfileDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: PROFILE_IMAGE_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.authService.updateProfile(user.userId, user.type, body, file);
   }

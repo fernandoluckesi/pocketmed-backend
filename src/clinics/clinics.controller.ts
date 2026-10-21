@@ -26,6 +26,11 @@ import { UpdateClinicDto } from './dto/update-clinic.dto';
 import { ConvertToClinicDto } from './dto/convert-to-clinic.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
+import {
+  createFileTypeValidationPipe,
+  PROFILE_IMAGE_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 @ApiTags('Clinics')
 @Controller('clinics')
@@ -40,7 +45,12 @@ export class ClinicsController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
   @SkipThrottle({ [THROTTLE_EMAIL]: true })
-  @UseInterceptors(FileInterceptor('profileImage', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('profileImage', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_UPLOAD_FILE_SIZE },
+    }),
+  )
   @ApiOperation({
     summary: 'Register a new clinic with its admin doctor (public)',
   })
@@ -51,7 +61,13 @@ export class ClinicsController {
   async create(
     @Body() dto: CreateClinicDto,
     @Ip() ip: string,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: PROFILE_IMAGE_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.clinicsService.create(dto, file, ip);
   }

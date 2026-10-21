@@ -31,6 +31,11 @@ import { AddResponsibleDto } from './dto/add-responsible.dto';
 import { InviteResponsibleDto } from './dto/invite-responsible.dto';
 import { RespondResponsibleInviteDto } from './dto/respond-responsible-invite.dto';
 import { TransferAdminDto } from './dto/transfer-admin.dto';
+import {
+  createFileTypeValidationPipe,
+  PROFILE_IMAGE_MIME_TYPES,
+  MAX_UPLOAD_FILE_SIZE,
+} from '../common/upload-validation';
 
 @ApiTags('Dependents')
 @Controller('dependents')
@@ -41,7 +46,7 @@ export class DependentsController {
 
   @Post()
   @Roles('patient')
-  @UseInterceptors(FileInterceptor('profileImage'))
+  @UseInterceptors(FileInterceptor('profileImage', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   @ApiOperation({ summary: 'Create a new dependent (patients only)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Dependent created successfully' })
@@ -49,7 +54,13 @@ export class DependentsController {
   async create(
     @CurrentUser() user: any,
     @Body() dto: CreateDependentDto,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: PROFILE_IMAGE_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.dependentsService.create(user.userId, dto, file);
   }
@@ -204,7 +215,7 @@ export class DependentsController {
 
   @Patch(':id')
   @Roles('patient')
-  @UseInterceptors(FileInterceptor('profileImage'))
+  @UseInterceptors(FileInterceptor('profileImage', { limits: { fileSize: MAX_UPLOAD_FILE_SIZE } }))
   @ApiOperation({ summary: 'Update dependent data (admin only)' })
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Dependent updated successfully' })
@@ -214,7 +225,13 @@ export class DependentsController {
     @Param('id') id: string,
     @Body() dto: UpdateDependentDto,
     @CurrentUser() user: any,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFile(
+      createFileTypeValidationPipe({
+        allowedMimeTypes: PROFILE_IMAGE_MIME_TYPES,
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File,
   ) {
     return this.dependentsService.update(id, user.userId, dto, file);
   }
