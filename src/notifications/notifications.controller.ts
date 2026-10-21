@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { NotificationsService } from './notifications.service';
 import { RegisterDeviceTokenDto } from './dto/register-device-token.dto';
+import { UnregisterTokenDto } from './dto/unregister-token.dto';
 
 @ApiTags('Notifications')
 @Controller('notifications')
@@ -23,7 +24,7 @@ export class NotificationsController {
   @Delete('device-token')
   @ApiOperation({ summary: 'Unregister Expo push token (e.g. on logout)' })
   @ApiResponse({ status: 200, description: 'Token unregistered' })
-  async unregisterToken(@CurrentUser() user: any, @Body() body: { expoPushToken: string }) {
+  async unregisterToken(@CurrentUser() user: any, @Body() body: UnregisterTokenDto) {
     await this.notificationsService.unregisterToken(user.userId, body.expoPushToken);
     return { message: 'Token unregistered' };
   }

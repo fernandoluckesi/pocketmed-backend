@@ -17,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreatePrescriptionDto } from './dto/create-prescription.dto';
 import { UpdatePrescriptionDto } from './dto/update-prescription.dto';
+import { ConfirmSignatureDto } from '../common/dto/confirm-signature.dto';
 
 @ApiTags('Prescriptions')
 @Controller('prescriptions')
@@ -134,7 +135,7 @@ export class PrescriptionsController {
   async confirmSignature(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    @Body() body: { externalSignatureId: string },
+    @Body() body: ConfirmSignatureDto,
   ) {
     return this.prescriptionsService.confirmSignature(id, user.userId, body.externalSignatureId);
   }
@@ -142,7 +143,7 @@ export class PrescriptionsController {
   @Get(':id/pdf')
   @Roles('doctor', 'admin')
   @ApiOperation({
-    summary: 'Returns a short-lived signed URL for this prescription\'s stored PDF',
+    summary: "Returns a short-lived signed URL for this prescription's stored PDF",
   })
   @ApiResponse({ status: 200, description: 'Signed URL, valid for a few minutes' })
   @ApiResponse({ status: 404, description: 'No PDF generated yet' })

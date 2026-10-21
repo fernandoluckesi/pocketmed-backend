@@ -28,6 +28,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
+import { ConfirmSignatureDto } from '../common/dto/confirm-signature.dto';
 import { DocumentStatus } from '../documents/document.types';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
@@ -207,14 +208,14 @@ export class ReportsController {
   async confirmSignature(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    @Body() body: { externalSignatureId: string },
+    @Body() body: ConfirmSignatureDto,
   ) {
     return this.reportsService.confirmSignature(id, user.userId, body.externalSignatureId);
   }
 
   @Get(':id/pdf')
   @Roles('doctor', 'admin')
-  @ApiOperation({ summary: 'Returns a short-lived signed URL for this report\'s stored PDF' })
+  @ApiOperation({ summary: "Returns a short-lived signed URL for this report's stored PDF" })
   @ApiResponse({ status: 200, description: 'Signed URL, valid for a few minutes' })
   @ApiResponse({ status: 404, description: 'No PDF generated yet' })
   async getPdf(@Param('id') id: string, @CurrentUser() user: any) {

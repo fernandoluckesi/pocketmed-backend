@@ -21,6 +21,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { UpdateExamDto } from './dto/update-exam.dto';
+import { SubmitResultDto } from './dto/submit-result.dto';
 
 @ApiTags('Exams')
 @Controller('exams')
@@ -87,7 +88,7 @@ export class ExamsController {
   async submitResult(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    @Body() body: { completedAt?: string },
+    @Body() body: SubmitResultDto,
     @UploadedFiles() files?: Express.Multer.File[],
   ) {
     return this.examsService.submitResult(id, user.userId, user.type, body.completedAt, files);

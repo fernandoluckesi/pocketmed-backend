@@ -15,7 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import { PatientsService, SurgeryData } from './patients.service';
+import { PatientsService } from './patients.service';
 import { MedicalAttachmentKind } from '../entities/medical-attachment.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -24,6 +24,20 @@ import {
   sanitizeAppointmentForViewer,
   sanitizeAppointmentsForViewer,
 } from '../common/sanitize-appointment';
+import { CreateConsultationDto } from './dto/create-consultation.dto';
+import { UpdateConsultationDto } from './dto/update-consultation.dto';
+import { ApproveConsultationDto } from './dto/approve-consultation.dto';
+import { PrescribeMedicationDto } from './dto/prescribe-medication.dto';
+import { UpdatePatientDto } from './dto/update-patient.dto';
+import { CreateDiseaseDto } from './dto/create-disease.dto';
+import { UpdateDiseaseDto } from './dto/update-disease.dto';
+import { CreateAllergyDto } from './dto/create-allergy.dto';
+import { UpdateAllergyDto } from './dto/update-allergy.dto';
+import { CreateVaccineDto } from './dto/create-vaccine.dto';
+import { UpdateVaccineDto } from './dto/update-vaccine.dto';
+import { SurgeryDto } from './dto/surgery.dto';
+import { CreateReportDto } from './dto/create-report.dto';
+import { CreateAttachmentDto } from './dto/create-attachment.dto';
 
 @ApiTags('Patients')
 @Controller('patients')
@@ -171,19 +185,7 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Consultation created' })
   async createConsultation(
     @Param('id') id: string,
-    @Body()
-    body: {
-      date: string;
-      symptoms?: string;
-      diagnosis?: string;
-      prescription?: string;
-      notes?: string;
-      priority?: string;
-      completed?: boolean;
-      visitType?: string;
-      paymentType?: string;
-      convenioId?: string;
-    },
+    @Body() body: CreateConsultationDto,
     @CurrentUser() user: any,
   ) {
     const consultation = await this.patientsService.createConsultation(
@@ -203,18 +205,7 @@ export class PatientsController {
   async updateConsultation(
     @Param('id') id: string,
     @Param('consultationId') consultationId: string,
-    @Body()
-    body: {
-      date?: string;
-      symptoms?: string;
-      diagnosis?: string;
-      prescription?: string;
-      notes?: string;
-      completed?: boolean;
-      visitType?: string;
-      paymentType?: string;
-      convenioId?: string;
-    },
+    @Body() body: UpdateConsultationDto,
     @CurrentUser() user: any,
   ) {
     const consultation = await this.patientsService.updateConsultation(
@@ -235,7 +226,7 @@ export class PatientsController {
   async approveConsultation(
     @Param('id') id: string,
     @Param('consultationId') consultationId: string,
-    @Body() body: { approved: boolean },
+    @Body() body: ApproveConsultationDto,
     @CurrentUser() user: any,
   ) {
     const consultation = await this.patientsService.approveConsultation(
@@ -270,17 +261,7 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Medication prescribed' })
   async prescribeMedication(
     @Param('id') id: string,
-    @Body()
-    body: {
-      name: string;
-      dosage: string;
-      frequency: string;
-      type?: string;
-      startDate: string;
-      endDate?: string;
-      notes?: string;
-      appointmentId?: string;
-    },
+    @Body() body: PrescribeMedicationDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.prescribeMedication(
@@ -298,15 +279,7 @@ export class PatientsController {
   @ApiResponse({ status: 200, description: 'Patient updated' })
   async updatePatient(
     @Param('id') id: string,
-    @Body()
-    body: {
-      name?: string;
-      email?: string;
-      phone?: string;
-      gender?: string;
-      birthDate?: string;
-      profileImage?: string;
-    },
+    @Body() body: UpdatePatientDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updatePatient(
@@ -337,16 +310,7 @@ export class PatientsController {
   @ApiResponse({ status: 201, description: 'Disease created' })
   async createDisease(
     @Param('id') id: string,
-    @Body()
-    body: {
-      name: string;
-      description?: string;
-      observations?: string;
-      status?: string;
-      diagnosisDate?: string;
-      treatmentStartDate?: string;
-      treatmentEndDate?: string;
-    },
+    @Body() body: CreateDiseaseDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.createDisease(
@@ -365,16 +329,7 @@ export class PatientsController {
   async updateDisease(
     @Param('id') id: string,
     @Param('diseaseId') diseaseId: string,
-    @Body()
-    body: {
-      name?: string;
-      description?: string;
-      observations?: string;
-      status?: string;
-      diagnosisDate?: string;
-      treatmentStartDate?: string;
-      treatmentEndDate?: string;
-    },
+    @Body() body: UpdateDiseaseDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updateDisease(
@@ -424,7 +379,7 @@ export class PatientsController {
   @ApiOperation({ summary: 'Add allergy to patient' })
   async createAllergy(
     @Param('id') id: string,
-    @Body() body: { name: string; severity?: string; reaction?: string; notes?: string },
+    @Body() body: CreateAllergyDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.createAllergy(
@@ -442,7 +397,7 @@ export class PatientsController {
   async updateAllergy(
     @Param('id') id: string,
     @Param('allergyId') allergyId: string,
-    @Body() body: { name?: string; severity?: string; reaction?: string; notes?: string },
+    @Body() body: UpdateAllergyDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updateAllergy(
@@ -491,15 +446,7 @@ export class PatientsController {
   @ApiOperation({ summary: 'Add vaccine to patient' })
   async createVaccine(
     @Param('id') id: string,
-    @Body()
-    body: {
-      name: string;
-      dose?: string;
-      applicationDate?: string;
-      nextDoseDate?: string;
-      laboratory?: string;
-      notes?: string;
-    },
+    @Body() body: CreateVaccineDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.createVaccine(
@@ -517,15 +464,7 @@ export class PatientsController {
   async updateVaccine(
     @Param('id') id: string,
     @Param('vaccineId') vaccineId: string,
-    @Body()
-    body: {
-      name?: string;
-      dose?: string;
-      applicationDate?: string;
-      nextDoseDate?: string;
-      laboratory?: string;
-      notes?: string;
-    },
+    @Body() body: UpdateVaccineDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updateVaccine(
@@ -574,11 +513,7 @@ export class PatientsController {
   @Post(':id/surgeries')
   @ApiOperation({ summary: 'Add a surgery to patient' })
   @ApiResponse({ status: 201, description: 'Surgery created' })
-  async createSurgery(
-    @Param('id') id: string,
-    @Body() body: SurgeryData,
-    @CurrentUser() user: any,
-  ) {
+  async createSurgery(@Param('id') id: string, @Body() body: SurgeryDto, @CurrentUser() user: any) {
     return this.patientsService.createSurgery(
       id,
       user.userId,
@@ -595,7 +530,7 @@ export class PatientsController {
   async updateSurgery(
     @Param('id') id: string,
     @Param('surgeryId') surgeryId: string,
-    @Body() body: SurgeryData,
+    @Body() body: SurgeryDto,
     @CurrentUser() user: any,
   ) {
     return this.patientsService.updateSurgery(
@@ -732,7 +667,7 @@ export class PatientsController {
   async createReport(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    @Body() body: { title?: string },
+    @Body() body: CreateReportDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (!file) {
@@ -782,7 +717,7 @@ export class PatientsController {
   async createAttachment(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    @Body() body: { kind?: string; appointmentId?: string },
+    @Body() body: CreateAttachmentDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (!file) {

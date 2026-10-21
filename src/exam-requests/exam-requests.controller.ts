@@ -17,6 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateExamRequestDto } from './dto/create-exam-request.dto';
 import { UpdateExamRequestDto } from './dto/update-exam-request.dto';
+import { ConfirmSignatureDto } from '../common/dto/confirm-signature.dto';
 
 /**
  * Formal "pedido de exame" documents — distinct from `/exams` (individual
@@ -140,7 +141,7 @@ export class ExamRequestsController {
   async confirmSignature(
     @Param('id') id: string,
     @CurrentUser() user: any,
-    @Body() body: { externalSignatureId: string },
+    @Body() body: ConfirmSignatureDto,
   ) {
     return this.examRequestsService.confirmSignature(id, user.userId, body.externalSignatureId);
   }
@@ -148,7 +149,7 @@ export class ExamRequestsController {
   @Get(':id/pdf')
   @Roles('doctor', 'admin')
   @ApiOperation({
-    summary: 'Returns a short-lived signed URL for this exam request\'s stored PDF',
+    summary: "Returns a short-lived signed URL for this exam request's stored PDF",
   })
   @ApiResponse({ status: 200, description: 'Signed URL, valid for a few minutes' })
   @ApiResponse({ status: 404, description: 'No PDF generated yet' })

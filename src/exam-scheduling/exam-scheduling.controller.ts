@@ -17,6 +17,8 @@ import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { ExamSchedulingService } from './exam-scheduling.service';
 import { CreateExamScheduleDto } from './dto/create-exam-schedule.dto';
+import { UpdateExamScheduleDto } from './dto/update-exam-schedule.dto';
+import { SaveExamScheduleResultDto } from './dto/save-exam-schedule-result.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -67,13 +69,7 @@ export class ExamSchedulingController {
   async update(
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body()
-    body: {
-      status?: string;
-      scheduledDateTime?: string;
-      appointmentId?: string;
-      exams?: { examCatalogId?: string | null; customExamName?: string | null }[];
-    },
+    @Body() body: UpdateExamScheduleDto,
   ) {
     return this.examSchedulingService.update(id, user.userId, body);
   }
@@ -91,7 +87,7 @@ export class ExamSchedulingController {
   async saveResult(
     @CurrentUser() user: any,
     @Param('id') id: string,
-    @Body() body: { resultText?: string },
+    @Body() body: SaveExamScheduleResultDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.examSchedulingService.saveResult(id, user.userId, body, file);

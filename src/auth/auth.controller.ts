@@ -29,6 +29,10 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { RequestEmailChangeDto } from './dto/request-email-change.dto';
 import { ConfirmEmailChangeDto } from './dto/confirm-email-change.dto';
 import { RequestDataDeletionDto } from './dto/request-data-deletion.dto';
+import { ValidateCodeDto } from './dto/validate-code.dto';
+import { CheckProfileAvailabilityDto } from './dto/check-profile-availability.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { THROTTLE_EMAIL, THROTTLE_AUTH } from '../common/throttler.config';
 import { Public } from './decorators/public.decorator';
 import { AllowUnverified } from './decorators/allow-unverified.decorator';
@@ -183,7 +187,7 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid or expired code' })
   @ApiResponse({ status: 404, description: 'Account not found' })
   @ApiResponse({ status: 429, description: 'Too many requests' })
-  async validateCode(@Body() body: { email: string; verificationCode: string }) {
+  async validateCode(@Body() body: ValidateCodeDto) {
     return this.authService.validateCode(body.email, body.verificationCode);
   }
 
@@ -354,7 +358,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Returns the list of conflicting fields' })
   async checkProfileAvailability(
     @CurrentUser() user: any,
-    @Body() body: { cpf?: string; phone?: string },
+    @Body() body: CheckProfileAvailabilityDto,
   ) {
     return this.authService.checkProfileAvailability(user.userId, body);
   }
@@ -377,21 +381,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Profile updated' })
   async updateProfile(
     @CurrentUser() user: any,
-    @Body()
-    body: {
-      name?: string;
-      phone?: string;
-      gender?: string;
-      birthDate?: string;
-      specialty?: string;
-      /** @deprecated Prefer `crmNumber` + `crmUf`. */
-      crm?: string;
-      crmNumber?: string;
-      crmUf?: string;
-      rqe?: string;
-      cpf?: string;
-      verificationCode?: string;
-    },
+    @Body() body: UpdateProfileDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.authService.updateProfile(user.userId, user.type, body, file);
@@ -405,7 +395,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Delete current user account (LGPD) - requires verification code' })
   @ApiResponse({ status: 200, description: 'Account deleted' })
   @ApiResponse({ status: 400, description: 'Invalid or expired verification code' })
-  async deleteAccount(@CurrentUser() user: any, @Body() body: { verificationCode: string }) {
+  async deleteAccount(@CurrentUser() user: any, @Body() body: DeleteAccountDto) {
     return this.authService.deleteAccount(user.userId, user.type, body.verificationCode);
   }
 
