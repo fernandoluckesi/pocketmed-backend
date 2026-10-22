@@ -19,4 +19,16 @@ export class RequestAccessDto {
   @IsString()
   @IsOptional()
   message?: string;
+
+  /** Set internally by the cross-clinic flow — not meant for direct client input. */
+  @ApiProperty({ required: false })
+  @IsUUID()
+  @IsOptional()
+  requestingClinicId?: string;
+
+  /** Set internally by the cross-clinic flow — not meant for direct client input. */
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  purpose?: string;
 }

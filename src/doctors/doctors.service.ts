@@ -9,7 +9,11 @@ import { Repository } from 'typeorm';
 import { Doctor } from '../entities/doctor.entity';
 import { Patient } from '../entities/patient.entity';
 import { Dependent } from '../entities/dependent.entity';
-import { DoctorAccessRequest, AccessRequestStatus } from '../entities/doctor-access-request.entity';
+import {
+  DoctorAccessRequest,
+  AccessRequestStatus,
+  AccessRequestChannel,
+} from '../entities/doctor-access-request.entity';
 import { DoctorPermission } from '../entities/doctor-permission.entity';
 import { RequestAccessDto } from './dto/request-access.dto';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -189,6 +193,9 @@ export class DoctorsService {
       dependentId: dto.dependentId,
       message: dto.message,
       status: AccessRequestStatus.PENDING,
+      requestingClinicId: dto.requestingClinicId ?? null,
+      purpose: dto.purpose ?? null,
+      channel: AccessRequestChannel.IN_APP,
     });
 
     const savedRequest = await this.accessRequestRepository.save(accessRequest);
@@ -292,10 +299,36 @@ export class DoctorsService {
       await this.permissionRepository.save(permission);
     }
 
-    // Notify doctor about the response
+    this.notifyAccessRequestOutcome(
+      request.doctorId,
+      status,
+      request.id,
+      request.patientId,
+      request.dependentId,
+    );
+
+    return {
+      message: `Access request ${status}`,
+      request,
+    };
+  }
+
+  /**
+   * Notifies the requesting doctor once a patient has responded. Extracted
+   * so the cross-clinic email-link consent flow (`CrossClinicAccessService`,
+   * which doesn't go through `respondToAccessRequest` since its patient has
+   * no app account to call it from) can reuse the exact same notice.
+   */
+  notifyAccessRequestOutcome(
+    doctorId: string,
+    status: AccessRequestStatus,
+    requestId: string,
+    patientId?: string | null,
+    dependentId?: string | null,
+  ): void {
     this.notificationsService
       .createNotification(
-        request.doctorId,
+        doctorId,
         'doctor',
         status === AccessRequestStatus.APPROVED ? 'Acesso autorizado!' : 'Acesso negado',
         status === AccessRequestStatus.APPROVED
@@ -304,19 +337,14 @@ export class DoctorsService {
         'ACCESS_REQUEST_RESPONDED',
         {
           status,
-          patientId: request.patientId ?? null,
-          dependentId: request.dependentId ?? null,
+          patientId: patientId ?? null,
+          dependentId: dependentId ?? null,
         },
-        request.id,
+        requestId,
       )
       .catch(() => {
         /* notification is best-effort */
       });
-
-    return {
-      message: `Access request ${status}`,
-      request,
-    };
   }
 
   async cancelAccessRequest(requestId: string, doctorId: string) {

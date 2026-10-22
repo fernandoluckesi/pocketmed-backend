@@ -45,4 +45,16 @@ export class DoctorPermission {
 
   @Column({ type: 'timestamp', nullable: true, default: null })
   revokedAt: Date | null;
+
+  /**
+   * Null = permanent grant (the original behavior, e.g. same-clinic
+   * DoctorAccessRequest approval). Set = temporary window (cross-clinic
+   * consent grants, 2h by default) — PatientsService.findOne must treat an
+   * expired-but-still-isActive row as no longer granting access.
+   */
+  @Column({ type: 'timestamp', nullable: true, default: null })
+  expiresAt: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  sourceRequestId: string | null;
 }

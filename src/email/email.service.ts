@@ -988,6 +988,65 @@ export class EmailService {
     }
   }
 
+  /**
+   * Cross-clinic record-sharing consent request, sent to a shadow patient
+   * (no app account, so this link is their only way to respond). Best-effort
+   * like every other notice here: a send failure must never break the
+   * request-creation flow that triggered it — the caller surfaces
+   * `inviteEmailStatus`-style feedback instead of throwing.
+   */
+  async sendCrossClinicAuthorizationRequest(
+    email: string,
+    input: {
+      patientName: string;
+      doctorName: string;
+      clinicName: string;
+      purpose: string;
+      expiresInMinutes: number;
+      actionUrl: string;
+    },
+  ): Promise<'sent' | 'failed'> {
+    try {
+      if (!this.emailEnabled) {
+        this.logger.warn(
+          `[EMAIL_DISABLED] Cross-clinic authorization request for ${email} not sent because EMAIL_ENABLED=false.`,
+        );
+        return 'failed';
+      }
+
+      const html = this.buildNoticeHtml({
+        userName: input.patientName,
+        heading: 'Solicitação de acesso ao seu prontuário',
+        paragraphs: [
+          `<strong>Dr(a). ${input.doctorName}</strong>, da clínica <strong>${input.clinicName}</strong>, está solicitando acesso ao seu histórico médico — finalidade informada: <strong>${input.purpose}</strong>.`,
+          `Se você reconhece esse profissional e autoriza o acesso, confirme pelo botão abaixo. Este link expira em ${input.expiresInMinutes} minutos e só pode ser usado uma vez.`,
+          '<strong>Se você não reconhece este profissional ou esta clínica, não prossiga — basta ignorar este e-mail.</strong>',
+        ],
+        actionUrl: input.actionUrl,
+        actionLabel: 'Revisar solicitação',
+      });
+
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: email,
+        subject: 'Solicitação de acesso ao seu prontuário - Hispora',
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Cross-clinic authorization request sent to ${email}`);
+      return 'sent';
+    } catch (error) {
+      this.logger.warn(
+        `Could not send cross-clinic authorization request to ${email}: ${(error as Error).message}`,
+      );
+      return 'failed';
+    }
+  }
+
   /** Shared shell for code-less notification emails. */
   private buildNoticeHtml(options: {
     userName: string;

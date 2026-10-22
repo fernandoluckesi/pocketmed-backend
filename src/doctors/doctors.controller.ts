@@ -10,7 +10,9 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard, SkipThrottle } from '@nestjs/throttler';
 import { DoctorsService } from './doctors.service';
+import { CrossClinicAccessService } from './cross-clinic-access.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -18,13 +20,19 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequireDoctorVerified } from '../auth/decorators/require-doctor-verified.decorator';
 import { RequestAccessDto } from './dto/request-access.dto';
 import { RespondAccessRequestDto } from './dto/respond-access-request.dto';
+import { LookupPatientByEmailDto } from './dto/lookup-patient-by-email.dto';
+import { RequestCrossClinicAccessDto } from './dto/request-cross-clinic-access.dto';
+import { THROTTLE_AUTH, THROTTLE_EMAIL } from '../common/throttler.config';
 
 @ApiTags('Doctors')
 @Controller('doctors')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
 export class DoctorsController {
-  constructor(private doctorsService: DoctorsService) {}
+  constructor(
+    private doctorsService: DoctorsService,
+    private crossClinicAccessService: CrossClinicAccessService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all doctors' })
@@ -50,6 +58,49 @@ export class DoctorsController {
   @ApiResponse({ status: 404, description: 'Patient or Dependent not found' })
   async requestAccess(@CurrentUser() user: any, @Body() dto: RequestAccessDto) {
     return this.doctorsService.requestAccess(user.userId, dto);
+  }
+
+  @Post('patients/lookup-by-email')
+  @Roles('doctor', 'admin')
+  @RequireDoctorVerified()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
+  @ApiOperation({
+    summary:
+      'Look up a patient by email for the cross-clinic authorization flow (reveals only found/name, never clinical data)',
+  })
+  @ApiResponse({ status: 200, description: 'Lookup result' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async lookupPatientByEmail(@CurrentUser() user: any, @Body() dto: LookupPatientByEmailDto) {
+    return this.crossClinicAccessService.lookupByEmail(user.userId, dto.email);
+  }
+
+  @Post('patients/:patientId/request-cross-clinic-access')
+  @Roles('doctor', 'admin')
+  @RequireDoctorVerified()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
+  @ApiOperation({
+    summary:
+      'Request authorization to access a patient record owned by another clinic (in-app if the patient has an account, emailed single-use link otherwise)',
+  })
+  @ApiResponse({ status: 201, description: 'Request created' })
+  @ApiResponse({ status: 400, description: 'Already has access, or a pending request exists' })
+  @ApiResponse({ status: 404, description: 'Patient not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async requestCrossClinicAccess(
+    @CurrentUser() user: any,
+    @Param('patientId') patientId: string,
+    @Body() dto: RequestCrossClinicAccessDto,
+  ) {
+    return this.crossClinicAccessService.requestCrossClinicAccess(
+      user.userId,
+      user.activeClinicId,
+      patientId,
+      dto.purpose,
+    );
   }
 
   @Get('access-requests/me')

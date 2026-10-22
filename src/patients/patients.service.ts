@@ -14,6 +14,9 @@ import {
   MoreThanOrEqual,
   LessThanOrEqual,
   DeepPartial,
+  Or,
+  IsNull,
+  MoreThan,
 } from 'typeorm';
 import { Patient } from '../entities/patient.entity';
 import { Dependent } from '../entities/dependent.entity';
@@ -168,6 +171,7 @@ export class PatientsService {
       .select('permission.patientId', 'patientId')
       .where('permission.doctorId = :doctorId', { doctorId })
       .andWhere('permission.isActive = :isActive', { isActive: true })
+      .andWhere('(permission.expiresAt IS NULL OR permission.expiresAt > :now)', { now: new Date() })
       .andWhere('permission.patientId IS NOT NULL')
       .getRawMany<{ patientId: string }>();
 
@@ -216,6 +220,7 @@ export class PatientsService {
       .select('permission.patientId', 'patientId')
       .where('permission.doctorId IN (:...doctorIds)', { doctorIds })
       .andWhere('permission.isActive = :isActive', { isActive: true })
+      .andWhere('(permission.expiresAt IS NULL OR permission.expiresAt > :now)', { now: new Date() })
       .andWhere('permission.patientId IS NOT NULL')
       .getRawMany<{ patientId: string }>();
 
@@ -420,6 +425,7 @@ export class PatientsService {
       .select('permission.patientId', 'patientId')
       .where('permission.doctorId = :doctorId', { doctorId: userId })
       .andWhere('permission.isActive = :isActive', { isActive: true })
+      .andWhere('(permission.expiresAt IS NULL OR permission.expiresAt > :now)', { now: new Date() })
       .andWhere('permission.patientId IN (:...patientIds)', { patientIds })
       .getRawMany<{ patientId: string }>();
 
@@ -484,7 +490,12 @@ export class PatientsService {
           let hasPermission = false;
           for (const responsibleId of responsibleIds) {
             const permission = await this.permissionRepository.findOne({
-              where: { doctorId: userId, patientId: responsibleId, isActive: true },
+              where: {
+                doctorId: userId,
+                patientId: responsibleId,
+                isActive: true,
+                expiresAt: Or(IsNull(), MoreThan(new Date())),
+              },
             });
             if (permission) {
               hasPermission = true;
@@ -530,7 +541,12 @@ export class PatientsService {
 
       if (!isCreator) {
         const permission = await this.permissionRepository.findOne({
-          where: { doctorId: userId, patientId: id, isActive: true },
+          where: {
+            doctorId: userId,
+            patientId: id,
+            isActive: true,
+            expiresAt: Or(IsNull(), MoreThan(new Date())),
+          },
         });
         hasPermission = !!permission;
       }
@@ -626,6 +642,7 @@ export class PatientsService {
       .select('permission.patientId', 'patientId')
       .where('permission.doctorId = :doctorId', { doctorId: userId })
       .andWhere('permission.isActive = :isActive', { isActive: true })
+      .andWhere('(permission.expiresAt IS NULL OR permission.expiresAt > :now)', { now: new Date() })
       .andWhere('permission.patientId IN (:...patientIds)', { patientIds })
       .getRawMany<{ patientId: string }>();
 
