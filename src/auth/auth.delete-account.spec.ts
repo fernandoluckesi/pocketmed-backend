@@ -42,7 +42,8 @@ describe('AuthService - deleteAccount', () => {
   // Rows returned by SELECTs the service runs during deletion. Configurable
   // per test to simulate dependents / files.
   let selectResponses: {
-    adminDependents?: { id: string }[];
+    adminDependents?: { dependentId: string }[];
+    dependentAdminsById?: Record<string, { patientId: string }[]>;
     examResultsById?: Record<string, { resultFile: string | null; resultFiles: any }[]>;
     dependentProfileById?: Record<string, { profileImage: string | null }[]>;
     patientProfile?: { profileImage: string | null }[];
@@ -64,8 +65,20 @@ describe('AuthService - deleteAccount', () => {
       query: jest.fn().mockImplementation((sql: string, params: any[] = []) => {
         queries.push({ sql, params });
 
-        if (sql.includes('SELECT `id` FROM `dependents` WHERE `adminResponsibleId`')) {
+        // Dependents where the user is an admin (via the join flag).
+        if (
+          sql.includes('SELECT `dependentId` FROM `dependent_responsibles`') &&
+          sql.includes('isAdmin')
+        ) {
           return Promise.resolve(selectResponses.adminDependents ?? []);
+        }
+        // Admins of a given dependent (to decide delete vs unlink).
+        if (
+          sql.includes('SELECT `patientId` FROM `dependent_responsibles`') &&
+          sql.includes('isAdmin')
+        ) {
+          const depId = params[0];
+          return Promise.resolve(selectResponses.dependentAdminsById?.[depId] ?? []);
         }
         if (sql.includes('SELECT `resultFile`, `resultFiles` FROM `exams`')) {
           const id = params[0];
@@ -193,7 +206,9 @@ describe('AuthService - deleteAccount', () => {
   });
 
   it('deletes an admin dependent and its data along with the account', async () => {
-    selectResponses.adminDependents = [{ id: 'dep-1' }];
+    selectResponses.adminDependents = [{ dependentId: 'dep-1' }];
+    // The user is the SOLE admin of dep-1, so it gets fully deleted.
+    selectResponses.dependentAdminsById = { 'dep-1': [{ patientId: USER_ID }] };
 
     await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
 

@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Dependent } from '../entities/dependent.entity';
 import { Patient } from '../entities/patient.entity';
 import {
@@ -36,6 +36,33 @@ export class DependentsService {
     private notificationsService: NotificationsService,
   ) {}
 
+  // ── Admin helpers (multiple admins live on the join table isAdmin flag) ────
+
+  /** Patient ids that are admins of a dependent (reads the join table). */
+  private async getAdminIds(dependentId: string): Promise<string[]> {
+    const rows: Array<{ patientId: string }> = await this.dependentRepository.query(
+      'SELECT patientId FROM dependent_responsibles WHERE dependentId = ? AND isAdmin = 1',
+      [dependentId],
+    );
+    return rows.map((r) => r.patientId);
+  }
+
+  private async isAdmin(dependentId: string, userId: string): Promise<boolean> {
+    const admins = await this.getAdminIds(dependentId);
+    return admins.includes(userId);
+  }
+
+  private async setAdminFlag(
+    dependentId: string,
+    patientId: string,
+    isAdmin: boolean,
+  ): Promise<void> {
+    await this.dependentRepository.query(
+      'UPDATE dependent_responsibles SET isAdmin = ? WHERE dependentId = ? AND patientId = ?',
+      [isAdmin ? 1 : 0, dependentId, patientId],
+    );
+  }
+
   async create(userId: string, dto: CreateDependentDto, file?: Express.Multer.File) {
     const patient = await this.patientRepository.findOne({
       where: { id: userId },
@@ -60,7 +87,12 @@ export class DependentsService {
       responsibles: [patient],
     });
 
-    return await this.dependentRepository.save(dependent);
+    const saved = await this.dependentRepository.save(dependent);
+
+    // The creator is the first admin on the join table too.
+    await this.setAdminFlag(saved.id, userId, true);
+
+    return saved;
   }
 
   /**
@@ -76,8 +108,8 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found');
     }
 
-    if (dependent.adminResponsibleId !== userId) {
-      throw new ForbiddenException('Only the admin responsible can edit the dependent');
+    if (!(await this.isAdmin(id, userId))) {
+      throw new ForbiddenException('Only an admin responsible can edit the dependent');
     }
 
     if (file) {
@@ -104,36 +136,56 @@ export class DependentsService {
    * a third party.
    */
   async getDeletionImpact(userId: string) {
+    // Dependents where this user is an admin (via the join flag) — not just the
+    // legacy root pointer, since there can be multiple admins now.
+    const adminRows: Array<{ dependentId: string }> = await this.dependentRepository.query(
+      'SELECT dependentId FROM dependent_responsibles WHERE patientId = ? AND isAdmin = 1',
+      [userId],
+    );
+    const adminDependentIds = adminRows.map((r) => r.dependentId);
+
+    if (adminDependentIds.length === 0) {
+      return { hasAdminDependents: false, dependents: [] };
+    }
+
     const dependents = await this.dependentRepository.find({
-      where: { adminResponsibleId: userId },
+      where: { id: In(adminDependentIds) },
       relations: ['responsibles'],
     });
 
-    const adminDependents = dependents.map((dependent) => {
-      // Everyone linked as a responsible, except the current admin (the user
-      // who is leaving). These are candidates to receive administration.
-      const otherResponsibles = (dependent.responsibles || [])
-        .filter((r) => r.id !== userId)
-        .map((r) => ({
-          id: r.id,
-          name: r.name,
-          profileImage: r.profileImage ?? null,
-        }));
+    const adminDependents = await Promise.all(
+      dependents.map(async (dependent) => {
+        const adminIds = await this.getAdminIds(dependent.id);
+        // If another admin remains after this user leaves, the dependent keeps
+        // an owner — no action needed from the user.
+        const hasOtherAdmin = adminIds.some((id) => id !== userId);
 
-      return {
-        id: dependent.id,
-        name: dependent.name,
-        profileImage: dependent.profileImage ?? null,
-        hasOtherResponsibles: otherResponsibles.length > 0,
-        otherResponsibles,
-      };
-    });
+        const otherResponsibles = (dependent.responsibles || [])
+          .filter((r) => r.id !== userId)
+          .map((r) => ({
+            id: r.id,
+            name: r.name,
+            profileImage: r.profileImage ?? null,
+          }));
+
+        return {
+          id: dependent.id,
+          name: dependent.name,
+          profileImage: dependent.profileImage ?? null,
+          hasOtherAdmin,
+          hasOtherResponsibles: otherResponsibles.length > 0,
+          otherResponsibles,
+        };
+      }),
+    );
+
+    // Only dependents WITHOUT another admin require the user to decide what
+    // happens before deleting their account.
+    const needingAction = adminDependents.filter((d) => !d.hasOtherAdmin);
 
     return {
-      // When there are no admin dependents, deletion can proceed with no extra
-      // steps on the client.
-      hasAdminDependents: adminDependents.length > 0,
-      dependents: adminDependents,
+      hasAdminDependents: needingAction.length > 0,
+      dependents: needingAction,
     };
   }
 
@@ -185,7 +237,19 @@ export class DependentsService {
       .where('responsibles.id = :userId', { userId })
       .getMany();
 
-    return dependents;
+    // Tell the client whether the requesting user is an admin of each
+    // dependent (multiple admins supported — the legacy adminResponsibleId
+    // pointer alone is no longer sufficient).
+    const adminRows: Array<{ dependentId: string }> = await this.dependentRepository.query(
+      'SELECT dependentId FROM dependent_responsibles WHERE patientId = ? AND isAdmin = 1',
+      [userId],
+    );
+    const adminDependentIds = new Set(adminRows.map((r) => r.dependentId));
+
+    return dependents.map((d) => ({
+      ...d,
+      isCurrentUserAdmin: adminDependentIds.has(d.id),
+    }));
   }
 
   async findOne(id: string, userId: string) {
@@ -213,7 +277,9 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found or you do not have access');
     }
 
-    return dependent;
+    // Expose which responsibles are admins (multiple admins supported).
+    const adminIds = await this.getAdminIds(id);
+    return { ...dependent, adminIds };
   }
 
   async addResponsible(dependentId: string, patientId: string, requestUserId: string) {
@@ -226,8 +292,8 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found');
     }
 
-    if (dependent.adminResponsibleId !== requestUserId) {
-      throw new ForbiddenException('Only the admin responsible can add new responsibles');
+    if (!(await this.isAdmin(dependentId, requestUserId))) {
+      throw new ForbiddenException('Only an admin responsible can add new responsibles');
     }
 
     const patient = await this.patientRepository.findOne({
@@ -269,8 +335,8 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found');
     }
 
-    if (dependent.adminResponsibleId !== requestUserId) {
-      throw new ForbiddenException('Only the admin responsible can invite responsibles');
+    if (!(await this.isAdmin(dependentId, requestUserId))) {
+      throw new ForbiddenException('Only an admin responsible can invite responsibles');
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -315,8 +381,8 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found');
     }
 
-    if (dependent.adminResponsibleId !== requestUserId) {
-      throw new ForbiddenException('Only the admin responsible can invite responsibles');
+    if (!(await this.isAdmin(dependentId, requestUserId))) {
+      throw new ForbiddenException('Only an admin responsible can invite responsibles');
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -428,16 +494,17 @@ export class DependentsService {
         (r) => r.id === invite.inviteePatientId,
       );
 
-      // Both flows ensure the invitee is a responsible; the admin transfer also
-      // moves the adminResponsibleId to them.
+      // Ensure the invitee is a responsible of the dependent.
       if (invitee && !alreadyResponsible) {
         invite.dependent.responsibles.push(invitee);
-      }
-      if (isAdminTransfer && invitee) {
-        invite.dependent.adminResponsibleId = invitee.id;
-      }
-      if (invitee && (!alreadyResponsible || isAdminTransfer)) {
         await this.dependentRepository.save(invite.dependent);
+      }
+
+      // Admin transfer ADDS the invitee as an admin (multiple admins allowed);
+      // existing admins keep their role. The join row exists now (either it was
+      // there, or the save above created it), so flip the isAdmin flag.
+      if (isAdminTransfer && invitee) {
+        await this.setAdminFlag(invite.dependentId, invitee.id, true);
       }
     }
 
@@ -445,15 +512,15 @@ export class DependentsService {
     const accepted = status === ResponsibleInviteStatus.ACCEPTED;
     const title = isAdminTransfer
       ? accepted
-        ? 'Transferência de administração aceita'
-        : 'Transferência de administração recusada'
+        ? 'Novo administrador aceito'
+        : 'Solicitação de administrador recusada'
       : accepted
         ? 'Convite aceito!'
         : 'Convite recusado';
     const body = isAdminTransfer
       ? accepted
-        ? `A administração de ${invite.dependent.name} foi transferida com sucesso.`
-        : `Sua solicitação para transferir a administração de ${invite.dependent.name} foi recusada.`
+        ? `${invite.dependent.name} agora tem um novo administrador.`
+        : `Sua solicitação para tornar um responsável administrador de ${invite.dependent.name} foi recusada.`
       : accepted
         ? `Seu convite para gerenciar ${invite.dependent.name} foi aceito.`
         : `Seu convite para gerenciar ${invite.dependent.name} foi recusado.`;
@@ -503,17 +570,39 @@ export class DependentsService {
       throw new ForbiddenException('You are not a responsible for this dependent');
     }
 
-    if (dependent.adminResponsibleId === userId) {
-      throw new BadRequestException(
-        'The admin responsible cannot step down directly. Transfer administration to another responsible or delete the dependent.',
-      );
+    const adminIds = await this.getAdminIds(dependentId);
+    const userIsAdmin = adminIds.includes(userId);
+
+    // An admin can only leave if there is ANOTHER admin to keep ownership.
+    // Otherwise they must promote someone first, or (if they're the only
+    // responsible) delete the dependent — handled on the client.
+    if (userIsAdmin) {
+      const otherAdmins = adminIds.filter((id) => id !== userId);
+      if (otherAdmins.length === 0) {
+        throw new BadRequestException(
+          'You are the only admin. Promote another responsible to admin first, or delete the dependent.',
+        );
+      }
     }
 
     dependent.responsibles = dependent.responsibles.filter((r) => r.id !== userId);
     await this.dependentRepository.save(dependent);
+    // Leaving also drops any admin role (join row is gone after the save, but
+    // clear defensively in case the ORM keeps it).
+    await this.setAdminFlag(dependentId, userId, false);
 
-    // Cancel any still-pending invites targeting this user for this dependent,
-    // so stale invites don't linger after they leave.
+    // If the leaving user was the legacy "root" admin, hand that pointer to
+    // another remaining admin so the deletion/merge SQL stays consistent.
+    if (dependent.adminResponsibleId === userId) {
+      const remainingAdmins = (await this.getAdminIds(dependentId)).filter((id) => id !== userId);
+      if (remainingAdmins.length > 0) {
+        await this.dependentRepository.update(dependentId, {
+          adminResponsibleId: remainingAdmins[0],
+        });
+      }
+    }
+
+    // Cancel any still-pending invites targeting this user for this dependent.
     await this.inviteRepository.update(
       {
         dependentId,
@@ -524,6 +613,45 @@ export class DependentsService {
     );
 
     return { message: 'You are no longer responsible for this dependent' };
+  }
+
+  /**
+   * Lets an admin step DOWN from admin while staying a responsible. Only
+   * allowed when there is at least one OTHER admin (a dependent must always
+   * have an admin).
+   */
+  async leaveAdmin(dependentId: string, userId: string) {
+    const dependent = await this.dependentRepository.findOne({
+      where: { id: dependentId },
+      relations: ['responsibles'],
+    });
+
+    if (!dependent) {
+      throw new NotFoundException('Dependent not found');
+    }
+
+    const adminIds = await this.getAdminIds(dependentId);
+    if (!adminIds.includes(userId)) {
+      throw new BadRequestException('You are not an admin of this dependent');
+    }
+
+    const otherAdmins = adminIds.filter((id) => id !== userId);
+    if (otherAdmins.length === 0) {
+      throw new BadRequestException(
+        'You are the only admin. Promote another responsible to admin first.',
+      );
+    }
+
+    await this.setAdminFlag(dependentId, userId, false);
+
+    // Keep the legacy root pointer valid.
+    if (dependent.adminResponsibleId === userId) {
+      await this.dependentRepository.update(dependentId, {
+        adminResponsibleId: otherAdmins[0],
+      });
+    }
+
+    return { message: 'You are no longer an admin of this dependent' };
   }
 
   /**
@@ -545,17 +673,23 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found');
     }
 
-    if (dependent.adminResponsibleId !== requestUserId) {
-      throw new ForbiddenException('Only the admin responsible can transfer administration');
+    if (!(await this.isAdmin(dependentId, requestUserId))) {
+      throw new ForbiddenException('Only an admin responsible can promote another admin');
     }
 
     if (targetResponsibleId === requestUserId) {
-      throw new BadRequestException('You are already the admin of this dependent');
+      throw new BadRequestException('You are already an admin of this dependent');
     }
 
     const target = (dependent.responsibles || []).find((r) => r.id === targetResponsibleId);
     if (!target) {
       throw new BadRequestException('The new admin must already be a responsible');
+    }
+
+    // Promoting ADDS another admin (it doesn't replace existing ones), so if the
+    // target is already an admin there's nothing to do.
+    if (await this.isAdmin(dependentId, targetResponsibleId)) {
+      throw new BadRequestException('This responsible is already an admin');
     }
 
     const existingPending = await this.inviteRepository.findOne({
@@ -567,7 +701,7 @@ export class DependentsService {
       },
     });
     if (existingPending) {
-      throw new BadRequestException('An admin transfer is already pending for this responsible');
+      throw new BadRequestException('An admin request is already pending for this responsible');
     }
 
     const inviter = await this.patientRepository.findOne({ where: { id: requestUserId } });
@@ -588,7 +722,7 @@ export class DependentsService {
         targetResponsibleId,
         'patient',
         'Solicitação para ser administrador',
-        `${inviter?.name ?? 'O administrador'} quer transferir a administração de ${dependent.name} para você.`,
+        `${inviter?.name ?? 'Um administrador'} quer tornar você administrador de ${dependent.name}.`,
         ADMIN_TRANSFER_REQUESTED,
         {
           dependentId,
@@ -622,13 +756,13 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found');
     }
 
-    if (dependent.adminResponsibleId !== requestUserId) {
-      throw new ForbiddenException('Only the admin responsible can remove responsibles');
+    if (!(await this.isAdmin(dependentId, requestUserId))) {
+      throw new ForbiddenException('Only an admin responsible can remove responsibles');
     }
 
     if (responsibleId === requestUserId) {
       throw new BadRequestException(
-        'The admin cannot remove themselves. Transfer administration or delete the dependent.',
+        'The admin cannot remove themselves. Use "leave" or delete the dependent.',
       );
     }
 
@@ -637,8 +771,15 @@ export class DependentsService {
       throw new BadRequestException('This user is not a responsible for this dependent');
     }
 
+    // Admins don't remove other admins (avoids ownership conflicts). The other
+    // admin must leave/step down themselves.
+    if (await this.isAdmin(dependentId, responsibleId)) {
+      throw new BadRequestException('You cannot remove another admin');
+    }
+
     dependent.responsibles = dependent.responsibles.filter((r) => r.id !== responsibleId);
     await this.dependentRepository.save(dependent);
+    await this.setAdminFlag(dependentId, responsibleId, false);
 
     // Cancel any pending invites targeting the removed responsible.
     await this.inviteRepository.update(
@@ -662,8 +803,17 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found');
     }
 
-    if (dependent.adminResponsibleId !== userId) {
-      throw new ForbiddenException('Only the admin responsible can delete the dependent');
+    if (!(await this.isAdmin(id, userId))) {
+      throw new ForbiddenException('Only an admin responsible can delete the dependent');
+    }
+
+    // With more than one admin, deletion is blocked — all admins would lose the
+    // dependent. Admins must agree down to a single admin before deleting.
+    const adminIds = await this.getAdminIds(id);
+    if (adminIds.length > 1) {
+      throw new BadRequestException(
+        'This dependent has more than one admin and cannot be deleted. It can only be deleted when there is a single admin.',
+      );
     }
 
     await this.dependentRepository.remove(dependent);

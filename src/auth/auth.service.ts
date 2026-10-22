@@ -1772,22 +1772,41 @@ export class AuthService {
 
     try {
       if (userType === 'patient') {
-        // 1) Dependents administered by this user. By the time we reach here,
-        //    the account-deletion flow has already transferred administration
-        //    for any dependent that had another responsible. Whatever is still
-        //    admin'd by this user is deleted along with the account (the user
-        //    explicitly chose this, or the dependent had no one else).
-        const adminDependents: { id: string }[] = await queryRunner.query(
-          'SELECT `id` FROM `dependents` WHERE `adminResponsibleId` = ?',
+        // 1) Dependents where this user is an admin (via the join flag — there
+        //    can be multiple admins now). A dependent is only DELETED when this
+        //    user is its ONLY admin; when another admin remains, we simply
+        //    unlink this user (and hand over the legacy root pointer).
+        const adminRows: { dependentId: string }[] = await queryRunner.query(
+          'SELECT `dependentId` FROM `dependent_responsibles` WHERE `patientId` = ? AND `isAdmin` = 1',
           [userId],
         );
-        const dependentIds = adminDependents.map((d) => d.id);
+        const adminDependentIds = adminRows.map((d) => d.dependentId);
 
-        for (const depId of dependentIds) {
+        for (const depId of adminDependentIds) {
+          const admins: { patientId: string }[] = await queryRunner.query(
+            'SELECT `patientId` FROM `dependent_responsibles` WHERE `dependentId` = ? AND `isAdmin` = 1',
+            [depId],
+          );
+          const otherAdmins = admins.map((a) => a.patientId).filter((pid) => pid !== userId);
+
+          if (otherAdmins.length > 0) {
+            // Another admin keeps the dependent: just remove this user's link.
+            await queryRunner.query(
+              'DELETE FROM `dependent_responsibles` WHERE `dependentId` = ? AND `patientId` = ?',
+              [depId, userId],
+            );
+            // Keep the legacy root pointer valid if it was this user.
+            await queryRunner.query(
+              'UPDATE `dependents` SET `adminResponsibleId` = ? WHERE `id` = ? AND `adminResponsibleId` = ?',
+              [otherAdmins[0], depId, userId],
+            );
+            continue;
+          }
+
+          // Sole admin → delete the dependent and its data.
           await this.collectAndDeletePatientScopedData(queryRunner, depId, filesToDelete, {
             isDependent: true,
           });
-          // Responsible links + pending invites for this dependent.
           await queryRunner.query(
             'DELETE FROM `dependent_responsible_invites` WHERE `dependentId` = ?',
             [depId],

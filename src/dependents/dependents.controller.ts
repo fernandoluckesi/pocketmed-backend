@@ -189,13 +189,23 @@ export class DependentsController {
 
   @Post(':id/leave')
   @Roles('patient')
-  @ApiOperation({ summary: 'Stop being a responsible for the dependent (non-admin only)' })
+  @ApiOperation({ summary: 'Stop being a responsible for the dependent' })
   @ApiResponse({ status: 201, description: 'Left as responsible successfully' })
-  @ApiResponse({ status: 400, description: 'Admin must transfer or delete instead' })
+  @ApiResponse({ status: 400, description: 'Only admin must promote/delete first' })
   @ApiResponse({ status: 403, description: 'Forbidden - not a responsible' })
   @ApiResponse({ status: 404, description: 'Dependent not found' })
   async leaveResponsible(@Param('id') id: string, @CurrentUser() user: any) {
     return this.dependentsService.leaveResponsible(id, user.userId);
+  }
+
+  @Post(':id/leave-admin')
+  @Roles('patient')
+  @ApiOperation({ summary: 'Stop being an admin but stay a responsible (needs another admin)' })
+  @ApiResponse({ status: 201, description: 'No longer an admin' })
+  @ApiResponse({ status: 400, description: 'Only admin / not an admin' })
+  @ApiResponse({ status: 404, description: 'Dependent not found' })
+  async leaveAdmin(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.dependentsService.leaveAdmin(id, user.userId);
   }
 
   @Delete(':id/responsibles/:responsibleId')
