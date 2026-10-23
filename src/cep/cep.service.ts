@@ -11,6 +11,7 @@ import { CepResponseDto } from './dto/cep-response.dto';
 @Injectable()
 export class CepService {
   constructor(private readonly httpService: HttpService) {}
+  //
 
   async lookup(cep: string): Promise<CepResponseDto> {
     if (!/^\d{8}$/.test(cep)) {
