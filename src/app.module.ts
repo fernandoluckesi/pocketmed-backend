@@ -15,6 +15,7 @@ import { ExamsModule } from './exams/exams.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { UploadModule } from './upload/upload.module';
 import { EmailModule } from './email/email.module';
+import { SupportModule } from './support/support.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { BackofficeBoundaryGuard } from './auth/guards/backoffice-boundary.guard';
@@ -136,7 +137,10 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
         // against the real Railway MySQL instance before deploying).
         ssl:
           configService.get<string>('DB_SSL') === 'true'
-            ? { rejectUnauthorized: configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED') === 'true' }
+            ? {
+                rejectUnauthorized:
+                  configService.get<string>('DB_SSL_REJECT_UNAUTHORIZED') === 'true',
+              }
             : undefined,
         entities: [
           Patient,
@@ -205,6 +209,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     AvailabilityModule,
     UploadModule,
     EmailModule,
+    SupportModule,
     NotificationsModule,
     ClinicAdminModule,
     ExamCatalogModule,

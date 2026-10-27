@@ -12,6 +12,7 @@ export class EmailService {
   private readonly webUrl: string;
   private readonly logoUrl: string;
   private readonly logoHorizontalUrl: string;
+  private readonly supportEmail: string;
 
   constructor(private configService: ConfigService) {
     const nodeEnv = String(this.configService.get<string>('NODE_ENV') ?? 'development').trim();
@@ -44,6 +45,11 @@ export class EmailService {
     this.logoHorizontalUrl =
       this.configService.get<string>('EMAIL_LOGO_HORIZONTAL_URL') ||
       `${this.webUrl}/hispora-horizontal-branco.png`;
+
+    // Inbox that receives "Fale Conosco" messages. Defaults to the test
+    // address for now; set SUPPORT_EMAIL in the environment to change it.
+    this.supportEmail =
+      this.configService.get<string>('SUPPORT_EMAIL') || 'fernando.luckesi94@gmail.com';
 
     if (!this.emailEnabled) {
       this.logger.warn(
@@ -351,7 +357,12 @@ export class EmailService {
         from: this.emailFrom,
         to: email,
         subject: `Resumo da sua consulta com ${doctorName}`,
-        html: this.buildConsultationSummaryEmailHtml(patientName, doctorName, appointmentDate, documents),
+        html: this.buildConsultationSummaryEmailHtml(
+          patientName,
+          doctorName,
+          appointmentDate,
+          documents,
+        ),
       });
 
       if (error) {
@@ -1098,6 +1109,64 @@ export class EmailService {
   </table>
 </body>
 </html>`;
+  }
+
+  /**
+   * Sends a "Fale Conosco" (support) message to the support inbox. The user's
+   * own email is set as reply-to, so the team can answer them directly.
+   */
+  async sendSupportMessage(input: {
+    userName: string;
+    userEmail: string;
+    userType?: string;
+    message: string;
+  }): Promise<void> {
+    const { userName, userEmail, userType, message } = input;
+
+    if (!this.emailEnabled) {
+      this.logger.warn(
+        `[EMAIL_DISABLED] Support message from ${userEmail} not sent because EMAIL_ENABLED=false.`,
+      );
+      return;
+    }
+
+    // Escape user content before dropping it into HTML.
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const safeMessage = escapeHtml(message).replace(/\n/g, '<br>');
+
+    const html = this.buildNoticeHtml({
+      userName: 'Equipe Hispora',
+      heading: 'Nova mensagem de suporte',
+      paragraphs: [
+        `<strong>De:</strong> ${escapeHtml(userName)} (${escapeHtml(userEmail)})`,
+        userType ? `<strong>Tipo de conta:</strong> ${escapeHtml(userType)}` : '',
+        '<strong>Mensagem:</strong>',
+        safeMessage,
+      ].filter(Boolean),
+    });
+
+    try {
+      const { error } = await this.resend.emails.send({
+        from: this.emailFrom,
+        to: this.supportEmail,
+        replyTo: userEmail,
+        subject: `Fale Conosco - ${userName}`,
+        html,
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      this.logger.log(`Support message from ${userEmail} sent to ${this.supportEmail}`);
+    } catch (error) {
+      if (this.shouldUseMockFallback(error)) {
+        this.logger.warn(`Falling back to mock support message delivery for ${userEmail}.`);
+        return;
+      }
+      this.rethrowEmailError(error, 'Error sending support message');
+    }
   }
 
   /** Masks an email for display, e.g. "jo***@gmail.com". */
