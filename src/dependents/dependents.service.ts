@@ -277,9 +277,21 @@ export class DependentsService {
       throw new NotFoundException('Dependent not found or you do not have access');
     }
 
-    // Expose which responsibles are admins (multiple admins supported).
+    // Expose which responsibles are admins (multiple admins supported) and
+    // which ones have a PENDING "become admin" request, so the client can show
+    // "Solicitação enviada" instead of letting the admin request again.
     const adminIds = await this.getAdminIds(id);
-    return { ...dependent, adminIds };
+    const pendingAdminInvites = await this.inviteRepository.find({
+      where: {
+        dependentId: id,
+        kind: ResponsibleInviteKind.ADMIN_TRANSFER,
+        status: ResponsibleInviteStatus.PENDING,
+      },
+      select: ['inviteePatientId'],
+    });
+    const pendingAdminInviteeIds = pendingAdminInvites.map((i) => i.inviteePatientId);
+
+    return { ...dependent, adminIds, pendingAdminInviteeIds };
   }
 
   async addResponsible(dependentId: string, patientId: string, requestUserId: string) {
