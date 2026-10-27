@@ -15,6 +15,7 @@ import { DoctorDocument } from '../entities/doctor-document.entity';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { MedicalRecordRetentionService } from './medical-record-retention.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TurnstileService } from '../common/turnstile/turnstile.service';
 import { DeletionRequestType } from './dto/request-data-deletion.dto';
@@ -63,6 +64,7 @@ describe('AuthService - public data deletion request', () => {
         { provide: UploadService, useValue: {} },
         { provide: EmailService, useValue: { sendDeletionRequestReceipt } },
         { provide: AuditService, useValue: { recordSecurityEvent } },
+        MedicalRecordRetentionService,
         { provide: NotificationsService, useValue: {} },
         { provide: DataSource, useValue: {} },
         {

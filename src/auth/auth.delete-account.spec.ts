@@ -16,6 +16,7 @@ import { DoctorDocument } from '../entities/doctor-document.entity';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { MedicalRecordRetentionService } from './medical-record-retention.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TurnstileService } from '../common/turnstile/turnstile.service';
 
@@ -47,6 +48,11 @@ describe('AuthService - deleteAccount', () => {
     examResultsById?: Record<string, { resultFile: string | null; resultFiles: any }[]>;
     dependentProfileById?: Record<string, { profileImage: string | null }[]>;
     patientProfile?: { profileImage: string | null }[];
+    /** Tables that should report an existing clinical document, keyed by the
+     * id being checked. Drives the retention-vs-hard-delete decision. */
+    medicalRecordByIdAndTable?: Record<string, string[]>;
+    /** Latest clinical entry per table, used to compute retentionUntil. */
+    lastEntryByTable?: Record<string, Date>;
   };
 
   function makeQueryRunner() {
@@ -91,6 +97,19 @@ describe('AuthService - deleteAccount', () => {
         if (sql.includes('SELECT `profileImage` FROM `patients`')) {
           return Promise.resolve(selectResponses.patientProfile ?? [{ profileImage: null }]);
         }
+        // Retention: does this id have any issued clinical document?
+        if (sql.includes('SELECT EXISTS(')) {
+          const id = params[0];
+          const tables = selectResponses.medicalRecordByIdAndTable?.[id] ?? [];
+          const found = tables.some((t) => sql.includes(`\`${t}\``));
+          return Promise.resolve([{ found: found ? 1 : 0 }]);
+        }
+        // Retention: latest entry, to derive retentionUntil.
+        if (sql.includes('MAX(`createdAt`)')) {
+          const entries = selectResponses.lastEntryByTable ?? {};
+          const hit = Object.entries(entries).find(([t]) => sql.includes(`\`${t}\``));
+          return Promise.resolve([{ last: hit ? hit[1] : null }]);
+        }
         return Promise.resolve([]);
       }),
     };
@@ -133,6 +152,7 @@ describe('AuthService - deleteAccount', () => {
         { provide: UploadService, useValue: { deleteFile } },
         { provide: EmailService, useValue: { sendAccountDeletionCode: jest.fn() } },
         { provide: AuditService, useValue: { recordDelete } },
+        MedicalRecordRetentionService,
         { provide: NotificationsService, useValue: { createNotification: jest.fn() } },
         { provide: DataSource, useValue: dataSource },
         { provide: ConfigService, useValue: { get: jest.fn(() => undefined) } },
@@ -171,7 +191,13 @@ describe('AuthService - deleteAccount', () => {
   it('hard-deletes all patient-scoped data and the patient (no dependents)', async () => {
     const res = await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
 
-    expect(res).toEqual({ message: 'Account deleted successfully' });
+    // `recordRetained: false` is the meaningful part here: this patient has
+    // no clinical document, so the account is genuinely erased rather than
+    // anonymised-and-kept (see medical-record-retention.service.ts).
+    expect(res).toEqual({
+      message: 'Account deleted successfully',
+      recordRetained: false,
+    });
     expect(committed).toBe(true);
     expect(rolledBack).toBe(false);
 
@@ -250,5 +276,137 @@ describe('AuthService - deleteAccount', () => {
 
     expect(rolledBack).toBe(true);
     expect(deleteFile).not.toHaveBeenCalled();
+  });
+  // ── Medical-record retention (audit finding R3) ──────────────────────────
+  // CFM Res. 1.821/2007 requires keeping the record for 20 years; LGPD
+  // art. 16 allows retaining data to meet a legal obligation. So an account
+  // that produced clinical documents is anonymised and kept, not erased —
+  // and one that didn't is still genuinely erased. Both branches matter:
+  // erasing a record breaches the CFM, keeping an account that could go
+  // breaches the LGPD right to erasure.
+  describe('medical-record retention', () => {
+    it('anonymises instead of deleting when the patient has a record', async () => {
+      selectResponses.medicalRecordByIdAndTable = { [USER_ID]: ['prescriptions'] };
+      selectResponses.lastEntryByTable = { prescriptions: new Date('2024-02-15T10:00:00Z') };
+
+      const res = await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      expect(res.recordRetained).toBe(true);
+      // The row must NOT be deleted...
+      const deletedPatient = queries.some((q) =>
+        q.sql.includes('DELETE FROM `patients`'),
+      );
+      expect(deletedPatient).toBe(false);
+      // ...it must be anonymised and stamped instead.
+      const update = queries.find((q) => q.sql.includes('UPDATE `patients` SET'));
+      expect(update).toBeDefined();
+      expect(update!.sql).toContain('`deletedAt` = NOW(6)');
+      expect(update!.sql).toContain('`email` = NULL');
+      expect(update!.sql).toContain('`password` = NULL');
+    });
+
+    it('keeps name and CPF on the retained row', async () => {
+      // Without them the retained record no longer identifies its subject,
+      // which defeats the very duty being honoured.
+      selectResponses.medicalRecordByIdAndTable = { [USER_ID]: ['reports'] };
+
+      await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      const update = queries.find((q) => q.sql.includes('UPDATE `patients` SET'));
+      expect(update!.sql).not.toContain('`name` = NULL');
+      expect(update!.sql).not.toContain('`cpf` = NULL');
+    });
+
+    it('computes retentionUntil as the last entry + 20 years', async () => {
+      selectResponses.medicalRecordByIdAndTable = { [USER_ID]: ['reports'] };
+      selectResponses.lastEntryByTable = { reports: new Date('2024-02-15T10:00:00Z') };
+
+      await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      const update = queries.find((q) => q.sql.includes('UPDATE `patients` SET'));
+      expect(update!.params[0]).toBe('2044-02-15');
+    });
+
+    it('still erases scheduling data when retaining the record', async () => {
+      // Retention covers issued documents, not appointments/medications/
+      // exams — those are erased either way.
+      selectResponses.medicalRecordByIdAndTable = { [USER_ID]: ['certificates'] };
+
+      await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      const sql = queries.map((q) => q.sql).join(' ');
+      expect(sql).toContain('DELETE FROM `appointments`');
+      expect(sql).toContain('DELETE FROM `medications`');
+      expect(sql).toContain('DELETE FROM `patient_allergies`');
+    });
+
+    it('records the retention in the audit trail', async () => {
+      selectResponses.medicalRecordByIdAndTable = { [USER_ID]: ['prescriptions'] };
+
+      await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      expect(recordDelete).toHaveBeenCalledWith(
+        expect.anything(),
+        USER_ID,
+        expect.objectContaining({ reason: 'ACCOUNT_DELETION_REQUESTED_RECORD_RETAINED' }),
+      );
+    });
+
+    it('tells the user their clinical record was kept, and why', async () => {
+      // Transparency: they asked for erasure, so a blanket "deleted
+      // successfully" would not be the whole truth.
+      selectResponses.medicalRecordByIdAndTable = { [USER_ID]: ['prescriptions'] };
+
+      const res = await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      expect(res.message).toContain('20 anos');
+      expect(res.message).toContain('CFM 1.821/2007');
+    });
+
+    it('blocks deletion when a sole-guardian dependent has a record', async () => {
+      // Deleting would breach the CFM duty; keeping an orphan dependent
+      // would leave a minor's health data with no responsible party. So the
+      // user is asked to hand over responsibility first.
+      selectResponses.adminDependents = [{ dependentId: 'dep-1' }];
+      selectResponses.dependentAdminsById = { 'dep-1': [{ patientId: USER_ID }] };
+      selectResponses.medicalRecordByIdAndTable = { 'dep-1': ['prescriptions'] };
+
+      await expect(
+        service.deleteAccount(USER_ID, 'patient', VALID_CODE),
+      ).rejects.toThrow(/dependente/i);
+
+      expect(rolledBack).toBe(true);
+      expect(deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('allows deletion when the dependent has no record', async () => {
+      selectResponses.adminDependents = [{ dependentId: 'dep-1' }];
+      selectResponses.dependentAdminsById = { 'dep-1': [{ patientId: USER_ID }] };
+      selectResponses.medicalRecordByIdAndTable = {}; // nothing anywhere
+
+      const res = await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      expect(res.recordRetained).toBe(false);
+      expect(committed).toBe(true);
+      const sql = queries.map((q) => q.sql).join(' ');
+      expect(sql).toContain('DELETE FROM `dependents`');
+    });
+
+    it('does not block when another guardian remains', async () => {
+      // The dependent is simply unlinked from this user, so the minor keeps
+      // a responsible party and the record keeps its owner.
+      selectResponses.adminDependents = [{ dependentId: 'dep-1' }];
+      selectResponses.dependentAdminsById = {
+        'dep-1': [{ patientId: USER_ID }, { patientId: 'other-admin' }],
+      };
+      selectResponses.medicalRecordByIdAndTable = { 'dep-1': ['prescriptions'] };
+
+      const res = await service.deleteAccount(USER_ID, 'patient', VALID_CODE);
+
+      expect(committed).toBe(true);
+      expect(res.recordRetained).toBe(false);
+      const sql = queries.map((q) => q.sql).join(' ');
+      expect(sql).not.toContain('DELETE FROM `dependents`');
+    });
   });
 });

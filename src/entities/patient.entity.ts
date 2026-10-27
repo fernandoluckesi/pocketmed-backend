@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   OneToMany,
   ManyToOne,
   JoinColumn,
@@ -32,8 +33,12 @@ export class Patient {
   @Column({ type: 'varchar', length: 30, nullable: true })
   username: string | null;
 
-  @Column({ type: 'varchar', length: 255 })
-  email: string;
+  // Nullable desde a migration 1835: ao excluir uma conta cujo prontuário
+  // deve ser retido, o contato é efetivamente apagado (NULL), e não
+  // substituído por placeholder — placeholder continuaria ocupando o índice
+  // único e impediria a pessoa de se recadastrar.
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  email: string | null;
 
   @Exclude()
   @Column({ type: 'varchar', length: 255, nullable: true })
@@ -42,8 +47,8 @@ export class Patient {
   @Column({ type: 'varchar', length: 50 })
   gender: string;
 
-  @Column({ type: 'varchar', length: 20 })
-  phone: string;
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  phone: string | null;
 
   // Digits-only mirror of `phone`, maintained by the DB. Indexed so the phone
   // availability check is a direct lookup instead of scanning every row.
@@ -146,6 +151,30 @@ export class Patient {
   /** List of chronic conditions/diseases */
   @Column({ type: 'json', nullable: true })
   diseases: string[] | null;
+
+  // ── Retenção de prontuário (CFM 1.821/2007) × eliminação (LGPD) ──────────
+  // Uma conta com prontuário não pode ser apagada: a guarda de 20 anos é
+  // obrigação legal. Nesses casos o registro é marcado aqui em vez de
+  // removido, e `deleteAccount` anonimiza os campos identificáveis
+  // (email, telefone, foto, credenciais) mantendo nome/CPF — sem eles o
+  // prontuário não identifica o titular e perde a função que justifica a
+  // guarda. Conta SEM prontuário continua sendo apagada de verdade.
+  //
+  // `@DeleteDateColumn` faz o TypeORM excluir estas linhas de toda query
+  // automaticamente, sem precisar espalhar `deletedAt IS NULL`. Consultas
+  // que precisam ver o histórico retido usam `withDeleted: true`.
+  @DeleteDateColumn()
+  deletedAt: Date | null;
+
+  /** Quando o titular pediu a exclusão. Distinto de `deletedAt` para fins de
+   * auditoria: registra o pedido, não o efeito. */
+  @Column({ type: 'datetime', nullable: true })
+  deletionRequestedAt: Date | null;
+
+  /** Data em que a guarda obrigatória expira (último registro clínico + 20
+   * anos). O job de retenção elimina definitivamente a partir daqui. */
+  @Column({ type: 'date', nullable: true })
+  retentionUntil: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

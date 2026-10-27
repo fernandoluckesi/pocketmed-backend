@@ -22,6 +22,7 @@ import { LoginDto } from './dto/login.dto';
 import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { MedicalRecordRetentionService } from './medical-record-retention.service';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { Clinic } from '../entities/clinic.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
@@ -70,6 +71,7 @@ export class AuthService {
     private uploadService: UploadService,
     private emailService: EmailService,
     private auditService: AuditService,
+    private retentionService: MedicalRecordRetentionService,
     private notificationsService: NotificationsService,
     private dataSource: DataSource,
     private configService: ConfigService,
@@ -1610,6 +1612,36 @@ export class AuthService {
           [primaryPatientId, shadowId],
         );
 
+        // Issued clinical documents. These were MISSING from the merge until
+        // 22/10/2026: a shadow patient's prescriptions, reports, certificates,
+        // exam requests, surgeries and attachments stayed behind on the old
+        // row, so they silently disappeared from the patient's view once the
+        // account was activated. Same reparenting as everything above.
+        await queryRunner.query(
+          'UPDATE `prescriptions` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        await queryRunner.query('UPDATE `reports` SET `patientId` = ? WHERE `patientId` = ?', [
+          primaryPatientId,
+          shadowId,
+        ]);
+        await queryRunner.query('UPDATE `certificates` SET `patientId` = ? WHERE `patientId` = ?', [
+          primaryPatientId,
+          shadowId,
+        ]);
+        await queryRunner.query(
+          'UPDATE `exam_requests` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        await queryRunner.query(
+          'UPDATE `patient_surgeries` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+        await queryRunner.query(
+          'UPDATE `medical_attachments` SET `patientId` = ? WHERE `patientId` = ?',
+          [primaryPatientId, shadowId],
+        );
+
         // Migrate dependents: transfer admin responsibility to the primary patient
         await queryRunner.query(
           'UPDATE `dependents` SET `adminResponsibleId` = ? WHERE `adminResponsibleId` = ?',
@@ -1803,6 +1835,12 @@ export class AuthService {
     // transactional, so we never remove files for a rolled-back delete).
     const filesToDelete: string[] = [];
 
+    // Set when the account had a medical record and was therefore anonymised
+    // and retained instead of erased. Changes both the audit reason and the
+    // message returned to the user — they are entitled to know their clinical
+    // record was kept, and why.
+    let retainedRecord = false;
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -1840,7 +1878,36 @@ export class AuthService {
             continue;
           }
 
-          // Sole admin → delete the dependent and its data.
+          // Sole admin. The dependent cannot be erased if it has a medical
+          // record of its own: the CFM retention duty applies to the minor's
+          // record too, and once this account is gone there would be nobody
+          // left to exercise the minor's rights over it.
+          //
+          // Blocking is the honest outcome here. Silently keeping an orphan
+          // dependent would leave a minor's health data with no responsible
+          // party, and deleting it would breach the retention duty — so the
+          // user is asked to hand over responsibility first. The platform
+          // already supports multiple responsibles, so the path exists.
+          const dependentHasRecord = await this.retentionService.hasMedicalRecord(
+            queryRunner,
+            depId,
+            { isDependent: true },
+          );
+          if (dependentHasRecord) {
+            const depRow: { name: string }[] = await queryRunner.query(
+              'SELECT `name` FROM `dependents` WHERE `id` = ?',
+              [depId],
+            );
+            const depName = depRow[0]?.name || 'dependente';
+            throw new BadRequestException(
+              `Não é possível excluir sua conta: o dependente "${depName}" possui ` +
+                `prontuário médico, que deve ser preservado por 20 anos conforme a ` +
+                `Resolução CFM 1.821/2007. Adicione outro responsável para esse ` +
+                `dependente antes de excluir sua conta.`,
+            );
+          }
+
+          // No record → safe to erase the dependent and its data.
           await this.collectAndDeletePatientScopedData(queryRunner, depId, filesToDelete, {
             isDependent: true,
           });
@@ -1854,7 +1921,9 @@ export class AuthService {
           await queryRunner.query('DELETE FROM `dependents` WHERE `id` = ?', [depId]);
         }
 
-        // 2) The user's own data (patient-scoped).
+        // 2) The user's own data (patient-scoped). Scheduling/tracking data
+        //    is always erased; issued clinical documents are not touched here
+        //    — step 6 decides whether they must be retained.
         await this.collectAndDeletePatientScopedData(queryRunner, userId, filesToDelete, {
           isDependent: false,
         });
@@ -1879,7 +1948,7 @@ export class AuthService {
           [userId],
         );
 
-        // 5) The user's own profile image, then the patient row itself.
+        // 5) The user's own profile image (erased either way).
         const patientRow: { profileImage: string | null }[] = await queryRunner.query(
           'SELECT `profileImage` FROM `patients` WHERE `id` = ?',
           [userId],
@@ -1887,7 +1956,36 @@ export class AuthService {
         if (patientRow[0]?.profileImage) {
           filesToDelete.push(patientRow[0].profileImage);
         }
-        await queryRunner.query('DELETE FROM `patients` WHERE `id` = ?', [userId]);
+
+        // 6) Hard delete vs. retention.
+        //
+        // CFM Res. 1.821/2007 requires keeping the medical record for 20
+        // years from the last entry, and LGPD art. 16 allows retaining data
+        // to meet a legal obligation — so an account that produced clinical
+        // documents cannot simply be erased. What CAN (and must) be erased is
+        // the person's identity as a platform user, which is what
+        // `anonymisePatientForRetention` does.
+        //
+        // No clinical documents → nothing to retain → genuine hard delete,
+        // exactly as before.
+        const patientHasRecord = await this.retentionService.hasMedicalRecord(queryRunner, userId, {
+          isDependent: false,
+        });
+
+        if (patientHasRecord) {
+          const retentionUntil = await this.retentionService.computeRetentionUntil(
+            queryRunner,
+            userId,
+          );
+          await this.retentionService.anonymisePatientForRetention(
+            queryRunner,
+            userId,
+            retentionUntil,
+          );
+          retainedRecord = true;
+        } else {
+          await queryRunner.query('DELETE FROM `patients` WHERE `id` = ?', [userId]);
+        }
       } else if (userType === 'doctor') {
         await queryRunner.query('DELETE FROM `doctor_access_requests` WHERE `doctorId` = ?', [
           userId,
@@ -1911,13 +2009,41 @@ export class AuthService {
           "DELETE FROM `device_tokens` WHERE `userId` = ? AND `userType` = 'doctor'",
           [userId],
         );
-        await queryRunner.query('DELETE FROM `doctors` WHERE `id` = ?', [userId]);
+
+        // Same rule as for patients, for the same reason: the professional's
+        // name and CRM are what authenticate every document they signed, so
+        // a doctor who issued any document is retained and anonymised rather
+        // than deleted.
+        const doctorHasRecord = await this.retentionService.doctorHasIssuedDocuments(
+          queryRunner,
+          userId,
+        );
+
+        if (doctorHasRecord) {
+          const retentionUntil = await this.retentionService.computeRetentionUntil(
+            queryRunner,
+            userId,
+            { isDoctor: true },
+          );
+          await this.retentionService.anonymiseDoctorForRetention(
+            queryRunner,
+            userId,
+            retentionUntil,
+          );
+          retainedRecord = true;
+        } else {
+          await queryRunner.query('DELETE FROM `doctors` WHERE `id` = ?', [userId]);
+        }
       }
 
-      // REQ-AUD-003/004 — Audit inside the same transaction
+      // REQ-AUD-003/004 — Audit inside the same transaction. The reason
+      // distinguishes a true erasure from a retention, so the audit trail
+      // shows which legal basis applied.
       await this.auditService.recordDelete(AuditResourceType.USER, userId, {
         patientId: userType === 'patient' ? userId : undefined,
-        reason: 'ACCOUNT_DELETION_REQUESTED',
+        reason: retainedRecord
+          ? 'ACCOUNT_DELETION_REQUESTED_RECORD_RETAINED'
+          : 'ACCOUNT_DELETION_REQUESTED',
         queryRunner,
       });
 
@@ -1933,7 +2059,17 @@ export class AuthService {
     // a failure here must not fail the account deletion (DB is already clean).
     await this.deleteStoredFiles(filesToDelete);
 
-    return { message: 'Account deleted successfully' };
+    // Transparency: the user asked for erasure, so if part of their data had
+    // to be kept they are told so, with the reason — rather than receiving a
+    // blanket "deleted successfully" that isn't the whole truth.
+    return {
+      message: retainedRecord
+        ? 'Conta excluída. Seus dados de acesso e contato foram removidos. ' +
+          'O conteúdo clínico já registrado é mantido pelo prazo legal de 20 anos ' +
+          '(Resolução CFM 1.821/2007) e, após esse prazo, será eliminado.'
+        : 'Account deleted successfully',
+      recordRetained: retainedRecord,
+    };
   }
 
   /**

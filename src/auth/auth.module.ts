@@ -5,6 +5,8 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { MedicalRecordRetentionService } from './medical-record-retention.service';
+import { MedicalRecordRetentionCronService } from './medical-record-retention-cron.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { Patient } from '../entities/patient.entity';
 import { Doctor } from '../entities/doctor.entity';
@@ -50,7 +52,12 @@ import { TurnstileModule } from '../common/turnstile/turnstile.module';
     TurnstileModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    MedicalRecordRetentionService,
+    MedicalRecordRetentionCronService,
+  ],
+  exports: [AuthService, MedicalRecordRetentionService],
 })
 export class AuthModule {}
