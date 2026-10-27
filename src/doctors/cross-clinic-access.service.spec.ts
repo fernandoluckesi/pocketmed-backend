@@ -244,6 +244,43 @@ describe('CrossClinicAccessService', () => {
     });
   });
 
+  describe('resendConsentLink', () => {
+    it('rotates the token and resends the e-mail for a still-pending request', async () => {
+      patientRepo.findOne.mockResolvedValue({ id: 'patient-1', name: 'Ana Maria', email: 'ana@example.com' });
+
+      const result = await service.resendConsentLink('doctor-1', 'req-1');
+
+      expect(result.emailStatus).toBe('sent');
+      expect(emailService.sendCrossClinicAuthorizationRequest).toHaveBeenCalledWith(
+        'ana@example.com',
+        expect.objectContaining({ patientName: 'Ana Maria' }),
+      );
+      const savedArg = accessRequestRepo.save.mock.calls[0][0];
+      expect(savedArg.consentTokenHash).not.toBe(requestRow.consentTokenHash);
+      expect(savedArg.consentTokenExpiresAt.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('rejects when a different doctor tries to resend someone else\'s request', async () => {
+      await expect(service.resendConsentLink('doctor-2', 'req-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('rejects when the request is not an email-link channel', async () => {
+      requestRow.channel = 'in_app' as any;
+      await expect(service.resendConsentLink('doctor-1', 'req-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('rejects when the request is no longer pending', async () => {
+      requestRow.status = AccessRequestStatus.APPROVED;
+      await expect(service.resendConsentLink('doctor-1', 'req-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+  });
+
   describe('respondToConsent — token single-use and expiry', () => {
     it('authorizes once, grants a time-boxed permission, and audits CONSENT_GRANTED', async () => {
       patientRepo.findOne.mockResolvedValue({ id: 'patient-1', cpf: null });

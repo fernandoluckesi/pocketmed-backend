@@ -213,6 +213,67 @@ export class CrossClinicAccessService {
   }
 
   /**
+   * Resends the authorization e-mail for a still-pending EMAIL_LINK request —
+   * rotates the token (old one stops working) rather than re-sending the same
+   * link, so a resend never leaves two simultaneously-valid links around.
+   * Only the requesting doctor can trigger this.
+   */
+  async resendConsentLink(
+    doctorId: string,
+    requestId: string,
+  ): Promise<{ emailStatus: 'sent' | 'failed' }> {
+    const request = await this.accessRequestRepository.findOne({ where: { id: requestId } });
+    if (!request || request.doctorId !== doctorId) {
+      throw new NotFoundException('Solicitação não encontrada.');
+    }
+    if (request.channel !== AccessRequestChannel.EMAIL_LINK) {
+      throw new BadRequestException('Esta solicitação não usa envio por link.');
+    }
+    if (request.status !== AccessRequestStatus.PENDING) {
+      throw new BadRequestException('Esta solicitação não está mais pendente.');
+    }
+
+    const patient = await this.patientRepository.findOne({ where: { id: request.patientId! } });
+    if (!patient) {
+      throw new NotFoundException('Paciente não encontrado.');
+    }
+
+    const doctor = await this.doctorRepository.findOne({ where: { id: doctorId } });
+    const clinic = request.requestingClinicId
+      ? await this.clinicRepository.findOne({ where: { id: request.requestingClinicId } })
+      : null;
+
+    const { token, hash } = this.tokenService.generate();
+    request.consentTokenHash = hash;
+    request.consentTokenExpiresAt = new Date(Date.now() + CONSENT_TOKEN_TTL_MINUTES * 60_000);
+    request.linkSentAt = new Date();
+    await this.accessRequestRepository.save(request);
+
+    const actionUrl = `${this.webUrl}/acesso-prontuario/${request.id}?token=${token}`;
+    const emailStatus = await this.emailService.sendCrossClinicAuthorizationRequest(
+      patient.email,
+      {
+        patientName: patient.name,
+        doctorName: doctor?.name ?? 'Médico',
+        clinicName: clinic?.name ?? 'outra clínica',
+        purpose: request.purpose ?? 'Atendimento médico',
+        expiresInMinutes: CONSENT_TOKEN_TTL_MINUTES,
+        actionUrl,
+      },
+    );
+
+    await this.auditService.recordSecurityEvent(AuditAction.CREATE, {
+      resourceType: AuditResourceType.CONSENT,
+      resourceId: request.id,
+      patientId: request.patientId ?? undefined,
+      success: emailStatus === 'sent',
+      metadata: { doctorId, channel: AccessRequestChannel.EMAIL_LINK, emailStatus, resend: true },
+    });
+
+    return { emailStatus };
+  }
+
+  /**
    * Returns only what's needed to render the consent page. Deliberately
    * does NOT consume the token — opening the link must never count as
    * authorization, and link-preview crawlers must not be able to burn it.

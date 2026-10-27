@@ -103,6 +103,24 @@ export class DoctorsController {
     );
   }
 
+  @Post('access-requests/:id/resend-cross-clinic-link')
+  @Roles('doctor', 'admin')
+  @RequireDoctorVerified()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ [THROTTLE_AUTH]: { ttl: 60_000, limit: 10 } })
+  @SkipThrottle({ [THROTTLE_EMAIL]: true })
+  @ApiOperation({
+    summary:
+      'Resend the cross-clinic authorization e-mail for a still-pending request (rotates the token)',
+  })
+  @ApiResponse({ status: 200, description: 'Resend attempted; returns the resulting status' })
+  @ApiResponse({ status: 400, description: 'Not an email-link request, or no longer pending' })
+  @ApiResponse({ status: 404, description: 'Request not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async resendCrossClinicLink(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.crossClinicAccessService.resendConsentLink(user.userId, id);
+  }
+
   @Get('access-requests/me')
   @Roles('doctor', 'admin')
   @RequireDoctorVerified()

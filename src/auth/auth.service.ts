@@ -93,6 +93,8 @@ export class AuthService {
       await this.assertCpfAvailable(patientCpf);
     }
 
+    await this.assertUsernameAvailable(dto.username);
+
     let profileImageUrl = null;
     if (file) {
       try {
@@ -113,6 +115,7 @@ export class AuthService {
     try {
       const patient = queryRunner.manager.create(Patient, {
         name: dto.name,
+        username: dto.username,
         email: dto.email,
         password: hashedPassword,
         gender: dto.gender,
@@ -167,6 +170,9 @@ export class AuthService {
       if (this.isDuplicateCpfError(error)) {
         throw new ConflictException('CPF já cadastrado');
       }
+      if (this.isDuplicateUsernameError(error)) {
+        throw new ConflictException('Nome de usuário já está em uso');
+      }
       throw error;
     } finally {
       await queryRunner.release();
@@ -189,6 +195,24 @@ export class AuthService {
     if (!isDup) return false;
     const msg = String(err.message || '').toLowerCase();
     return msg.includes('cpfunique') || msg.includes('idx_patients_cpf_unique');
+  }
+
+  /**
+   * Same defense-in-depth as `isDuplicateCpfError`, for the patient username
+   * unique index (IDX_patients_username_unique — see migration 1834).
+   */
+  private isDuplicateUsernameError(error: unknown): boolean {
+    const err = error as { code?: string; message?: string } | null;
+    if (!err) return false;
+    const isDup =
+      err.code === 'ER_DUP_ENTRY' ||
+      String(err.message || '').includes('ER_DUP_ENTRY') ||
+      String(err.message || '')
+        .toLowerCase()
+        .includes('duplicate entry');
+    if (!isDup) return false;
+    const msg = String(err.message || '').toLowerCase();
+    return msg.includes('idx_patients_username_unique');
   }
 
   async registerPatientShadow(
@@ -1319,6 +1343,19 @@ export class AuthService {
     });
     if (patient && patient.id !== excludeUserId) {
       throw new ConflictException('CPF já cadastrado');
+    }
+  }
+
+  /**
+   * Ensures the given username isn't already used by another patient.
+   * Unlike CPF/phone, there's no "shadow accounts may share a value"
+   * carve-out — shadow patients never have a username at all (always
+   * null), so this simply checks the whole table.
+   */
+  private async assertUsernameAvailable(username: string, excludeUserId?: string): Promise<void> {
+    const patient = await this.patientRepository.findOne({ where: { username } });
+    if (patient && patient.id !== excludeUserId) {
+      throw new ConflictException('Nome de usuário já está em uso');
     }
   }
 

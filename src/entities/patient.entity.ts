@@ -26,6 +26,12 @@ export class Patient {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
+  // Required for patients who self-register on mobile; null for shadow
+  // patients (created by a doctor, never self-register). Globally unique
+  // when present — see migration 1834 (IDX_patients_username_unique).
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  username: string | null;
+
   @Column({ type: 'varchar', length: 255 })
   email: string;
 

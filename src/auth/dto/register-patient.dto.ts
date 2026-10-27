@@ -4,6 +4,7 @@ import {
   IsString,
   IsNotEmpty,
   MinLength,
+  MaxLength,
   IsDateString,
   IsBoolean,
   IsOptional,
@@ -16,6 +17,15 @@ export class RegisterPatientDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @ApiProperty({ example: 'fernando.luckesi87' })
+  @IsString()
+  @IsNotEmpty({ message: 'O nome de usuário é obrigatório' })
+  @MaxLength(30, { message: 'Nome de usuário muito longo' })
+  @Matches(/^[A-Za-z0-9_.]+$/, {
+    message: 'O nome de usuário só pode conter letras, números, sublinhados e pontos',
+  })
+  username: string;
 
   @ApiProperty({ example: 'fernando.luckesi@email.com' })
   @IsEmail()

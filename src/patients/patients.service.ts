@@ -81,6 +81,7 @@ export class PatientsService {
   private readonly patientSelectFields: (keyof Patient)[] = [
     'id',
     'name',
+    'username',
     'email',
     'gender',
     'phone',
@@ -581,13 +582,18 @@ export class PatientsService {
       throw new ForbiddenException('Search query must be at least 3 characters');
     }
 
-    // Shared across roles: name/email match the raw query; a query that looks
-    // like a CPF (once normalized) also matches by CPF. This only shapes the
-    // WHERE clause — it never widens which fields come back in the response.
+    // Shared across roles: name/email/username match the raw query; a query
+    // that looks like a CPF (once normalized) also matches by CPF. This only
+    // shapes the WHERE clause — it never widens which fields come back in
+    // the response.
     const normalizedCpfQuery = normalizeCpf(query);
+    // The UI always displays usernames as "@username" — strip a leading "@"
+    // so pasting/typing it that way still matches.
+    const usernameQuery = query.replace(/^@/, '');
     const searchConditions: Array<Record<string, unknown>> = [
       { name: Like(`%${query}%`), isShadow: false },
       { email: Like(`%${query}%`), isShadow: false },
+      { username: Like(`%${usernameQuery}%`), isShadow: false },
     ];
     if (normalizedCpfQuery.length >= 3) {
       searchConditions.push({ cpf: Like(`%${normalizedCpfQuery}%`), isShadow: false });
@@ -623,10 +629,13 @@ export class PatientsService {
     // dados dele antes de haver vínculo. Sem permissão ativa (ou acesso ainda
     // não verificado), a resposta não deve carregar email/telefone/nascimento/
     // CPF/foto — só o necessário para decidir se é a pessoa certa e solicitar
-    // acesso.
+    // acesso. `username` is the exception: unlike email/phone it isn't
+    // sensitive, and it's exactly what lets a doctor tell two "João Silva"
+    // results apart before requesting access, which name alone can't do.
     const toRestrictedResult = (patient: Patient) => ({
       id: patient.id,
       name: patient.name,
+      username: patient.username,
       createdByDoctorId: patient.doctorCreatorId,
       hasPermission: false,
       hasAccess: false,
