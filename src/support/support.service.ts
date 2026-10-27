@@ -46,4 +46,23 @@ export class SupportService {
 
     return { message: 'Mensagem enviada para o suporte com sucesso.' };
   }
+
+  /**
+   * Public "Fale Conosco" from unauthenticated screens (login/signup). The
+   * sender provides their own name and email, which become the reply-to.
+   */
+  async sendPublicMessage(input: {
+    name: string;
+    email: string;
+    message: string;
+  }): Promise<{ message: string }> {
+    await this.emailService.sendSupportMessage({
+      userName: input.name,
+      userEmail: input.email,
+      userType: 'visitante',
+      message: input.message,
+    });
+
+    return { message: 'Mensagem enviada para o suporte com sucesso.' };
+  }
 }
