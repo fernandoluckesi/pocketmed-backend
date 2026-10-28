@@ -16,6 +16,7 @@ import { AvailabilityModule } from './availability/availability.module';
 import { UploadModule } from './upload/upload.module';
 import { EmailModule } from './email/email.module';
 import { SupportModule } from './support/support.module';
+import { DocumentAiModule } from './document-ai/document-ai.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { BackofficeBoundaryGuard } from './auth/guards/backoffice-boundary.guard';
@@ -210,6 +211,7 @@ import { AuditContextInterceptor } from './audit/audit-context.interceptor';
     UploadModule,
     EmailModule,
     SupportModule,
+    DocumentAiModule,
     NotificationsModule,
     ClinicAdminModule,
     ExamCatalogModule,
