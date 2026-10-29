@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Patch,
   Delete,
@@ -408,6 +409,18 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Verification code sent to email' })
   async sendProfileUpdateVerification(@CurrentUser() user: any) {
     return this.authService.sendProfileUpdateVerification(user.userId, user.type);
+  }
+
+  @Get('me')
+  @AllowUnverified()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get the current authenticated user (with a fresh profileImage URL)',
+  })
+  @ApiResponse({ status: 200, description: 'Current user' })
+  async me(@CurrentUser() user: any) {
+    return this.authService.getCurrentUser(user.userId, user.type);
   }
 
   @Patch('profile')

@@ -1543,6 +1543,25 @@ export class AuthService {
     return this.doctorRepository.findOne({ where: { id: userId } });
   }
 
+  /**
+   * Returns the current user in the SAME shape as `login`, so the client can
+   * refresh fields that go stale on the device — most importantly the
+   * `profileImage`, which the global presign interceptor re-signs on every
+   * response (stored presigned URLs expire ~15 min, so the copy saved at login
+   * breaks after a reload). No token is issued here: the caller already has one.
+   */
+  async getCurrentUser(userId: string, userType?: string) {
+    const user = await this.findUserById(userId, userType);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const doctorContext =
+      user.type === 'doctor' ? await this.getDoctorAuthContext(user.id) : undefined;
+
+    return this.sanitizeUser(user, doctorContext);
+  }
+
   private async syncProfessionalDataToRoleProfiles(doctor: Doctor): Promise<void> {
     const updatedFields = {
       name: doctor.name,
