@@ -182,6 +182,21 @@ export class Doctor {
   @Column({ type: 'date', nullable: true })
   retentionUntil: Date | null;
 
+  // ── Aceite dos Termos / Política de Privacidade ──────────────────────────
+  // Registrado para que seja possível provar QUANDO e QUAL versão o usuário
+  // aceitou. Antes, o aceite existia só como checkbox no formulário e nada
+  // era persistido — em disputa, "o checkbox era obrigatório" é prova bem
+  // mais fraca que um registro com data e versão, sobretudo para dado de
+  // saúde (LGPD art. 11 exige consentimento específico e destacado).
+  //
+  // NULL significa "aceitou antes de começarmos a registrar" — preencher
+  // uma data que não conhecemos seria inventar prova.
+  @Column({ type: 'datetime', nullable: true })
+  termsAcceptedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  termsAcceptedVersion: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

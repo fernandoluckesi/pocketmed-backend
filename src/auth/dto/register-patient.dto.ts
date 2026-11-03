@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsString,
@@ -10,6 +10,7 @@ import {
   IsOptional,
   Matches,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { IsCpf } from '../../common/validators/is-cpf.validator';
 
 export class RegisterPatientDto {
@@ -79,4 +80,25 @@ export class RegisterPatientDto {
   @IsOptional()
   @IsString()
   captchaToken?: string;
+
+  // Aceite dos Termos/Política. Registrado com data e versão para que o
+  // consentimento seja comprovável depois (LGPD art. 11 — dado de saúde
+  // exige consentimento específico e destacado). Opcional no DTO para não
+  // quebrar clientes antigos; quando ausente, nada é gravado e o registro
+  // fica NULL (= "aceitou antes de passarmos a registrar").
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  // `@Transform` é necessário: quando o cadastro inclui foto de perfil, o
+  // payload vai como multipart/form-data e todo valor chega como string —
+  // `acceptedTerms` viraria "true" e o `@IsBoolean()` rejeitaria com 400,
+  // quebrando justamente o cadastro COM foto. O `transform: true` do
+  // ValidationPipe global não converte string→boolean por conta própria.
+  @Transform(({ value }) => {
+    if (typeof value === 'boolean') return value;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  @IsBoolean()
+  acceptedTerms?: boolean;
 }

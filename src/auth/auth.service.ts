@@ -23,6 +23,7 @@ import { UploadService } from '../upload/upload.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { MedicalRecordRetentionService } from './medical-record-retention.service';
+import { CURRENT_TERMS_VERSION } from '../common/legal-terms';
 import { AuditAction, AuditResourceType } from '../audit/audit.constants';
 import { Clinic } from '../entities/clinic.entity';
 import { ClinicMembership } from '../entities/clinic-membership.entity';
@@ -128,6 +129,11 @@ export class AuthService {
         type: 'patient',
         isShadow: false,
         emailVerified: false,
+        // Só grava quando o cliente confirmou o aceite. Sem isso, NULL —
+        // que significa "aceitou antes de passarmos a registrar", em vez de
+        // uma data inventada.
+        termsAcceptedAt: dto.acceptedTerms ? new Date() : null,
+        termsAcceptedVersion: dto.acceptedTerms ? CURRENT_TERMS_VERSION : null,
       });
 
       // Persist the verification code as part of the registration transaction
@@ -525,6 +531,9 @@ export class AuthService {
         type: 'doctor',
         isShadow: false,
         emailVerified: false,
+        // Mesma regra do cadastro de paciente — ver comentário lá.
+        termsAcceptedAt: dto.acceptedTerms ? new Date() : null,
+        termsAcceptedVersion: dto.acceptedTerms ? CURRENT_TERMS_VERSION : null,
       });
 
       // Persist the code inside the transaction, but send the email only AFTER
