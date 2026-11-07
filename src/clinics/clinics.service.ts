@@ -581,7 +581,12 @@ export class ClinicsService {
       throw new NotFoundException('Doctor not found');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    // .trim() guards against a stray trailing space/newline in the env var
+    // (an easy copy-paste mistake) — untrimmed, it survives into `backUrl`
+    // below and Mercado Pago rejects the whole request with "Invalid value
+    // for back_url, must be a valid URL", failing every checkout.
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL')?.trim() || 'http://localhost:5173';
     const additionalProfessionals = dto.additionalProfessionals || 0;
 
     if (useMercadoPago) {
@@ -713,7 +718,8 @@ export class ClinicsService {
       );
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL')?.trim() || 'http://localhost:5173';
 
     return this.stripeService.createBillingPortalSession({
       customerId: clinic.stripeCustomerId,
