@@ -45,6 +45,22 @@ export class MercadoPagoService {
     externalReference: string;
     backUrl: string;
   }): Promise<{ id: string; initPoint: string }> {
+    // Mercado Pago's PreApproval (subscriptions) API rejects the request
+    // outright — "Both payer and collector must be real or test users" —
+    // when the access token is a TEST/sandbox credential but `payer_email`
+    // is an arbitrary real-looking address (e.g. a clinic's actual admin
+    // doctor email). While production credentials for this application
+    // haven't been activated yet (see Mercado Pago dashboard > Hispora Web >
+    // Credenciais de produção), every checkout runs against the sandbox, so
+    // the payer must be one of the test buyer accounts created under
+    // Testes > Contas de teste — never the real doctor's email. This override
+    // only applies to that transition period: once real production
+    // credentials are configured and this variable is unset, `payerEmail`
+    // flows through unchanged, which is required for actually billing the
+    // clinic.
+    const testPayerEmail = this.configService.get<string>('MERCADOPAGO_TEST_PAYER_EMAIL');
+    const payerEmail = testPayerEmail || params.payerEmail;
+
     const result = await this.preApproval.create({
       body: {
         reason: params.reason,
@@ -55,7 +71,7 @@ export class MercadoPagoService {
           currency_id: 'BRL',
         },
         back_url: params.backUrl,
-        payer_email: params.payerEmail,
+        payer_email: payerEmail,
         external_reference: params.externalReference,
       },
     });
